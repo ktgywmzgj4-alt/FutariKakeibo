@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ふたり家計簿 主要画面プレビュー</title>
+  <style>
+    @import url("./fonts/noto-sans-jp.css");
+
+    :root {
+      --bg: #fff7e8;
+      --card: #fffdf7;
+      --terra: #d64f29;
+      --terra-soft: #f3c2a7;
+      --sage: #7b9b78;
+      --sage-soft: #d4e1ca;
+      --green: #223b33;
+      --muted: #666057;
+      --gold: #e3b161;
+      --line: #eadfcf;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 1400px;
+      background: #efe7da;
+      color: var(--green);
+      font-family: "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    }
+    header {
+      height: 94px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 50px;
+      background: #243b34;
+      color: white;
+    }
+    header h1 { margin: 0; font-size: 26px; letter-spacing: .03em; }
+    header p { margin: 6px 0 0; color: #d9e5da; font-size: 13px; }
+    .badge { background: #ffffff1c; border: 1px solid #ffffff36; border-radius: 999px; padding: 8px 14px; font-size: 12px; }
+    main {
+      padding: 28px 30px 34px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 22px;
+    }
+    .device {
+      position: relative;
+      height: 742px;
+      border: 10px solid #18221f;
+      border-radius: 42px;
+      background: var(--bg);
+      overflow: hidden;
+      box-shadow: 0 18px 44px #2c241b24;
+    }
+    .island { position: absolute; top: 9px; left: 50%; transform: translateX(-50%); width: 90px; height: 24px; border-radius: 20px; background: #18221f; z-index: 4; }
+    .status { height: 41px; padding: 12px 19px 0; display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; }
+    .screen { height: calc(100% - 41px); display: flex; flex-direction: column; }
+    .top { padding: 10px 18px 8px; }
+    .top small { color: var(--muted); }
+    .top h2 { font-size: 23px; margin: 4px 0 0; }
+    .month { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px 12px; color: var(--terra); font-weight: 700; font-size: 14px; }
+    .scroll { padding: 0 14px 78px; overflow: hidden; flex: 1; }
+    .card { background: var(--card); border-radius: 20px; padding: 15px; margin-bottom: 12px; box-shadow: 0 8px 20px #30493b10; }
+    .label { color: var(--muted); font-size: 11px; }
+    .money { font-size: 29px; font-weight: 800; letter-spacing: -.04em; margin: 3px 0 9px; }
+    .row { display: flex; align-items: center; gap: 10px; min-height: 46px; }
+    .between { justify-content: space-between; }
+    .icon { width: 36px; height: 36px; border-radius: 50%; background: var(--terra); color: white; display: grid; place-items: center; font-size: 17px; }
+    .icon.sage { background: var(--sage); }
+    .icon.gold { background: var(--gold); }
+    .copy { min-width: 0; flex: 1; }
+    .copy strong { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .copy span { color: var(--muted); font-size: 10px; }
+    .amount { font-size: 13px; font-weight: 800; }
+    .progress { height: 9px; border-radius: 99px; background: #eadfce; overflow: hidden; }
+    .progress i { display: block; width: 62%; height: 100%; border-radius: inherit; background: var(--sage); }
+    .mini { color: var(--muted); font-size: 10px; margin-top: 7px; }
+    .titleline { font-size: 14px; font-weight: 800; margin-bottom: 10px; display: flex; gap: 7px; align-items: center; }
+    .settle { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    .settle strong:last-child { font-size: 18px; }
+    .divider { height: 1px; background: var(--line); }
+    nav { position: absolute; bottom: 0; left: 0; right: 0; height: 67px; background: #fffdf9ee; backdrop-filter: blur(12px); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr); padding-top: 8px; }
+    nav div { text-align: center; color: #777068; font-size: 9px; }
+    nav b { display: block; font-size: 18px; line-height: 25px; }
+    nav .active { color: var(--terra); font-weight: 700; }
+    .scan { border: 1px solid #efd9c9; background: #fffaf4; }
+    .scan .icon { background: #f8ddcd; color: var(--terra); }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; color: var(--muted); font-size: 10px; font-weight: 700; margin-bottom: 5px; }
+    .input { background: var(--bg); border-radius: 11px; padding: 11px; font-size: 13px; min-height: 39px; }
+    .seg { display: grid; grid-template-columns: 1fr 1fr; background: #eee5d9; border-radius: 9px; padding: 3px; font-size: 11px; text-align: center; }
+    .seg span { padding: 6px; border-radius: 7px; }
+    .seg .selected { background: white; box-shadow: 0 1px 4px #0001; font-weight: 700; }
+    .primary { margin-top: 4px; background: var(--terra); color: white; border-radius: 14px; padding: 13px; text-align: center; font-weight: 800; font-size: 13px; }
+    .chips { display: flex; gap: 6px; overflow: hidden; padding: 0 14px 12px; }
+    .chip { white-space: nowrap; background: white; border-radius: 999px; padding: 7px 10px; font-size: 10px; font-weight: 700; }
+    .chip.active { background: var(--terra); color: white; }
+    .search { margin: 0 14px 10px; border-radius: 11px; padding: 9px 11px; background: #e9dfd2; color: #7b746c; font-size: 11px; }
+    .setting-row { display: flex; align-items: center; justify-content: space-between; min-height: 43px; font-size: 12px; }
+    .setting-row b { color: var(--sage); margin-right: 7px; }
+    .sync { background: #edf4e9; border-radius: 12px; padding: 10px; color: #52704f; font-size: 11px; font-weight: 700; margin-bottom: 10px; }
+    .outline { border: 1px solid var(--sage); color: #567754; border-radius: 12px; padding: 10px; text-align: center; font-weight: 700; font-size: 11px; }
+    .danger { color: #ad342f; }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>ふたり家計簿 — 主要画面デザインQA</h1><p>「陽だまりの家計」 / SwiftUI実装と同じ配色・情報構造の静的プレビュー</p></div>
+    <div class="badge">架空データのみ</div>
+  </header>
+  <main>
+    <section class="device">
+      <div class="island"></div><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+      <div class="screen"><div class="top"><small>こんにちは、優さん</small><h2>ふたりのホーム</h2></div><div class="month"><span>‹</span><span>2026年8月</span><span>›</span></div>
+      <div class="scroll">
+        <div class="card"><span class="label">今月の支出</span><div class="money">¥62,480</div><div class="progress"><i></i></div><div class="mini">予算 ¥100,000　あと ¥37,520 使えます</div></div>
+        <div class="card"><div class="titleline">↔ 今月の精算</div><div class="settle"><strong>パートナー → 優</strong><strong>¥8,240</strong></div><div class="mini">「2人で折半」にした支出だけで計算</div></div>
+        <div class="card"><div class="titleline">カテゴリ別</div><div class="row between"><span>食費</span><strong>¥28,600</strong></div><div class="row between"><span>外食</span><strong>¥16,200</strong></div><div class="row between"><span>日用品</span><strong>¥9,480</strong></div></div>
+        <div class="card"><div class="titleline">最近の支出</div><div class="row"><div class="icon">食</div><div class="copy"><strong>ひだまりスーパー</strong><span>8月13日 • 優</span></div><div class="amount">¥4,280</div></div><div class="divider"></div><div class="row"><div class="icon sage">麺</div><div class="copy"><strong>ラーメン</strong><span>8月11日 • パートナー</span></div><div class="amount">¥2,100</div></div></div>
+      </div></div>
+      <nav><div class="active"><b>⌂</b>ホーム</div><div><b>☷</b>履歴</div><div><b>⊕</b>追加</div><div><b>⚙</b>設定</div></nav>
+    </section>
+
+    <section class="device">
+      <div class="island"></div><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+      <div class="screen"><div class="top"><h2>支出を追加</h2></div><div class="scroll" style="padding-top:10px">
+        <div class="card scan"><div class="row"><div class="icon">▣</div><div class="copy"><strong>レシートから入力</strong><span>画像は保存・送信せず、このiPhone内で処理</span></div><b>›</b></div></div>
+        <div class="card"><div class="field"><label>内容</label><div class="input">ひだまりスーパー</div></div><div class="field"><label>金額</label><div class="input" style="font-size:18px;font-weight:800">¥ 4,280</div></div><div class="field"><label>日付</label><div class="input">2026年8月13日</div></div><div class="field"><label>カテゴリ</label><div class="input">食費　⌄</div></div><div class="field"><label>支払った人</label><div class="input">優　⌄</div></div><div class="field"><label>分け方</label><div class="seg"><span class="selected">2人で折半</span><span>個人の支出</span></div></div></div>
+        <div class="primary">支出を保存</div>
+      </div></div>
+      <nav><div><b>⌂</b>ホーム</div><div><b>☷</b>履歴</div><div class="active"><b>⊕</b>追加</div><div><b>⚙</b>設定</div></nav>
+    </section>
+
+    <section class="device">
+      <div class="island"></div><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+      <div class="screen"><div class="top"><h2>支出履歴</h2></div><div class="search">⌕　内容やメモを検索</div><div class="month"><span>‹</span><span>2026年8月</span><span>›</span></div><div class="chips"><div class="chip active">すべて</div><div class="chip">食費</div><div class="chip">外食</div><div class="chip">日用品</div></div>
+      <div class="scroll"><div class="card"><div class="row"><div class="icon">食</div><div class="copy"><strong>ひだまりスーパー</strong><span>8月13日 • 優</span></div><div class="amount">¥4,280</div></div><div class="divider"></div><div class="row"><div class="icon sage">麺</div><div class="copy"><strong>ラーメン</strong><span>8月11日 • パートナー</span></div><div class="amount">¥2,100</div></div><div class="divider"></div><div class="row"><div class="icon gold">電</div><div class="copy"><strong>電気料金</strong><span>8月8日 • 優</span></div><div class="amount">¥7,620</div></div><div class="divider"></div><div class="row"><div class="icon sage">薬</div><div class="copy"><strong>ドラッグストア</strong><span>8月6日 • パートナー</span></div><div class="amount">¥3,480</div></div></div>
+      <div class="card"><div class="titleline">8月の合計</div><div class="settle"><span>12件</span><strong>¥62,480</strong></div></div></div></div>
+      <nav><div><b>⌂</b>ホーム</div><div class="active"><b>☷</b>履歴</div><div><b>⊕</b>追加</div><div><b>⚙</b>設定</div></nav>
+    </section>
+
+    <section class="device">
+      <div class="island"></div><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+      <div class="screen"><div class="top"><h2>設定</h2></div><div class="scroll" style="padding-top:10px">
+        <div class="card"><div class="titleline">ふたりの設定</div><div class="field"><label>家計の名前</label><div class="input">ふたりの家計</div></div><div class="field"><label>月予算</label><div class="input">¥ 100,000</div></div><div class="outline" style="border-color:var(--terra);color:var(--terra)">設定を保存</div></div>
+        <div class="card"><div class="titleline">☁ 2人で共有</div><div class="sync">✓ 同期済み 9:41</div><div class="mini" style="margin:0 0 11px">招待された参加者だけが家計データを読み書きできます。</div><div class="outline">↻ 今すぐ同期　　＋ 招待を表示</div></div>
+        <div class="card"><div class="titleline">▣ データ管理</div><div class="setting-row"><span><b>↥</b>CSVを書き出す</span><span>›</span></div><div class="divider"></div><div class="setting-row"><span><b>▣</b>データとプライバシー</span><span>›</span></div><div class="divider"></div><div class="setting-row danger"><span>⌫ このiPhone内のデータを削除</span><span>›</span></div></div>
+        <div class="card"><div class="titleline">⌂ ふたり家計簿</div><div class="mini">Version 0.1.0 (1)</div><div class="mini">広告・課金機能はまだ実装していません。</div></div>
+      </div></div>
+      <nav><div><b>⌂</b>ホーム</div><div><b>☷</b>履歴</div><div><b>⊕</b>追加</div><div class="active"><b>⚙</b>設定</div></nav>
+    </section>
+  </main>
+</body>
+</html>

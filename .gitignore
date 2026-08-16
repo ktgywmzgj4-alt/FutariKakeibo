@@ -1,0 +1,19 @@
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+
+# Local signing and secrets
+*.mobileprovision
+*.p12
+*.cer
+*.env
+.env.*
+
+# Generated archives
+*.xcarchive
+*.ipa
+
+# macOS
+.DS_Store

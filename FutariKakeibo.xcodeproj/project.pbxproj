@@ -1,0 +1,494 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		C00000000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* AppDelegate.swift */; };
+		C00000000000000000000002 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* AppStore.swift */; };
+		C00000000000000000000003 /* FutariKakeiboApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* FutariKakeiboApp.swift */; };
+		C00000000000000000000004 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000004 /* RootView.swift */; };
+		C00000000000000000000005 /* ExpenseRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000005 /* ExpenseRow.swift */; };
+		C00000000000000000000006 /* MonthNavigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000006 /* MonthNavigator.swift */; };
+		C00000000000000000000007 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000007 /* AppTheme.swift */; };
+		C00000000000000000000008 /* CategoryStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000008 /* CategoryStyle.swift */; };
+		C00000000000000000000009 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000009 /* DashboardView.swift */; };
+		C00000000000000000000010 /* ExpenseEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000010 /* ExpenseEditorView.swift */; };
+		C00000000000000000000011 /* ExpenseListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000011 /* ExpenseListView.swift */; };
+		C00000000000000000000012 /* ReceiptScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000012 /* ReceiptScannerView.swift */; };
+		C00000000000000000000013 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000013 /* OnboardingView.swift */; };
+		C00000000000000000000014 /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000014 /* ActivityView.swift */; };
+		C00000000000000000000015 /* CloudSharingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000015 /* CloudSharingView.swift */; };
+		C00000000000000000000016 /* PrivacySummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000016 /* PrivacySummaryView.swift */; };
+		C00000000000000000000017 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000017 /* SettingsView.swift */; };
+		C00000000000000000000018 /* AppSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000018 /* AppSnapshot.swift */; };
+		C00000000000000000000019 /* Expense.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000019 /* Expense.swift */; };
+		C00000000000000000000020 /* ExpenseCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000020 /* ExpenseCategory.swift */; };
+		C00000000000000000000021 /* Household.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000021 /* Household.swift */; };
+		C00000000000000000000022 /* LedgerCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000022 /* LedgerCalculator.swift */; };
+		C00000000000000000000023 /* Member.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000023 /* Member.swift */; };
+		C00000000000000000000024 /* ReceiptDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000024 /* ReceiptDraft.swift */; };
+		C00000000000000000000025 /* LocalSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000025 /* LocalSnapshotStore.swift */; };
+		C00000000000000000000026 /* CSVExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000026 /* CSVExporter.swift */; };
+		C00000000000000000000027 /* CloudKitSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000027 /* CloudKitSyncService.swift */; };
+		C00000000000000000000028 /* CloudShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000028 /* CloudShareInbox.swift */; };
+		C00000000000000000000029 /* ReceiptParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000029 /* ReceiptParser.swift */; };
+		C00000000000000000000030 /* ReceiptRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000030 /* ReceiptRecognizer.swift */; };
+		C00000000000000000000033 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000033 /* PrivacyInfo.xcprivacy */; };
+		C00000000000000000000034 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000034 /* Assets.xcassets */; };
+		C00000000000000000000035 /* LedgerCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000035 /* LedgerCalculatorTests.swift */; };
+		C00000000000000000000036 /* LocalSnapshotStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000036 /* LocalSnapshotStoreTests.swift */; };
+		C00000000000000000000037 /* ReceiptParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000037 /* ReceiptParserTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A00000000000000000000020 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00000000000000000000004;
+			remoteInfo = FutariKakeibo;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		B00000000000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/AppDelegate.swift; sourceTree = "<group>"; };
+		B00000000000000000000002 /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/AppStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000003 /* FutariKakeiboApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/FutariKakeiboApp.swift; sourceTree = "<group>"; };
+		B00000000000000000000004 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/RootView.swift; sourceTree = "<group>"; };
+		B00000000000000000000005 /* ExpenseRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/ExpenseRow.swift; sourceTree = "<group>"; };
+		B00000000000000000000006 /* MonthNavigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/MonthNavigator.swift; sourceTree = "<group>"; };
+		B00000000000000000000007 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem/AppTheme.swift; sourceTree = "<group>"; };
+		B00000000000000000000008 /* CategoryStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem/CategoryStyle.swift; sourceTree = "<group>"; };
+		B00000000000000000000009 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Dashboard/DashboardView.swift; sourceTree = "<group>"; };
+		B00000000000000000000010 /* ExpenseEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Expenses/ExpenseEditorView.swift; sourceTree = "<group>"; };
+		B00000000000000000000011 /* ExpenseListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Expenses/ExpenseListView.swift; sourceTree = "<group>"; };
+		B00000000000000000000012 /* ReceiptScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Expenses/ReceiptScannerView.swift; sourceTree = "<group>"; };
+		B00000000000000000000013 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Onboarding/OnboardingView.swift; sourceTree = "<group>"; };
+		B00000000000000000000014 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Settings/ActivityView.swift; sourceTree = "<group>"; };
+		B00000000000000000000015 /* CloudSharingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Settings/CloudSharingView.swift; sourceTree = "<group>"; };
+		B00000000000000000000016 /* PrivacySummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Settings/PrivacySummaryView.swift; sourceTree = "<group>"; };
+		B00000000000000000000017 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Settings/SettingsView.swift; sourceTree = "<group>"; };
+		B00000000000000000000018 /* AppSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/AppSnapshot.swift; sourceTree = "<group>"; };
+		B00000000000000000000019 /* Expense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/Expense.swift; sourceTree = "<group>"; };
+		B00000000000000000000020 /* ExpenseCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/ExpenseCategory.swift; sourceTree = "<group>"; };
+		B00000000000000000000021 /* Household.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/Household.swift; sourceTree = "<group>"; };
+		B00000000000000000000022 /* LedgerCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/LedgerCalculator.swift; sourceTree = "<group>"; };
+		B00000000000000000000023 /* Member.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/Member.swift; sourceTree = "<group>"; };
+		B00000000000000000000024 /* ReceiptDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/ReceiptDraft.swift; sourceTree = "<group>"; };
+		B00000000000000000000025 /* LocalSnapshotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence/LocalSnapshotStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000026 /* CSVExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/CSVExporter.swift; sourceTree = "<group>"; };
+		B00000000000000000000027 /* CloudKitSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/CloudKitSyncService.swift; sourceTree = "<group>"; };
+		B00000000000000000000028 /* CloudShareInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/CloudShareInbox.swift; sourceTree = "<group>"; };
+		B00000000000000000000029 /* ReceiptParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ReceiptParser.swift; sourceTree = "<group>"; };
+		B00000000000000000000030 /* ReceiptRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ReceiptRecognizer.swift; sourceTree = "<group>"; };
+		B00000000000000000000031 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Resources/Info.plist; sourceTree = "<group>"; };
+		B00000000000000000000032 /* FutariKakeibo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Resources/FutariKakeibo.entitlements; sourceTree = "<group>"; };
+		B00000000000000000000033 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = Resources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		B00000000000000000000034 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = "<group>"; };
+		B00000000000000000000035 /* LedgerCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LedgerCalculatorTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000036 /* LocalSnapshotStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalSnapshotStoreTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000037 /* ReceiptParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptParserTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000038 /* FutariKakeibo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FutariKakeibo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B00000000000000000000039 /* FutariKakeiboTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FutariKakeiboTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A00000000000000000000015 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000016 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A00000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000017 /* FutariKakeibo */,
+				A00000000000000000000018 /* FutariKakeiboTests */,
+				A00000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A00000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000038 /* FutariKakeibo.app */,
+				B00000000000000000000039 /* FutariKakeiboTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000017 /* FutariKakeibo */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000001 /* AppDelegate.swift */,
+				B00000000000000000000002 /* AppStore.swift */,
+				B00000000000000000000003 /* FutariKakeiboApp.swift */,
+				B00000000000000000000004 /* RootView.swift */,
+				B00000000000000000000005 /* ExpenseRow.swift */,
+				B00000000000000000000006 /* MonthNavigator.swift */,
+				B00000000000000000000007 /* AppTheme.swift */,
+				B00000000000000000000008 /* CategoryStyle.swift */,
+				B00000000000000000000009 /* DashboardView.swift */,
+				B00000000000000000000010 /* ExpenseEditorView.swift */,
+				B00000000000000000000011 /* ExpenseListView.swift */,
+				B00000000000000000000012 /* ReceiptScannerView.swift */,
+				B00000000000000000000013 /* OnboardingView.swift */,
+				B00000000000000000000014 /* ActivityView.swift */,
+				B00000000000000000000015 /* CloudSharingView.swift */,
+				B00000000000000000000016 /* PrivacySummaryView.swift */,
+				B00000000000000000000017 /* SettingsView.swift */,
+				B00000000000000000000018 /* AppSnapshot.swift */,
+				B00000000000000000000019 /* Expense.swift */,
+				B00000000000000000000020 /* ExpenseCategory.swift */,
+				B00000000000000000000021 /* Household.swift */,
+				B00000000000000000000022 /* LedgerCalculator.swift */,
+				B00000000000000000000023 /* Member.swift */,
+				B00000000000000000000024 /* ReceiptDraft.swift */,
+				B00000000000000000000025 /* LocalSnapshotStore.swift */,
+				B00000000000000000000026 /* CSVExporter.swift */,
+				B00000000000000000000027 /* CloudKitSyncService.swift */,
+				B00000000000000000000028 /* CloudShareInbox.swift */,
+				B00000000000000000000029 /* ReceiptParser.swift */,
+				B00000000000000000000030 /* ReceiptRecognizer.swift */,
+				B00000000000000000000031 /* Info.plist */,
+				B00000000000000000000032 /* FutariKakeibo.entitlements */,
+				B00000000000000000000033 /* PrivacyInfo.xcprivacy */,
+				B00000000000000000000034 /* Assets.xcassets */,
+			);
+			path = FutariKakeibo;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000018 /* FutariKakeiboTests */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000035 /* LedgerCalculatorTests.swift */,
+				B00000000000000000000036 /* LocalSnapshotStoreTests.swift */,
+				B00000000000000000000037 /* ReceiptParserTests.swift */,
+			);
+			path = FutariKakeiboTests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A00000000000000000000004 /* FutariKakeibo */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000000000000000000009 /* Build configuration list for PBXNativeTarget "FutariKakeibo" */;
+			buildPhases = (
+				A00000000000000000000011 /* Sources */,
+				A00000000000000000000015 /* Frameworks */,
+				A00000000000000000000013 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FutariKakeibo;
+			productName = FutariKakeibo;
+			productReference = B00000000000000000000038 /* FutariKakeibo.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A00000000000000000000005 /* FutariKakeiboTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000000000000000000010 /* Build configuration list for PBXNativeTarget "FutariKakeiboTests" */;
+			buildPhases = (
+				A00000000000000000000012 /* Sources */,
+				A00000000000000000000016 /* Frameworks */,
+				A00000000000000000000014 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A00000000000000000000019 /* PBXTargetDependency */,
+			);
+			name = FutariKakeiboTests;
+			productName = FutariKakeiboTests;
+			productReference = B00000000000000000000039 /* FutariKakeiboTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					A00000000000000000000004 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					A00000000000000000000005 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = A00000000000000000000004;
+					};
+				};
+			};
+			buildConfigurationList = A00000000000000000000008 /* Build configuration list for PBXProject "FutariKakeibo" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = ja;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				ja,
+				en,
+				Base,
+			);
+			mainGroup = A00000000000000000000002;
+			productRefGroup = A00000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A00000000000000000000004 /* FutariKakeibo */,
+				A00000000000000000000005 /* FutariKakeiboTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A00000000000000000000013 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C00000000000000000000033 /* PrivacyInfo.xcprivacy in Resources */,
+				C00000000000000000000034 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000014 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A00000000000000000000011 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C00000000000000000000001 /* AppDelegate.swift in Sources */,
+				C00000000000000000000002 /* AppStore.swift in Sources */,
+				C00000000000000000000003 /* FutariKakeiboApp.swift in Sources */,
+				C00000000000000000000004 /* RootView.swift in Sources */,
+				C00000000000000000000005 /* ExpenseRow.swift in Sources */,
+				C00000000000000000000006 /* MonthNavigator.swift in Sources */,
+				C00000000000000000000007 /* AppTheme.swift in Sources */,
+				C00000000000000000000008 /* CategoryStyle.swift in Sources */,
+				C00000000000000000000009 /* DashboardView.swift in Sources */,
+				C00000000000000000000010 /* ExpenseEditorView.swift in Sources */,
+				C00000000000000000000011 /* ExpenseListView.swift in Sources */,
+				C00000000000000000000012 /* ReceiptScannerView.swift in Sources */,
+				C00000000000000000000013 /* OnboardingView.swift in Sources */,
+				C00000000000000000000014 /* ActivityView.swift in Sources */,
+				C00000000000000000000015 /* CloudSharingView.swift in Sources */,
+				C00000000000000000000016 /* PrivacySummaryView.swift in Sources */,
+				C00000000000000000000017 /* SettingsView.swift in Sources */,
+				C00000000000000000000018 /* AppSnapshot.swift in Sources */,
+				C00000000000000000000019 /* Expense.swift in Sources */,
+				C00000000000000000000020 /* ExpenseCategory.swift in Sources */,
+				C00000000000000000000021 /* Household.swift in Sources */,
+				C00000000000000000000022 /* LedgerCalculator.swift in Sources */,
+				C00000000000000000000023 /* Member.swift in Sources */,
+				C00000000000000000000024 /* ReceiptDraft.swift in Sources */,
+				C00000000000000000000025 /* LocalSnapshotStore.swift in Sources */,
+				C00000000000000000000026 /* CSVExporter.swift in Sources */,
+				C00000000000000000000027 /* CloudKitSyncService.swift in Sources */,
+				C00000000000000000000028 /* CloudShareInbox.swift in Sources */,
+				C00000000000000000000029 /* ReceiptParser.swift in Sources */,
+				C00000000000000000000030 /* ReceiptRecognizer.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000012 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C00000000000000000000035 /* LedgerCalculatorTests.swift in Sources */,
+				C00000000000000000000036 /* LocalSnapshotStoreTests.swift in Sources */,
+				C00000000000000000000037 /* ReceiptParserTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A00000000000000000000019 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00000000000000000000004 /* FutariKakeibo */;
+			targetProxy = A00000000000000000000020 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A00000000000000000000021 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A00000000000000000000022 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A00000000000000000000023 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = FutariKakeibo/Resources/FutariKakeibo.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = FutariKakeibo/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = jp.aikawa.FutariKakeibo;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A00000000000000000000024 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = FutariKakeibo/Resources/FutariKakeibo.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = FutariKakeibo/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = jp.aikawa.FutariKakeibo;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		A00000000000000000000025 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = jp.aikawa.FutariKakeiboTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FutariKakeibo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FutariKakeibo";
+			};
+			name = Debug;
+		};
+		A00000000000000000000026 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = jp.aikawa.FutariKakeiboTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FutariKakeibo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FutariKakeibo";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A00000000000000000000008 /* Build configuration list for PBXProject "FutariKakeibo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000021 /* Debug */,
+				A00000000000000000000022 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00000000000000000000009 /* Build configuration list for PBXNativeTarget "FutariKakeibo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000023 /* Debug */,
+				A00000000000000000000024 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00000000000000000000010 /* Build configuration list for PBXNativeTarget "FutariKakeiboTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000025 /* Debug */,
+				A00000000000000000000026 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A00000000000000000000001 /* Project object */;
+}
