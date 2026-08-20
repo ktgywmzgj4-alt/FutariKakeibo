@@ -19,7 +19,7 @@ struct ReceiptScannerView: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: VNDocumentCameraViewController, context: Context) {}
 
     @MainActor
-    final class Coordinator: NSObject, VNDocumentCameraViewControllerDelegate {
+    final class Coordinator: NSObject, @preconcurrency VNDocumentCameraViewControllerDelegate {
         let onCancel: () -> Void
         let completion: (Result<[UIImage], Error>) -> Void
 
