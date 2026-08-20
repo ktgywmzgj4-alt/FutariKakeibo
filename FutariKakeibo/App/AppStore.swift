@@ -68,6 +68,11 @@ final class AppStore: ObservableObject {
         guard !didLoad else { return }
         didLoad = true
         defer { isLoading = false }
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-reset-data-for-ui-tests") {
+            try? await localStore.deleteAll()
+        }
+#endif
         do {
             snapshot = try await localStore.load()
             syncState = snapshot.household?.cloudLocation == nil ? .localOnly : .synced(.now)
