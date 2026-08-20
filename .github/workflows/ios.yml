@@ -68,5 +68,6 @@ jobs:
             -scheme FutariKakeibo \
             -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
             -derivedDataPath DerivedData \
+            -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO \
             test
