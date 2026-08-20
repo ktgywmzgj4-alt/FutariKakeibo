@@ -1,5 +1,5 @@
 import UIKit
-import Vision
+@preconcurrency import Vision
 
 enum ReceiptRecognizer {
     enum RecognitionError: LocalizedError {
