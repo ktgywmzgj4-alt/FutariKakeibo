@@ -32,6 +32,19 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphonesimulator --show-sdk-version
 
+      - name: Install XcodeGen
+        shell: bash
+        run: |
+          set -euo pipefail
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
+          xcodegen --version
+
+      - name: Generate Xcode project
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodegen generate
+
       - name: Inspect project and available simulators
         shell: bash
         run: |
