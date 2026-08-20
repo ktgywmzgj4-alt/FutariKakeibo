@@ -43,13 +43,26 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: jp.aikawa.FutariKakeiboTests
+  FutariKakeiboUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: FutariKakeiboUITests
+    dependencies:
+      - target: FutariKakeibo
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: jp.aikawa.FutariKakeiboUITests
+        TEST_TARGET_NAME: FutariKakeibo
 schemes:
   FutariKakeibo:
     build:
       targets:
         FutariKakeibo: all
         FutariKakeiboTests: [test]
+        FutariKakeiboUITests: [test]
     test:
       gatherCoverageData: true
       targets:
         - FutariKakeiboTests
+        - FutariKakeiboUITests
