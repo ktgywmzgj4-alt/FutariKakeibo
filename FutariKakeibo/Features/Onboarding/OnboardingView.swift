@@ -41,10 +41,12 @@ struct OnboardingView: View {
 
                     labeledField("あなたの呼び名", text: $selfName, placeholder: "例：優")
                         .textContentType(.nickname)
+                        .accessibilityIdentifier("onboarding.selfName")
                         .focused($focusedField, equals: .selfName)
 
                     labeledField("パートナーの呼び名", text: $partnerName, placeholder: "例：パートナー")
                         .textContentType(.nickname)
+                        .accessibilityIdentifier("onboarding.partnerName")
                         .focused($focusedField, equals: .partnerName)
 
                     VStack(alignment: .leading, spacing: 7) {
@@ -56,6 +58,7 @@ struct OnboardingView: View {
                             .textFieldStyle(.roundedBorder)
                             .focused($focusedField, equals: .budget)
                             .accessibilityLabel("2人の月予算")
+                            .accessibilityIdentifier("onboarding.budget")
                     }
                 }
                 .appCard()
@@ -78,6 +81,7 @@ struct OnboardingView: View {
                         .background(AppTheme.terracotta)
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
+                .accessibilityIdentifier("onboarding.start")
                 .disabled(parsedBudget <= 0)
                 .opacity(parsedBudget <= 0 ? 0.5 : 1)
 
