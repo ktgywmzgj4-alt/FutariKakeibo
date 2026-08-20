@@ -26,11 +26,14 @@
 
 1. `FutariKakeibo.xcodeproj` をXcodeで開く（再生成する場合は `xcodegen generate`）。
 2. Target > Signing & Capabilities で自分のTeamを選択する。
-3. Bundle Identifierと `FutariKakeibo.entitlements` のiCloudコンテナIDを、自分の一意な値に変更する。
+3. Apple Developerに登録済みの設定値を確認する。
+   - Bundle ID: `jp.aikawa.futarikakeibo`
+   - iCloud Container: `iCloud.jp.aikawa.futarikakeibo`
+   - Team ID: `79XN3292J9`
 4. iCloud（CloudKit）が有効になっていることを確認する。
 5. まず実機1台でローカル機能を確認し、その後CloudKit共有を確認する。
 
-Apple Developer上でのコンテナ作成、価格設定、課金、TestFlight提出はこのソースには含まれません。
+Bundle IDとiCloud ContainerはApple Developerへ登録済みです。価格設定、課金、証明書・プロビジョニングプロファイルの作成、TestFlight提出はまだ行っていません。
 
 ## プロジェクトの再生成
 
