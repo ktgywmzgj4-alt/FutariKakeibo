@@ -1,23 +1,72 @@
-name: iOS tests
+name: iOS build and tests
 
 on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    runs-on: macos-15
+    runs-on: macos-26
+    timeout-minutes: 30
+
     steps:
       - uses: actions/checkout@v4
-      - name: Install XcodeGen
-        run: brew install xcodegen
-      - name: Generate project
-        run: xcodegen generate
-      - name: Build and test
+
+      - name: Select Xcode 26
+        shell: bash
         run: |
+          set -euo pipefail
+          XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' -print | sort -V | tail -n 1)"
+          if [[ -z "$XCODE_PATH" ]]; then
+            echo "Xcode 26 is not installed on this runner."
+            exit 1
+          fi
+          sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
+
+      - name: Inspect project and available simulators
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -list -project FutariKakeibo.xcodeproj
+          xcrun simctl list runtimes available
+          xcrun simctl list devices available
+
+      - name: Select an available iPhone Simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          SIMULATOR_UDID="$(
+            xcrun simctl list devices available --json |
+            ruby -rjson -e '
+              devices = JSON.parse(STDIN.read).fetch("devices")
+              runtime = devices.keys.grep(/iOS/).sort.reverse.find do |key|
+                devices.fetch(key).any? { |device| device["isAvailable"] && device["name"].start_with?("iPhone") }
+              end
+              abort "No available iPhone Simulator was found." unless runtime
+              device = devices.fetch(runtime).find { |item| item["isAvailable"] && item["name"].start_with?("iPhone") }
+              puts device.fetch("udid")
+            '
+          )"
+          echo "udid=$SIMULATOR_UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Build and run unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
           xcodebuild \
             -project FutariKakeibo.xcodeproj \
             -scheme FutariKakeibo \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=NO \
             test
