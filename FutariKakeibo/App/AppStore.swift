@@ -34,15 +34,11 @@ final class AppStore: ObservableObject {
     @Published var shareConfiguration: ShareConfiguration?
 
     private let localStore: LocalSnapshotStore
-    private let cloudService: CloudKitSyncService
+    private lazy var cloudService = CloudKitSyncService()
     private var didLoad = false
 
-    init(
-        localStore: LocalSnapshotStore = LocalSnapshotStore(),
-        cloudService: CloudKitSyncService = CloudKitSyncService()
-    ) {
+    init(localStore: LocalSnapshotStore = LocalSnapshotStore()) {
         self.localStore = localStore
-        self.cloudService = cloudService
     }
 
     var household: Household? { snapshot.household }
