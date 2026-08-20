@@ -55,6 +55,7 @@ struct ExpenseEditorView: View {
                         .background(canSave ? AppTheme.terracotta : AppTheme.secondaryText.opacity(0.4))
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
+                .accessibilityIdentifier("expense.save")
                 .disabled(!canSave)
 
                 if !recognizedText.isEmpty {
@@ -168,6 +169,7 @@ struct ExpenseEditorView: View {
             field("内容") {
                 TextField("例：スーパーで食材", text: $title)
                     .textInputAutocapitalization(.never)
+                    .accessibilityIdentifier("expense.title")
                     .focused($focusedField, equals: .title)
             }
 
@@ -176,6 +178,7 @@ struct ExpenseEditorView: View {
                     Text("¥").foregroundStyle(AppTheme.secondaryText)
                     TextField("0", text: $amountText)
                         .keyboardType(.numberPad)
+                        .accessibilityIdentifier("expense.amount")
                         .font(.title3.monospacedDigit().bold())
                         .focused($focusedField, equals: .amount)
                 }
