@@ -1,6 +1,6 @@
 import SwiftUI
 import UIKit
-import VisionKit
+@preconcurrency import VisionKit
 
 struct ReceiptScannerView: UIViewControllerRepresentable {
     let onCancel: () -> Void
