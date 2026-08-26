@@ -17,10 +17,13 @@ actor LocalSnapshotStore {
     private let decoder: JSONDecoder
 
     init(directoryURL: URL? = nil) {
-        let baseDirectory = directoryURL ?? FileManager.default.urls(
+        let resolvedDirectory = directoryURL ?? FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
-        ).first!
+        ).first
+        // アプリの保存先が取得できない極端な状況でも起動時にクラッシュしないよう、
+        // 一時ディレクトリへ安全にフォールバックする。
+        let baseDirectory = resolvedDirectory ?? FileManager.default.temporaryDirectory
         let appDirectory = baseDirectory.appendingPathComponent("FutariKakeibo", isDirectory: true)
         fileURL = appDirectory.appendingPathComponent("snapshot.json")
 
