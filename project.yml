@@ -8,8 +8,6 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    CURRENT_PROJECT_VERSION: "1"
-    MARKETING_VERSION: "0.1.0"
     DEVELOPMENT_TEAM: "79XN3292J9"
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -22,12 +20,33 @@ targets:
       - path: FutariKakeibo
     info:
       path: FutariKakeibo/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: "ふたり家計簿"
+        CKSharingSupported: true
+        ITSAppUsesNonExemptEncryption: false
+        LSRequiresIPhoneOS: true
+        NSCameraUsageDescription: "レシートを撮影し、店名や合計金額を端末内で読み取るためにカメラを使用します。"
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UILaunchScreen: {}
+        UIRequiredDeviceCapabilities:
+          - arm64
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
     entitlements:
       path: FutariKakeibo/Resources/FutariKakeibo.entitlements
+      properties:
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.jp.aikawa.futarikakeibo
+        com.apple.developer.icloud-services:
+          - CloudKit
+        com.apple.developer.ubiquity-kvstore-identifier: "$(TeamIdentifierPrefix)jp.aikawa.futarikakeibo"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: jp.aikawa.futarikakeibo
         PRODUCT_NAME: FutariKakeibo
+        CURRENT_PROJECT_VERSION: "2"
+        MARKETING_VERSION: "1.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         INFOPLIST_KEY_CFBundleDisplayName: "ふたり家計簿"
