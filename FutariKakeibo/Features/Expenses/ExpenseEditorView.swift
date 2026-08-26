@@ -231,8 +231,13 @@ struct ExpenseEditorView: View {
     }
 
     private func recognize(_ images: [UIImage]) {
+        guard !images.isEmpty else {
+            validationMessage = "レシートを読み取れませんでした。もう一度撮影してください。"
+            return
+        }
         isRecognizing = true
-        Task {
+        // OCRはバックグラウンドで実行されるため、結果の反映は明示的にメインアクターへ戻して行う。
+        Task { @MainActor in
             defer { isRecognizing = false }
             do {
                 let text = try await ReceiptRecognizer.recognize(images: images)
