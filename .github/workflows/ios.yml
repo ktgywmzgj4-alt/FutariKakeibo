@@ -45,6 +45,18 @@ jobs:
           set -euo pipefail
           xcodegen generate
 
+      - name: Validate generated app metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          INFO_PLIST="FutariKakeibo/Resources/Info.plist"
+          ENTITLEMENTS="FutariKakeibo/Resources/FutariKakeibo.entitlements"
+          test -n "$(/usr/libexec/PlistBuddy -c 'Print :NSCameraUsageDescription' "$INFO_PLIST")"
+          [[ "$(/usr/libexec/PlistBuddy -c 'Print :CKSharingSupported' "$INFO_PLIST")" == "true" ]]
+          /usr/libexec/PlistBuddy -c 'Print :UILaunchScreen' "$INFO_PLIST" >/dev/null
+          [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.icloud-services:0' "$ENTITLEMENTS")" == "CloudKit" ]]
+          [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.icloud-container-identifiers:0' "$ENTITLEMENTS")" == "iCloud.jp.aikawa.futarikakeibo" ]]
+
       - name: Inspect project and available simulators
         shell: bash
         run: |
@@ -117,6 +129,18 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
           xcodegen generate
 
+      - name: Validate generated app metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          INFO_PLIST="FutariKakeibo/Resources/Info.plist"
+          ENTITLEMENTS="FutariKakeibo/Resources/FutariKakeibo.entitlements"
+          test -n "$(/usr/libexec/PlistBuddy -c 'Print :NSCameraUsageDescription' "$INFO_PLIST")"
+          [[ "$(/usr/libexec/PlistBuddy -c 'Print :CKSharingSupported' "$INFO_PLIST")" == "true" ]]
+          /usr/libexec/PlistBuddy -c 'Print :UILaunchScreen' "$INFO_PLIST" >/dev/null
+          [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.icloud-services:0' "$ENTITLEMENTS")" == "CloudKit" ]]
+          [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.icloud-container-identifiers:0' "$ENTITLEMENTS")" == "iCloud.jp.aikawa.futarikakeibo" ]]
+
       - name: Import Apple Distribution certificate
         shell: bash
         env:
@@ -168,6 +192,20 @@ jobs:
             CODE_SIGN_IDENTITY='Apple Distribution' \
             PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
             OTHER_CODE_SIGN_FLAGS="--keychain $RUNNER_TEMP/app-signing.keychain-db"
+      - name: Verify archived app metadata and signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="$RUNNER_TEMP/FutariKakeibo.xcarchive/Products/Applications/FutariKakeibo.app"
+          INFO_PLIST="$APP_PATH/Info.plist"
+          SIGNED_ENTITLEMENTS="$RUNNER_TEMP/signed-entitlements.plist"
+          test -n "$(plutil -extract NSCameraUsageDescription raw -o - "$INFO_PLIST")"
+          [[ "$(plutil -extract CKSharingSupported raw -o - "$INFO_PLIST")" == "true" ]]
+          plutil -extract UILaunchScreen xml1 -o - "$INFO_PLIST" >/dev/null
+          [[ "$(plutil -extract CFBundleVersion raw -o - "$INFO_PLIST")" == "2" ]]
+          /usr/bin/codesign -d --entitlements :- "$APP_PATH" > "$SIGNED_ENTITLEMENTS" 2>/dev/null
+          [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.icloud-services:0' "$SIGNED_ENTITLEMENTS")" == "CloudKit" ]]
+          [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.icloud-container-identifiers:0' "$SIGNED_ENTITLEMENTS")" == "iCloud.jp.aikawa.futarikakeibo" ]]
 
       - name: Export IPA
         shell: bash
