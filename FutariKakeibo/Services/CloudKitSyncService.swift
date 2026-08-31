@@ -43,10 +43,18 @@ actor CloudKitSyncService {
         var deletedExpenseIDs: [UUID: Date]
     }
 
-    nonisolated let container: CKContainer
+    private nonisolated let explicitContainer: CKContainer?
 
-    init(container: CKContainer = .default()) {
-        self.container = container
+    init(container: CKContainer? = nil) {
+        explicitContainer = container
+    }
+
+    // CKContainer.default() は、iCloudのentitlementを持たないビルド
+    // （署名なしでシミュレータへ入れた場合など）でCKExceptionを投げ、
+    // 捕まえられないままプロセスごと終了する。起動時に必ず作るのをやめ、
+    // 実際にCloudKitを使う時まで生成を遅らせる。
+    nonisolated var container: CKContainer {
+        explicitContainer ?? .default()
     }
 
     func accountStatus() async throws -> CKAccountStatus {
@@ -201,6 +209,8 @@ actor CloudKitSyncService {
         record["monthlyBudget"] = Int64(household.monthlyBudget) as CKRecordValue
         record["ownerMemberID"] = household.ownerMemberID.uuidString as CKRecordValue
         record["membersData"] = try JSONEncoder().encode(household.members) as CKRecordValue
+        record["categoryBudgetsData"] = try JSONEncoder().encode(household.categoryBudgets) as CKRecordValue
+        record["recurringExpensesData"] = try JSONEncoder().encode(household.recurringExpenses) as CKRecordValue
         record["createdAt"] = household.createdAt as CKRecordValue
         record["updatedAt"] = household.updatedAt as CKRecordValue
         return try await saveRecord(record, to: database)
@@ -236,6 +246,10 @@ actor CloudKitSyncService {
         record["paidByMemberID"] = expense.paidByMemberID.uuidString as CKRecordValue
         record["splitMethod"] = expense.splitMethod.rawValue as CKRecordValue
         record["note"] = expense.note as CKRecordValue
+        // 定期支出から作られた回かどうかは後から変わらないため、ある場合だけ書き込む。
+        if let recurringID = expense.recurringID {
+            record["recurringID"] = recurringID.uuidString as CKRecordValue
+        }
         record["createdAt"] = expense.createdAt as CKRecordValue
         record["updatedAt"] = expense.updatedAt as CKRecordValue
         _ = try await saveRecord(record, to: database)
@@ -256,12 +270,19 @@ actor CloudKitSyncService {
             throw SyncError.invalidRecord(record.recordID.recordName)
         }
         let members = try JSONDecoder().decode([Member].self, from: membersData)
+        // 旧バージョンが作ったレコードにはこの2つの項目がないため、無い場合は空として扱う。
+        let categoryBudgets = try (record["categoryBudgetsData"] as? Data)
+            .map { try JSONDecoder().decode([CategoryBudget].self, from: $0) } ?? []
+        let recurringExpenses = try (record["recurringExpensesData"] as? Data)
+            .map { try JSONDecoder().decode([RecurringExpense].self, from: $0) } ?? []
         return Household(
             id: id,
             name: name,
             monthlyBudget: budgetNumber.intValue,
             members: members,
             ownerMemberID: ownerID,
+            categoryBudgets: categoryBudgets,
+            recurringExpenses: recurringExpenses,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
@@ -295,6 +316,7 @@ actor CloudKitSyncService {
             paidByMemberID: paidByID,
             splitMethod: splitMethod,
             note: record["note"] as? String ?? "",
+            recurringID: (record["recurringID"] as? String).flatMap(UUID.init(uuidString:)),
             createdAt: createdAt,
             updatedAt: updatedAt
         )

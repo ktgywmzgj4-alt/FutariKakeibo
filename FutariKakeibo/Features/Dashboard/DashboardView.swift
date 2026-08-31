@@ -8,8 +8,11 @@ struct DashboardView: View {
             LazyVStack(spacing: 18) {
                 MonthNavigator(month: store.selectedMonth, onMove: store.moveMonth)
 
+                recurringNoticeCard
                 budgetCard
                 settlementCard
+                categoryBudgetCard
+                upcomingRecurringCard
                 categoryCard
                 recentCard
             }
@@ -134,6 +137,97 @@ struct DashboardView: View {
             }
         }
         .appCard()
+    }
+
+    @ViewBuilder
+    private var recurringNoticeCard: some View {
+        if store.lastRecurringInsertCount > 0 {
+            HStack(spacing: 11) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(AppTheme.sage)
+                Text("定期支出を \(store.lastRecurringInsertCount) 件、自動で追加しました")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(AppTheme.deepGreen)
+                Spacer(minLength: 8)
+                Button("閉じる") { store.lastRecurringInsertCount = 0 }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppTheme.terracotta)
+            }
+            .padding(14)
+            .background(AppTheme.sageSoft.opacity(0.45))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+    }
+
+    @ViewBuilder
+    private var categoryBudgetCard: some View {
+        let statuses = store.categoryBudgetStatuses
+        if !statuses.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text("カテゴリ別予算")
+                        .font(.headline)
+                        .foregroundStyle(AppTheme.deepGreen)
+                    Spacer()
+                    if let over = statuses.first(where: \.isOverBudget) {
+                        Label("\(over.category.displayName)が超過", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppTheme.danger)
+                    }
+                }
+
+                ForEach(statuses.prefix(4)) { status in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Label(status.category.displayName, systemImage: status.category.systemImage)
+                                .font(.subheadline)
+                                .foregroundStyle(status.category.color)
+                            Spacer()
+                            Text("\(status.spent.yenText) / \(status.budget.yenText)")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(status.isOverBudget ? AppTheme.danger : AppTheme.secondaryText)
+                        }
+                        ProgressView(value: status.progress)
+                            .tint(status.isOverBudget ? AppTheme.danger : status.category.color)
+                            .accessibilityLabel("\(status.category.displayName)の予算使用率")
+                            .accessibilityValue("\(Int(status.progress * 100))パーセント")
+                    }
+                }
+            }
+            .appCard()
+        }
+    }
+
+    @ViewBuilder
+    private var upcomingRecurringCard: some View {
+        let occurrences = store.upcomingRecurringOccurrences
+        if !occurrences.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("この先の定期支出", systemImage: "repeat.circle.fill")
+                    .font(.headline)
+                    .foregroundStyle(AppTheme.deepGreen)
+
+                ForEach(occurrences.prefix(3)) { occurrence in
+                    HStack(spacing: 9) {
+                        Text(occurrence.date.formatted(.dateTime.month().day()))
+                            .font(.caption.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(AppTheme.secondaryText)
+                        Text(occurrence.template.title)
+                            .foregroundStyle(AppTheme.deepGreen)
+                        Spacer()
+                        Text(occurrence.template.amount.yenText)
+                            .font(.subheadline.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(AppTheme.deepGreen)
+                    }
+                    .font(.subheadline)
+                }
+
+                Text("その日になると自動で支出に追加されます。")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+            .appCard()
+        }
     }
 
     private func emptyMessage(_ text: String, icon: String) -> some View {

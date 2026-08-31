@@ -31,6 +31,13 @@ struct ExpenseRow: View {
                             .background(AppTheme.sageSoft)
                             .clipShape(Capsule())
                     }
+                    if expense.isRecurring {
+                        Text("定期")
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(AppTheme.terracottaSoft.opacity(0.55))
+                            .clipShape(Capsule())
+                    }
                 }
                 .font(.caption)
                 .foregroundStyle(AppTheme.secondaryText)
@@ -46,7 +53,8 @@ struct ExpenseRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "\(expense.title)、\(expense.amount.yenText)、\(expense.category.displayName)、" +
-            "\(household.member(id: expense.paidByMemberID)?.displayName ?? "不明")が支払い"
+            "\(household.member(id: expense.paidByMemberID)?.displayName ?? "不明")が支払い" +
+            (expense.isRecurring ? "、定期支出" : "")
         )
     }
 }

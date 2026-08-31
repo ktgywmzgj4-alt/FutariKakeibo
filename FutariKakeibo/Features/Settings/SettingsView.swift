@@ -15,6 +15,7 @@ struct SettingsView: View {
         ScrollView {
             VStack(spacing: 18) {
                 householdCard
+                planningCard
                 cloudCard
                 dataCard
                 aboutCard
@@ -80,6 +81,42 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .appCard()
+    }
+
+    private var planningCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionTitle("予算と自動入力", icon: "wand.and.stars")
+
+            NavigationLink {
+                RecurringExpenseListView()
+            } label: {
+                settingsRow("定期支出（家賃・サブスク）", icon: "repeat.circle.fill")
+            }
+            .buttonStyle(.plain)
+
+            Divider()
+
+            NavigationLink {
+                CategoryBudgetView()
+            } label: {
+                settingsRow("カテゴリ別予算", icon: "chart.pie.fill")
+            }
+            .buttonStyle(.plain)
+
+            Text(planningSummary)
+                .font(.footnote)
+                .foregroundStyle(AppTheme.secondaryText)
+        }
+        .appCard()
+    }
+
+    private var planningSummary: String {
+        let active = store.recurringExpenses.filter(\.isActive)
+        guard !active.isEmpty else {
+            return "家賃や電気代を登録しておくと、毎月自動で支出に追加されます。"
+        }
+        let total = active.reduce(0) { $0 + $1.amount }
+        return "毎月 \(active.count) 件・\(total.yenText) を自動で計上します。"
     }
 
     private var cloudCard: some View {

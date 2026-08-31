@@ -42,6 +42,18 @@
 		C00000000000000000000035 /* LedgerCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000035 /* LedgerCalculatorTests.swift */; };
 		C00000000000000000000036 /* LocalSnapshotStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000036 /* LocalSnapshotStoreTests.swift */; };
 		C00000000000000000000037 /* ReceiptParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000037 /* ReceiptParserTests.swift */; };
+		C00000000000000000000040 /* CategoryBudget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000040 /* CategoryBudget.swift */; };
+		C00000000000000000000041 /* MonthlyReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000041 /* MonthlyReport.swift */; };
+		C00000000000000000000042 /* RecurringExpense.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000042 /* RecurringExpense.swift */; };
+		C00000000000000000000043 /* RecurringExpenseScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000043 /* RecurringExpenseScheduler.swift */; };
+		C00000000000000000000044 /* RecurringExpenseEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000044 /* RecurringExpenseEditorView.swift */; };
+		C00000000000000000000045 /* RecurringExpenseListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000045 /* RecurringExpenseListView.swift */; };
+		C00000000000000000000046 /* ReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000046 /* ReportView.swift */; };
+		C00000000000000000000047 /* CategoryBudgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000047 /* CategoryBudgetView.swift */; };
+		C00000000000000000000048 /* CategoryBudgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000048 /* CategoryBudgetTests.swift */; };
+		C00000000000000000000049 /* MonthlyReportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000049 /* MonthlyReportTests.swift */; };
+		C00000000000000000000050 /* RecurringExpenseSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000050 /* RecurringExpenseSchedulerTests.swift */; };
+		C00000000000000000000051 /* SnapshotCompatibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000051 /* SnapshotCompatibilityTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -94,6 +106,18 @@
 		B00000000000000000000037 /* ReceiptParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptParserTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000038 /* FutariKakeibo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FutariKakeibo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B00000000000000000000039 /* FutariKakeiboTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FutariKakeiboTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B00000000000000000000040 /* CategoryBudget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/CategoryBudget.swift; sourceTree = "<group>"; };
+		B00000000000000000000041 /* MonthlyReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/MonthlyReport.swift; sourceTree = "<group>"; };
+		B00000000000000000000042 /* RecurringExpense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/RecurringExpense.swift; sourceTree = "<group>"; };
+		B00000000000000000000043 /* RecurringExpenseScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/RecurringExpenseScheduler.swift; sourceTree = "<group>"; };
+		B00000000000000000000044 /* RecurringExpenseEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Recurring/RecurringExpenseEditorView.swift; sourceTree = "<group>"; };
+		B00000000000000000000045 /* RecurringExpenseListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Recurring/RecurringExpenseListView.swift; sourceTree = "<group>"; };
+		B00000000000000000000046 /* ReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Reports/ReportView.swift; sourceTree = "<group>"; };
+		B00000000000000000000047 /* CategoryBudgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Settings/CategoryBudgetView.swift; sourceTree = "<group>"; };
+		B00000000000000000000048 /* CategoryBudgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryBudgetTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000049 /* MonthlyReportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonthlyReportTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000050 /* RecurringExpenseSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecurringExpenseSchedulerTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000051 /* SnapshotCompatibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotCompatibilityTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -165,6 +189,14 @@
 				B00000000000000000000028 /* CloudShareInbox.swift */,
 				B00000000000000000000029 /* ReceiptParser.swift */,
 				B00000000000000000000030 /* ReceiptRecognizer.swift */,
+				B00000000000000000000040 /* CategoryBudget.swift */,
+				B00000000000000000000041 /* MonthlyReport.swift */,
+				B00000000000000000000042 /* RecurringExpense.swift */,
+				B00000000000000000000043 /* RecurringExpenseScheduler.swift */,
+				B00000000000000000000044 /* RecurringExpenseEditorView.swift */,
+				B00000000000000000000045 /* RecurringExpenseListView.swift */,
+				B00000000000000000000046 /* ReportView.swift */,
+				B00000000000000000000047 /* CategoryBudgetView.swift */,
 				B00000000000000000000031 /* Info.plist */,
 				B00000000000000000000032 /* FutariKakeibo.entitlements */,
 				B00000000000000000000033 /* PrivacyInfo.xcprivacy */,
@@ -179,6 +211,10 @@
 				B00000000000000000000035 /* LedgerCalculatorTests.swift */,
 				B00000000000000000000036 /* LocalSnapshotStoreTests.swift */,
 				B00000000000000000000037 /* ReceiptParserTests.swift */,
+				B00000000000000000000048 /* CategoryBudgetTests.swift */,
+				B00000000000000000000049 /* MonthlyReportTests.swift */,
+				B00000000000000000000050 /* RecurringExpenseSchedulerTests.swift */,
+				B00000000000000000000051 /* SnapshotCompatibilityTests.swift */,
 			);
 			path = FutariKakeiboTests;
 			sourceTree = "<group>";
@@ -314,6 +350,14 @@
 				C00000000000000000000028 /* CloudShareInbox.swift in Sources */,
 				C00000000000000000000029 /* ReceiptParser.swift in Sources */,
 				C00000000000000000000030 /* ReceiptRecognizer.swift in Sources */,
+				C00000000000000000000040 /* CategoryBudget.swift in Sources */,
+				C00000000000000000000041 /* MonthlyReport.swift in Sources */,
+				C00000000000000000000042 /* RecurringExpense.swift in Sources */,
+				C00000000000000000000043 /* RecurringExpenseScheduler.swift in Sources */,
+				C00000000000000000000044 /* RecurringExpenseEditorView.swift in Sources */,
+				C00000000000000000000045 /* RecurringExpenseListView.swift in Sources */,
+				C00000000000000000000046 /* ReportView.swift in Sources */,
+				C00000000000000000000047 /* CategoryBudgetView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -324,6 +368,10 @@
 				C00000000000000000000035 /* LedgerCalculatorTests.swift in Sources */,
 				C00000000000000000000036 /* LocalSnapshotStoreTests.swift in Sources */,
 				C00000000000000000000037 /* ReceiptParserTests.swift in Sources */,
+				C00000000000000000000048 /* CategoryBudgetTests.swift in Sources */,
+				C00000000000000000000049 /* MonthlyReportTests.swift in Sources */,
+				C00000000000000000000050 /* RecurringExpenseSchedulerTests.swift in Sources */,
+				C00000000000000000000051 /* SnapshotCompatibilityTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
