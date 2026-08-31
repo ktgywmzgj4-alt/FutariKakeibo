@@ -41,6 +41,7 @@ private struct MainTabView: View {
         case dashboard
         case history
         case add
+        case report
         case settings
     }
 
@@ -61,6 +62,10 @@ private struct MainTabView: View {
             }
             .tabItem { Label("追加", systemImage: "plus.circle.fill") }
             .tag(Tab.add)
+
+            NavigationStack { ReportView() }
+                .tabItem { Label("レポート", systemImage: "chart.bar.xaxis") }
+                .tag(Tab.report)
 
             NavigationStack { SettingsView() }
                 .tabItem { Label("設定", systemImage: "gearshape.fill") }

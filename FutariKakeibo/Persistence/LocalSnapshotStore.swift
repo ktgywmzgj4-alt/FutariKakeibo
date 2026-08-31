@@ -54,7 +54,10 @@ actor LocalSnapshotStore {
             attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
         )
 
-        let data = try encoder.encode(snapshot)
+        // 読み込んだ時点の版に関わらず、書き出すファイルは常に現在の形式にそろえる。
+        var upgraded = snapshot
+        upgraded.schemaVersion = AppSnapshot.currentSchemaVersion
+        let data = try encoder.encode(upgraded)
         try data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 

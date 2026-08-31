@@ -32,6 +32,8 @@ final class AppStore: ObservableObject {
     @Published var errorMessage: String?
     @Published private(set) var syncState: SyncState = .localOnly
     @Published var shareConfiguration: ShareConfiguration?
+    /// 直近の自動計上で何件追加したか。ホーム画面の通知に使う。
+    @Published var lastRecurringInsertCount = 0
 
     private let localStore: LocalSnapshotStore
     private let cloudService: CloudKitSyncService
@@ -68,6 +70,35 @@ final class AppStore: ObservableObject {
         return LedgerCalculator.settlement(expenses: monthlyExpenses, household: household)
     }
 
+    var recurringExpenses: [RecurringExpense] {
+        snapshot.household?.recurringExpenses ?? []
+    }
+
+    var categoryBudgetStatuses: [LedgerCalculator.CategoryBudgetStatus] {
+        guard let household = snapshot.household else { return [] }
+        return LedgerCalculator.categoryBudgetStatuses(
+            expenses: monthlyExpenses,
+            budgets: household.categoryBudgets
+        )
+    }
+
+    var monthlyReport: MonthlyReport {
+        guard let household = snapshot.household else { return .empty }
+        return MonthlyReport.make(
+            expenses: snapshot.expenses,
+            household: household,
+            month: selectedMonth
+        )
+    }
+
+    /// 表示中の月に、これから自動で計上される予定。
+    var upcomingRecurringOccurrences: [RecurringExpenseScheduler.Occurrence] {
+        RecurringExpenseScheduler.upcomingOccurrences(
+            templates: snapshot.household?.recurringExpenses ?? [],
+            in: selectedMonth
+        )
+    }
+
     func loadIfNeeded() async {
         guard !didLoad else { return }
         didLoad = true
@@ -77,7 +108,9 @@ final class AppStore: ObservableObject {
             syncState = snapshot.household?.cloudLocation == nil ? .localOnly : .synced(.now)
         } catch {
             errorMessage = "保存データを読み込めませんでした。データは上書きしていません。\n\(error.localizedDescription)"
+            return
         }
+        await applyRecurringExpenses()
     }
 
     func createHousehold(selfName: String, partnerName: String, monthlyBudget: Int) async {
@@ -122,7 +155,8 @@ final class AppStore: ObservableObject {
     func deleteExpense(_ expense: Expense) async {
         snapshot.expenses.removeAll { $0.id == expense.id }
         let deletedAt = Date.now
-        if snapshot.household?.cloudLocation != nil {
+        // 定期支出から作った回は、削除印を残さないと次の起動で作り直してしまう。
+        if snapshot.household?.cloudLocation != nil || expense.isRecurring {
             snapshot.deletedExpenseIDs[expense.id] = deletedAt
         }
         await persistLocally()
@@ -140,7 +174,12 @@ final class AppStore: ObservableObject {
         }
     }
 
-    func updateHousehold(name: String, monthlyBudget: Int, members: [Member]) async {
+    func updateHousehold(
+        name: String,
+        monthlyBudget: Int,
+        members: [Member],
+        categoryBudgets: [CategoryBudget]? = nil
+    ) async {
         guard var household = snapshot.household else { return }
         household.name = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "ふたりの家計"
@@ -154,19 +193,93 @@ final class AppStore: ObservableObject {
                 : name
             return cleaned
         }
-        household.updatedAt = .now
-        snapshot.household = household
+        if let categoryBudgets {
+            household.categoryBudgets = CategoryBudget.normalized(categoryBudgets)
+        }
+        await saveHousehold(household)
+    }
+
+    func updateCategoryBudgets(_ budgets: [CategoryBudget]) async {
+        guard var household = snapshot.household else { return }
+        household.categoryBudgets = CategoryBudget.normalized(budgets)
+        await saveHousehold(household)
+    }
+
+    // MARK: - 定期支出
+
+    func addRecurringExpense(_ template: RecurringExpense) async {
+        guard var household = snapshot.household else { return }
+        guard template.isValid, template.hasValidPeriod else {
+            errorMessage = "内容と1円以上の金額、開始月以降の終了月を入力してください。"
+            return
+        }
+        household.recurringExpenses.append(template)
+        await saveHousehold(household)
+        await applyRecurringExpenses()
+    }
+
+    func updateRecurringExpense(_ template: RecurringExpense) async {
+        guard var household = snapshot.household else { return }
+        guard template.isValid, template.hasValidPeriod else {
+            errorMessage = "内容と1円以上の金額、開始月以降の終了月を入力してください。"
+            return
+        }
+        guard let index = household.recurringExpenses.firstIndex(where: { $0.id == template.id }) else {
+            return
+        }
+        var changed = template
+        changed.updatedAt = .now
+        household.recurringExpenses[index] = changed
+        await saveHousehold(household)
+        await applyRecurringExpenses()
+    }
+
+    /// ひな形だけを消す。すでに計上済みの支出は実際の記録なので残す。
+    func deleteRecurringExpense(_ template: RecurringExpense) async {
+        guard var household = snapshot.household else { return }
+        household.recurringExpenses.removeAll { $0.id == template.id }
+        await saveHousehold(household)
+    }
+
+    func setRecurringExpense(_ template: RecurringExpense, isActive: Bool) async {
+        var changed = template
+        changed.isActive = isActive
+        await updateRecurringExpense(changed)
+    }
+
+    /// まだ作られていない月の定期支出を作る。何度呼んでも重複しない。
+    @discardableResult
+    func applyRecurringExpenses(referenceDate: Date = .now) async -> Int {
+        guard let household = snapshot.household, !household.recurringExpenses.isEmpty else {
+            return 0
+        }
+        let pending = RecurringExpenseScheduler.pendingExpenses(
+            templates: household.recurringExpenses,
+            existing: snapshot.expenses,
+            deletedExpenseIDs: Set(snapshot.deletedExpenseIDs.keys),
+            upTo: referenceDate
+        )
+        guard !pending.isEmpty else { return 0 }
+
+        snapshot.expenses.append(contentsOf: pending)
+        snapshot.expenses.sort { $0.date > $1.date }
+        lastRecurringInsertCount = pending.count
         await persistLocally()
 
-        guard household.cloudLocation != nil else { return }
+        guard household.cloudLocation != nil else { return pending.count }
         do {
             syncState = .syncing
-            try await cloudService.saveHousehold(household)
+            for expense in pending {
+                try await cloudService.saveExpense(expense, household: household)
+            }
             syncState = .synced(.now)
         } catch {
             syncState = .failed(error.localizedDescription)
         }
+        return pending.count
     }
+
+    // MARK: - iCloud共有
 
     func prepareCloudShare() async {
         guard var household = snapshot.household else { return }
@@ -268,6 +381,9 @@ final class AppStore: ObservableObject {
         } catch {
             syncState = .failed(error.localizedDescription)
         }
+
+        // 相手が追加したひな形の分も、この端末で計上しておく。
+        await applyRecurringExpenses()
     }
 
     func exportCSV() throws -> URL {
@@ -289,6 +405,24 @@ final class AppStore: ObservableObject {
 
     func moveMonth(by value: Int) {
         selectedMonth = Calendar.current.date(byAdding: .month, value: value, to: selectedMonth) ?? selectedMonth
+    }
+
+    // MARK: - Private
+
+    private func saveHousehold(_ household: Household) async {
+        var changed = household
+        changed.updatedAt = .now
+        snapshot.household = changed
+        await persistLocally()
+
+        guard changed.cloudLocation != nil else { return }
+        do {
+            syncState = .syncing
+            try await cloudService.saveHousehold(changed)
+            syncState = .synced(.now)
+        } catch {
+            syncState = .failed(error.localizedDescription)
+        }
     }
 
     private func persistLocally() async {

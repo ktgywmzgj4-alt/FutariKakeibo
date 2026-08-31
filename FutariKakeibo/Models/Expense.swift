@@ -23,6 +23,8 @@ struct Expense: Identifiable, Codable, Hashable, Sendable {
     var paidByMemberID: UUID
     var splitMethod: SplitMethod
     var note: String
+    /// 定期支出のひな形から自動で作られた場合、そのひな形のID。手入力ならnil。
+    var recurringID: UUID?
     var createdAt: Date
     var updatedAt: Date
 
@@ -35,6 +37,7 @@ struct Expense: Identifiable, Codable, Hashable, Sendable {
         paidByMemberID: UUID,
         splitMethod: SplitMethod = .equally,
         note: String = "",
+        recurringID: UUID? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
@@ -46,11 +49,16 @@ struct Expense: Identifiable, Codable, Hashable, Sendable {
         self.paidByMemberID = paidByMemberID
         self.splitMethod = splitMethod
         self.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.recurringID = recurringID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
 
     var isValid: Bool {
         !title.isEmpty && amount > 0
+    }
+
+    var isRecurring: Bool {
+        recurringID != nil
     }
 }

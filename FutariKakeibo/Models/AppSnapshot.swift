@@ -1,7 +1,8 @@
 import Foundation
 
 struct AppSnapshot: Codable, Sendable {
-    static let currentSchemaVersion = 1
+    // v2でカテゴリ別予算と定期支出を追加した。v1のファイルはそのまま読み込める。
+    static let currentSchemaVersion = 2
 
     var schemaVersion: Int
     var household: Household?

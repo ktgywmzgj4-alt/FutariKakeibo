@@ -26,6 +26,7 @@
 - [ ] `project.pbxproj` / `project.yml` / EntitlementsのIDを同じ値へ変更
 - [ ] iCloud CapabilityとCloudKitコンテナを作成・紐付け
 - [ ] Development環境でRecord Type `Household` / `Expense` / CKShareを生成
+- [ ] `Household` に `categoryBudgetsData` / `recurringExpensesData`、`Expense` に `recurringID` の項目ができていることを確認
 - [ ] CloudKit Dashboardでschemaを確認
 - [ ] Development schemaをProductionへDeploy
 - [ ] 自動署名でDevelopmentとDistributionのプロファイルを確認

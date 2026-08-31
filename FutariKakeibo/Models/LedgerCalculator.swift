@@ -9,6 +9,18 @@ enum LedgerCalculator {
         static let settled = Settlement(payer: nil, receiver: nil, amount: 0)
     }
 
+    /// カテゴリ予算に対する、その月の使用状況。
+    struct CategoryBudgetStatus: Identifiable, Equatable, Sendable {
+        var category: ExpenseCategory
+        var spent: Int
+        var budget: Int
+
+        var id: ExpenseCategory { category }
+        var remaining: Int { budget - spent }
+        var isOverBudget: Bool { spent > budget }
+        var progress: Double { LedgerCalculator.budgetProgress(total: spent, budget: budget) }
+    }
+
     static func expenses(
         _ expenses: [Expense],
         in month: Date,
@@ -56,5 +68,33 @@ enum LedgerCalculator {
     static func budgetProgress(total: Int, budget: Int) -> Double {
         guard budget > 0 else { return 0 }
         return min(max(Double(total) / Double(budget), 0), 1)
+    }
+
+    /// 予算を設定したカテゴリだけを、使いすぎている順に返す。
+    static func categoryBudgetStatuses(
+        expenses: [Expense],
+        budgets: [CategoryBudget]
+    ) -> [CategoryBudgetStatus] {
+        let totals = categoryTotals(expenses)
+        return budgets
+            .filter { $0.amount > 0 }
+            .map { budget in
+                CategoryBudgetStatus(
+                    category: budget.category,
+                    spent: totals[budget.category] ?? 0,
+                    budget: budget.amount
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.progress == rhs.progress {
+                    return lhs.spent > rhs.spent
+                }
+                return lhs.progress > rhs.progress
+            }
+    }
+
+    /// カテゴリ予算の合計。月予算とのズレを設定画面で知らせるために使う。
+    static func totalCategoryBudget(_ budgets: [CategoryBudget]) -> Int {
+        budgets.reduce(0) { $0 + max($1.amount, 0) }
     }
 }
