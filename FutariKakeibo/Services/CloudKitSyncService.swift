@@ -43,10 +43,18 @@ actor CloudKitSyncService {
         var deletedExpenseIDs: [UUID: Date]
     }
 
-    nonisolated let container: CKContainer
+    private nonisolated let explicitContainer: CKContainer?
 
-    init(container: CKContainer = .default()) {
-        self.container = container
+    init(container: CKContainer? = nil) {
+        explicitContainer = container
+    }
+
+    // CKContainer.default() は、iCloudのentitlementを持たないビルド
+    // （署名なしでシミュレータへ入れた場合など）でCKExceptionを投げ、
+    // 捕まえられないままプロセスごと終了する。起動時に必ず作るのをやめ、
+    // 実際にCloudKitを使う時まで生成を遅らせる。
+    nonisolated var container: CKContainer {
+        explicitContainer ?? .default()
     }
 
     func accountStatus() async throws -> CKAccountStatus {
