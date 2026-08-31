@@ -30,9 +30,11 @@ struct ReceiptScannerView: UIViewControllerRepresentable {
             self.completion = completion
         }
 
+        // VisionKitのデリゲートはメインスレッドから呼ばれるが、
+        // その保証がコンパイラに伝わらないため、明示してから画面を閉じる。
         func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
             onCancel()
-            controller.dismiss(animated: true)
+            MainActor.assumeIsolated { controller.dismiss(animated: true) }
         }
 
         func documentCameraViewController(
@@ -40,7 +42,7 @@ struct ReceiptScannerView: UIViewControllerRepresentable {
             didFailWithError error: Error
         ) {
             completion(.failure(error))
-            controller.dismiss(animated: true)
+            MainActor.assumeIsolated { controller.dismiss(animated: true) }
         }
 
         func documentCameraViewController(
@@ -49,7 +51,7 @@ struct ReceiptScannerView: UIViewControllerRepresentable {
         ) {
             let images = (0..<scan.pageCount).map(scan.imageOfPage(at:))
             completion(.success(images))
-            controller.dismiss(animated: true)
+            MainActor.assumeIsolated { controller.dismiss(animated: true) }
         }
     }
 }
