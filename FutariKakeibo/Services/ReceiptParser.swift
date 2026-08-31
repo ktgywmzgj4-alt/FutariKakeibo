@@ -10,11 +10,12 @@ enum ReceiptParser {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
 
+        let merchantName = merchant(from: lines)
         return ReceiptDraft(
-            merchant: merchant(from: lines),
+            merchant: merchantName,
             amount: totalAmount(from: lines),
             date: receiptDate(from: lines, now: now, calendar: calendar),
-            suggestedCategory: category(from: text),
+            suggestedCategory: category(from: text, merchant: merchantName),
             recognizedText: text
         )
     }
@@ -47,23 +48,40 @@ enum ReceiptParser {
         return ""
     }
 
-    static func category(from text: String) -> ExpenseCategory {
-        let value = text.lowercased()
-        let rules: [(ExpenseCategory, [String])] = [
-            (.transportation, ["駅", "鉄道", "タクシー", "駐車", "高速", "ガソリン", "eneos"]),
-            (.utilities, ["電気", "ガス", "水道", "通信", "携帯"]),
-            (.health, ["病院", "医院", "薬局", "クリニック", "歯科"]),
-            (.beauty, ["美容", "衣料", "服", "ユニクロ", "gu "]),
-            (.travel, ["ホテル", "旅館", "宿泊", "レンタカー", "航空"]),
-            (.dining, ["レストラン", "居酒屋", "カフェ", "ラーメン", "食堂", "coffee"]),
-            (.household, ["ドラッグ", "ホームセンター", "日用品", "ダイソー"]),
-            (.groceries, ["スーパー", "食品", "コンビニ", "market", "mart"]),
-            (.entertainment, ["映画", "シネマ", "カラオケ", "チケット"])
-        ]
+    private static let categoryRules: [(ExpenseCategory, [String])] = [
+        (.transportation, ["駅", "鉄道", "タクシー", "駐車", "高速", "ガソリン", "eneos"]),
+        (.utilities, ["電気", "ガス", "水道", "通信", "携帯"]),
+        (.health, ["病院", "医院", "薬局", "クリニック", "歯科"]),
+        (.beauty, ["美容", "衣料", "服", "ユニクロ", "gu "]),
+        (.travel, ["ホテル", "旅館", "宿泊", "レンタカー", "航空"]),
+        (.dining, ["レストラン", "居酒屋", "カフェ", "ラーメン", "食堂", "coffee"]),
+        (.household, ["ドラッグ", "ホームセンター", "日用品", "ダイソー"]),
+        (.groceries, ["スーパー", "食品", "コンビニ", "market", "mart"]),
+        (.entertainment, ["映画", "シネマ", "カラオケ", "チケット"])
+    ]
 
-        return rules.first { _, keywords in
-            keywords.contains { value.contains($0) }
-        }?.0 ?? .other
+    static func category(from text: String, merchant: String = "") -> ExpenseCategory {
+        // 店名はレシート全体の性格を最もよく表すため、まず店名だけで判定する。
+        // 明細に「日用品」が1行あるだけでスーパーの買い物が日用品にならないようにする。
+        if let matched = bestMatch(in: merchant) {
+            return matched
+        }
+        return bestMatch(in: text) ?? .other
+    }
+
+    /// 当てはまった語の多いカテゴリを選ぶ。同数なら定義順で先にあるものを選ぶ。
+    private static func bestMatch(in text: String) -> ExpenseCategory? {
+        guard !text.isEmpty else { return nil }
+        let value = text.lowercased()
+        var best: (category: ExpenseCategory, hits: Int)?
+
+        for (category, keywords) in categoryRules {
+            let hits = keywords.filter { value.contains($0) }.count
+            if hits > (best?.hits ?? 0) {
+                best = (category, hits)
+            }
+        }
+        return best?.category
     }
 
     private static func amounts(in line: String) -> [Int] {
