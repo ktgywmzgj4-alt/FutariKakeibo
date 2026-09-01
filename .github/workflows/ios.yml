@@ -13,19 +13,19 @@ concurrency:
 
 jobs:
   test:
-    runs-on: macos-26
+    runs-on: macos-latest
     timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode 26
+      - name: Select the newest Xcode
         shell: bash
         run: |
           set -euo pipefail
-          XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' -print | sort -V | tail -n 1)"
+          XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print | sort -V | tail -n 1)"
           if [[ -z "$XCODE_PATH" ]]; then
-            echo "Xcode 26 is not installed on this runner."
+            echo "No Xcode is installed on this runner."
             exit 1
           fi
           sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
@@ -88,7 +88,7 @@ jobs:
   testflight:
     if: github.event_name == 'workflow_dispatch'
     needs: test
-    runs-on: macos-26
+    runs-on: macos-latest
     timeout-minutes: 45
     env:
       TEAM_ID: 79XN3292J9
@@ -98,13 +98,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode 26
+      - name: Select the newest Xcode
         shell: bash
         run: |
           set -euo pipefail
-          XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' -print | sort -V | tail -n 1)"
+          XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print | sort -V | tail -n 1)"
           if [[ -z "$XCODE_PATH" ]]; then
-            echo "Xcode 26 is not installed on this runner."
+            echo "No Xcode is installed on this runner."
             exit 1
           fi
           sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
