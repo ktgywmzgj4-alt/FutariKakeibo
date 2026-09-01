@@ -64,7 +64,7 @@ final class MonthlyReportTests: XCTestCase {
         XCTAssertEqual(report.trend.count, 6)
         XCTAssertEqual(report.trend.first?.month, date(2026, 3, 1))
         XCTAssertEqual(report.trend.last?.month, date(2026, 8, 1))
-        XCTAssertEqual(report.trend.map(\.total), [0, 0, 0, 5_000, 0, 0])
+        XCTAssertEqual(report.trend.map(\.expense), [0, 0, 0, 5_000, 0, 0])
     }
 
     func testSplitsCategoriesAndMembersByShare() {

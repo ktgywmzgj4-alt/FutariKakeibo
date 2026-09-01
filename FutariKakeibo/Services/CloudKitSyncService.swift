@@ -40,7 +40,9 @@ actor CloudKitSyncService {
     struct CloudSnapshot: Sendable {
         var household: Household
         var expenses: [Expense]
+        var incomes: [Income]
         var deletedExpenseIDs: [UUID: Date]
+        var deletedIncomeIDs: [UUID: Date]
     }
 
     private nonisolated let explicitContainer: CKContainer?
@@ -69,7 +71,11 @@ actor CloudKitSyncService {
         }
     }
 
-    func prepareShare(household: Household, expenses: [Expense]) async throws -> (CloudLocation, CKShare) {
+    func prepareShare(
+        household: Household,
+        expenses: [Expense],
+        incomes: [Income] = []
+    ) async throws -> (CloudLocation, CKShare) {
         guard try await accountStatus() == .available else {
             throw SyncError.iCloudUnavailable
         }
@@ -87,6 +93,9 @@ actor CloudKitSyncService {
         let rootRecord = try await upsertHousehold(household, at: location, in: database)
         for expense in expenses {
             try await upsertExpense(expense, householdRecordID: rootRecord.recordID, at: location, in: database)
+        }
+        for income in incomes {
+            try await upsertIncome(income, householdRecordID: rootRecord.recordID, at: location, in: database)
         }
 
         if let shareReference = rootRecord.share {
@@ -141,10 +150,30 @@ actor CloudKitSyncService {
             }
         }
         expenses.sort { $0.date > $1.date }
+
+        let incomeQuery = CKQuery(recordType: RecordType.income, predicate: NSPredicate(value: true))
+        let incomeRecords = try await queryAll(incomeQuery, zoneID: zoneID(for: location), in: database)
+        var incomes: [Income] = []
+        var deletedIncomeIDs: [UUID: Date] = [:]
+        for record in incomeRecords {
+            if (record["isDeleted"] as? NSNumber)?.boolValue == true {
+                let deletion = try decodeDeletion(record)
+                deletedIncomeIDs[deletion.id] = max(
+                    deletedIncomeIDs[deletion.id] ?? .distantPast,
+                    deletion.deletedAt
+                )
+            } else {
+                incomes.append(try decodeIncome(record))
+            }
+        }
+        incomes.sort { $0.date > $1.date }
+
         return CloudSnapshot(
             household: household,
             expenses: expenses,
-            deletedExpenseIDs: deletedExpenseIDs
+            incomes: incomes,
+            deletedExpenseIDs: deletedExpenseIDs,
+            deletedIncomeIDs: deletedIncomeIDs
         )
     }
 
@@ -183,11 +212,41 @@ actor CloudKitSyncService {
         _ = try await saveRecord(record, to: database)
     }
 
+    func saveIncome(_ income: Income, household: Household) async throws {
+        guard let location = household.cloudLocation else { return }
+        let database = database(for: location)
+        let rootID = CKRecord.ID(recordName: location.rootRecordName, zoneID: zoneID(for: location))
+        try await upsertIncome(income, householdRecordID: rootID, at: location, in: database)
+    }
+
+    func deleteIncome(id: UUID, deletedAt: Date, household: Household) async throws {
+        guard let location = household.cloudLocation else { return }
+        let database = database(for: location)
+        let rootID = CKRecord.ID(recordName: location.rootRecordName, zoneID: zoneID(for: location))
+        let recordID = CKRecord.ID(
+            recordName: "income-\(id.uuidString.lowercased())",
+            zoneID: zoneID(for: location)
+        )
+        let record = try await fetchRecord(recordID, from: database)
+            ?? CKRecord(recordType: RecordType.income, recordID: recordID)
+        if (record["isDeleted"] as? NSNumber)?.boolValue == true,
+           let remoteDeletedAt = record["updatedAt"] as? Date,
+           remoteDeletedAt >= deletedAt {
+            return
+        }
+        record.parent = CKRecord.Reference(recordID: rootID, action: .deleteSelf)
+        record["id"] = id.uuidString as CKRecordValue
+        record["isDeleted"] = NSNumber(value: true) as CKRecordValue
+        record["updatedAt"] = deletedAt as CKRecordValue
+        _ = try await saveRecord(record, to: database)
+    }
+
     // MARK: - Record mapping
 
     private enum RecordType {
         static let household = "Household"
         static let expense = "Expense"
+        static let income = "Income"
     }
 
     private func upsertHousehold(
@@ -331,6 +390,70 @@ actor CloudKitSyncService {
             throw SyncError.invalidRecord(record.recordID.recordName)
         }
         return (id, deletedAt)
+    }
+
+    private func upsertIncome(
+        _ income: Income,
+        householdRecordID: CKRecord.ID,
+        at location: CloudLocation,
+        in database: CKDatabase
+    ) async throws {
+        let recordID = CKRecord.ID(
+            recordName: "income-\(income.id.uuidString.lowercased())",
+            zoneID: zoneID(for: location)
+        )
+        let record = try await fetchRecord(recordID, from: database)
+            ?? CKRecord(recordType: RecordType.income, recordID: recordID)
+        // 削除印は古いオフライン端末からの再アップロードより常に優先する。
+        guard (record["isDeleted"] as? NSNumber)?.boolValue != true else {
+            return
+        }
+        if let remoteUpdatedAt = record["updatedAt"] as? Date,
+           remoteUpdatedAt > income.updatedAt {
+            return
+        }
+        record.parent = CKRecord.Reference(recordID: householdRecordID, action: .deleteSelf)
+        record["id"] = income.id.uuidString as CKRecordValue
+        record["isDeleted"] = NSNumber(value: false) as CKRecordValue
+        record["title"] = income.title as CKRecordValue
+        record["amount"] = Int64(income.amount) as CKRecordValue
+        record["date"] = income.date as CKRecordValue
+        record["source"] = income.source.rawValue as CKRecordValue
+        record["receivedByMemberID"] = income.receivedByMemberID.uuidString as CKRecordValue
+        record["note"] = income.note as CKRecordValue
+        record["createdAt"] = income.createdAt as CKRecordValue
+        record["updatedAt"] = income.updatedAt as CKRecordValue
+        _ = try await saveRecord(record, to: database)
+    }
+
+    private func decodeIncome(_ record: CKRecord) throws -> Income {
+        guard
+            let idText = record["id"] as? String,
+            let id = UUID(uuidString: idText),
+            let title = record["title"] as? String,
+            let amountNumber = record["amount"] as? NSNumber,
+            let date = record["date"] as? Date,
+            let sourceText = record["source"] as? String,
+            let source = IncomeSource(rawValue: sourceText),
+            let receivedByText = record["receivedByMemberID"] as? String,
+            let receivedByID = UUID(uuidString: receivedByText),
+            let createdAt = record["createdAt"] as? Date,
+            let updatedAt = record["updatedAt"] as? Date
+        else {
+            throw SyncError.invalidRecord(record.recordID.recordName)
+        }
+
+        return Income(
+            id: id,
+            title: title,
+            amount: amountNumber.intValue,
+            date: date,
+            source: source,
+            receivedByMemberID: receivedByID,
+            note: record["note"] as? String ?? "",
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
     }
 
     // MARK: - CloudKit wrappers
