@@ -1,0 +1,21 @@
+name: Runner probe
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "ubuntu runner assigned"
+
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "macos runner assigned"
