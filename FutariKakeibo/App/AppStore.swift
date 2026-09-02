@@ -32,6 +32,9 @@ final class AppStore: ObservableObject {
     @Published var errorMessage: String?
     @Published private(set) var syncState: SyncState = .localOnly
     @Published var shareConfiguration: ShareConfiguration?
+    /// 相手に伝える合言葉。発行した直後だけ画面に出す。
+    @Published var shareInvite: ShareInvite?
+    @Published private(set) var isPreparingInvite = false
     /// 直近の自動計上で何件追加したか。ホーム画面の通知に使う。
     @Published var lastRecurringInsertCount = 0
 
@@ -375,6 +378,70 @@ final class AppStore: ObservableObject {
         } catch {
             syncState = .failed(error.localizedDescription)
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// 合言葉を発行して相手を招く。共有の用意と合言葉の発行をまとめて行う。
+    func startSharingWithCode() async {
+        guard var household = snapshot.household else { return }
+        isPreparingInvite = true
+        syncState = .syncing
+        defer { isPreparingInvite = false }
+
+        do {
+            let result = try await cloudService.prepareShare(
+                household: household,
+                expenses: snapshot.expenses,
+                incomes: snapshot.incomes
+            )
+            household.cloudLocation = result.0
+            snapshot.household = household
+            await persistLocally()
+
+            guard let url = result.1.url else {
+                throw CloudKitSyncService.SyncError.inviteUnavailable
+            }
+            shareInvite = try await cloudService.publishInvite(shareURL: url)
+            syncState = .synced(.now)
+        } catch {
+            syncState = .failed(error.localizedDescription)
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// 相手からもらった合言葉で共有に参加する。
+    @discardableResult
+    func joinSharing(code: String) async -> Bool {
+        isPreparingInvite = true
+        syncState = .syncing
+        defer { isPreparingInvite = false }
+
+        do {
+            let invite = try await cloudService.resolveInvite(code: code)
+            let location = try await cloudService.acceptShare(at: invite.shareURL)
+            let cloud = try await cloudService.fetchSnapshot(at: location)
+
+            var household = cloud.household
+            household.cloudLocation = location
+            let selectedMember = household.members.first { $0.role == .partner }?.id
+                ?? household.members.last?.id
+            snapshot = AppSnapshot(
+                household: household,
+                selectedMemberID: selectedMember,
+                expenses: cloud.expenses,
+                incomes: cloud.incomes,
+                deletedExpenseIDs: cloud.deletedExpenseIDs,
+                deletedIncomeIDs: cloud.deletedIncomeIDs
+            )
+            await persistLocally()
+            // 一度使った合言葉は残さない。
+            await cloudService.consumeInvite(code: invite.code)
+            syncState = .synced(.now)
+            return true
+        } catch {
+            syncState = .failed(error.localizedDescription)
+            errorMessage = error.localizedDescription
+            return false
         }
     }
 

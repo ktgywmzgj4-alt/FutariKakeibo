@@ -121,49 +121,38 @@ struct SettingsView: View {
 
     private var cloudCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            sectionTitle("2人で共有", icon: "icloud.fill")
+            sectionTitle("ふたりで共有", icon: "icloud.fill")
 
             Label(store.syncState.label, systemImage: syncIcon)
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(syncColor)
 
-            if store.household?.cloudLocation == nil {
-                Text("共有を有効にするまで、データはこのiPhone内だけに保存されます。準備後、Appleの招待画面からパートナー1人を招待してください。")
-                    .font(.footnote)
-                    .foregroundStyle(AppTheme.secondaryText)
+            Text(store.household?.cloudLocation == nil
+                 ? "合言葉をひとつ相手に伝えるだけで、同じ家計簿を2人で使えます。"
+                 : "この家計簿は2人で共有しています。どちらが記録しても、もう一方に届きます。")
+                .font(.footnote)
+                .foregroundStyle(AppTheme.secondaryText)
+
+            NavigationLink {
+                SharingView()
+            } label: {
+                settingsRow(
+                    store.household?.cloudLocation == nil ? "共有をはじめる" : "共有の設定",
+                    icon: "person.2.badge.key.fill"
+                )
+            }
+            .buttonStyle(.plain)
+
+            if store.household?.cloudLocation != nil {
+                Divider()
 
                 Button {
-                    Task { await store.prepareCloudShare() }
+                    Task { await store.refreshFromCloudIfConfigured() }
                 } label: {
-                    Label("iCloud共有を準備", systemImage: "person.badge.plus")
+                    settingsRow("今すぐ同期", icon: "arrow.triangle.2.circlepath")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(AppTheme.positive)
+                .buttonStyle(.plain)
                 .disabled(store.syncState == .syncing)
-            } else {
-                Text("招待された参加者だけが、この家計のデータを読み書きできます。")
-                    .font(.footnote)
-                    .foregroundStyle(AppTheme.secondaryText)
-
-                HStack {
-                    Button {
-                        Task { await store.refreshFromCloudIfConfigured() }
-                    } label: {
-                        Label("今すぐ同期", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(store.syncState == .syncing)
-
-                    if store.household?.cloudLocation?.scope == .privateDatabase {
-                        Button {
-                            Task { await store.prepareCloudShare() }
-                        } label: {
-                            Label("招待を表示", systemImage: "person.badge.plus")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(AppTheme.positive)
-                    }
-                }
             }
         }
         .appCard()
