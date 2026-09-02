@@ -30,12 +30,14 @@ enum ReceiptParser {
         // レジや会計処理の記録。品名と金額の並びに見えるが買ったものではない。
         "レジ", "スキャン", "会計機", "精算機", "伝票", "承認", "処理", "取扱", "商品区分", "取引",
         "カード", "会員", "有効期限", "対象", "タイショウ", "テーブル", "人数", "メンテナンス",
-        "no.", "no ", "＃", "#", "税率"
+        "no.", "no ", "＃", "#", "税率",
+        // 給油機やはかりの表示。品名の位置に来るが買ったものではない。
+        "数量", "単価", "給油", "リットル"
     ]
     /// 番号を示す語。桁が金額と紛らわしいため、合計を推測するときに外す。
     private static let serialNumberKeywords = [
         "no.", "no ", "＃", "#", "レシート", "会計券", "精算機", "会計機", "伝票",
-        "承認", "登録番号", "レジ", "会員", "スキャン", "処理"
+        "承認", "登録番号", "レジ", "会員", "スキャン", "処理", "通番", "端末番号"
     ]
 
     // MARK: - 行
@@ -209,17 +211,28 @@ enum ReceiptParser {
             }
         }
 
-        // 合計が読めなかった場合。レシート番号や伝票番号は金額より桁が大きく、
-        // 単純な最大値だと必ずそちらを拾ってしまうので、番号の行は外す。
-        let numbered = rows.enumerated()
-            .filter { _, row in
-                !looksLikePhoneNumber(row.text)
-                    && !looksLikeDate(row.text)
-                    && !looksLikeSerialNumber(row.text)
-            }
-            .flatMap { index, row in
-                amounts(in: row.text).filter(isPlausibleAmount).map { (index: index, amount: $0) }
-            }
+        // 合計が読めなかった場合。「合計」が大きく刷られていると、次の行の
+        // 「内税分消費税」まで巻き込んで1行になり、合計の行だと判定できなくなる。
+        //
+        // このとき単純な最大値を取ると、店番号や端末番号のほうが桁が大きいので
+        // 必ずそちらを拾う（Selfixのレシートで店番号 SS-38125 を合計にしていた）。
+        // ¥ の付いた数字があれば、それだけを見る。番号に通貨の印は付かない。
+        let usable = Array(rows.enumerated()).filter { pair in
+            !looksLikePhoneNumber(pair.element.text)
+                && !looksLikeDate(pair.element.text)
+                && !looksLikeSerialNumber(pair.element.text)
+        }
+        let marked = usable.flatMap { pair in
+            currencyAmounts(in: pair.element.text)
+                .filter(isPlausibleAmount)
+                .map { (index: pair.offset, amount: $0) }
+        }
+        let plain = usable.flatMap { pair in
+            amounts(in: pair.element.text)
+                .filter(isPlausibleAmount)
+                .map { (index: pair.offset, amount: $0) }
+        }
+        let numbered = marked.isEmpty ? plain : marked
         guard !numbered.isEmpty else { return nil }
 
         // 明細が読めているなら、合計はその和以上で、税を足しても大きくは離れない。
@@ -478,16 +491,44 @@ enum ReceiptParser {
         return result
     }
 
+    /// 数字の並びから金額を拾う。
+    ///
+    /// レシートには金額と紛らわしい数字が多い。店番号 `SS-38125`、商品コード `0200`、
+    /// 単価 `@155`、給油量 `19.12(L)`、カード番号の末尾 `XXXX6941`。
+    /// どれも桁数だけでは金額と見分けがつかないので、前後に何が付いているかで落とす。
     private static func amounts(in line: String) -> [Int] {
         let normalized = normalizedDigits(line)
-        guard let regex = try? NSRegularExpression(pattern: #"(?<!\d)(\d{1,7})(?!\d)"#) else {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"(?<![-0-9A-Za-z@－])(?<![0-9]\.)([0-9]{1,7})(?![-0-9A-Za-z－])(?!\.[0-9])"#
+        ) else {
             return []
         }
         let range = NSRange(normalized.startIndex..., in: normalized)
         return regex.matches(in: normalized, range: range).compactMap { match in
             guard let swiftRange = Range(match.range(at: 1), in: normalized) else { return nil }
-            return Int(normalized[swiftRange])
+            let digits = normalized[swiftRange]
+            // 先頭が0の数字は商品コードや端末番号。金額が0で始まることはない。
+            if digits.count > 1, digits.hasPrefix("0") { return nil }
+            return Int(digits)
         }
+    }
+
+    /// ¥ や 円 の付いた数字だけを拾う。
+    /// 店番号にも伝票番号にも通貨の印は付かないので、これだけで大半を落とせる。
+    private static func currencyAmounts(in line: String) -> [Int] {
+        let patterns = [#"[¥￥]\s*([0-9,０-９，]{1,11})"#, #"([0-9,０-９，]{1,11})\s*円"#]
+        var found: [Int] = []
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            let range = NSRange(line.startIndex..., in: line)
+            for match in regex.matches(in: line, range: range) {
+                guard let swiftRange = Range(match.range(at: 1), in: line) else { continue }
+                let digits = normalizedDigits(String(line[swiftRange]))
+                if digits.count > 1, digits.hasPrefix("0") { continue }
+                if let value = Int(digits) { found.append(value) }
+            }
+        }
+        return found
     }
 
     private static func firstMatch(_ pattern: String, in text: String) -> [String]? {

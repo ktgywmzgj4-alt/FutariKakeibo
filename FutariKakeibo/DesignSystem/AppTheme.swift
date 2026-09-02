@@ -58,15 +58,18 @@ struct AppCardModifier: ViewModifier {
 /// 文字の右の輪郭から虹をわずかに覗かせる。
 /// 同じ文字を虹色で少し右にずらして後ろに敷き、その分だけがはみ出す。
 struct SpectrumEdgeModifier: ViewModifier {
-    var offset: CGFloat = 2
+    var offset: CGFloat = 1.5
 
     func body(content: Content) -> some View {
         content
             .background(alignment: .leading) {
-                content
-                    .foregroundStyle(AppTheme.spectrum)
+                // content にはすでに文字色（黒）が付いているため、
+                // ここで foregroundStyle を重ねても虹色にはならず、
+                // 黒い文字がもう1枚ずれて並ぶだけになる（実機で二重に見えていた原因）。
+                // 文字の形で虹色を切り抜いて、その分だけ右へずらす。
+                AppTheme.spectrum
+                    .mask(alignment: .leading) { content }
                     .offset(x: offset)
-                    .blur(radius: 0.4)
                     .accessibilityHidden(true)
             }
     }
@@ -78,7 +81,7 @@ extension View {
     }
 
     /// 見出しや金額など、目を引かせたい文字にだけ使う。
-    func spectrumEdge(_ offset: CGFloat = 2) -> some View {
+    func spectrumEdge(_ offset: CGFloat = 1.5) -> some View {
         modifier(SpectrumEdgeModifier(offset: offset))
     }
 }

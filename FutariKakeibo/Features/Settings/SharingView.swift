@@ -97,7 +97,7 @@ struct SharingView: View {
             Text(invite.formattedCode)
                 .font(.system(size: 36, weight: .bold, design: .monospaced))
                 .foregroundStyle(AppTheme.ink)
-                .spectrumEdge(3)
+                .spectrumEdge(1.8)
                 .textSelection(.enabled)
                 .accessibilityLabel(invite.code.map { String($0) }.joined(separator: " "))
 

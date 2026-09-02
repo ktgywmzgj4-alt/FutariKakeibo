@@ -35,7 +35,7 @@ struct ReportView: View {
             Text(report.total.yenText)
                 .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundStyle(AppTheme.ink)
-                .spectrumEdge(2.5)
+                .spectrumEdge(1.5)
 
             HStack(spacing: 7) {
                 Image(systemName: differenceIcon(report))
