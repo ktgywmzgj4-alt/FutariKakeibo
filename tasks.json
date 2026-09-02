@@ -1,0 +1,103 @@
+{
+  "_readme": "作業の台帳です。AIはここを見て次にやることを決め、終わったら証拠を書き込みます。",
+
+  "rules": {
+    "AIがやってはいけないこと": [
+      "タスクを配列から削除する（やめるときは status を canceled にして reason を書く）",
+      "passes（合格条件）を書き換える（変えたいときは人間に提案して承認をもらう）",
+      "evidence を、実際に確認していない値で埋める",
+      "done のタスクを doing や todo に戻して作り直す（新しいタスクを足す）",
+      "このrulesを書き換える"
+    ],
+    "statusの意味": {
+      "todo": "まだ着手していない",
+      "doing": "作業中。同時に doing にしていいのは1件まで",
+      "blocked": "人間の作業か外部の都合で進めない。blocked_by に理由を書く",
+      "review": "実装は終わったが、検品役の判定待ち",
+      "done": "検品役が合格を出し、evidence が埋まっている",
+      "canceled": "やらないことにした。reason を書く"
+    },
+    "doneにする条件": "passes に書かれたことが evidence の証拠で示せていること。AI自身の『できました』は証拠になりません（evals/acceptance.md を参照）",
+    "1タスクの大きさ": "CIを1〜2回まわせば終わる大きさ。大きすぎるものは計画役が分割する"
+  },
+
+  "tasks": [
+    {
+      "id": "T-001",
+      "task": "AIハーネス（作業の足場）を用意する",
+      "status": "review",
+      "owner": "計画役",
+      "passes": "AGENTS.md / CLAUDE.md / Docs/mission.md / Docs/requirements.md / Docs/voice.md / Docs/safety.md / Docs/roles.md / tasks.json / progress.md / evals/acceptance.md が存在し、bash scripts/check_all.sh が通る",
+      "evidence": "CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/33646378026 → test ジョブ success (4m54s)、Executed 62 tests, with 0 failures。手元: bash scripts/check_all.sh 全5項目OK。PR #15 に16ファイル（文書12 + スクリプト4）。合否の判定は人間待ち",
+      "dependencies": [],
+      "notes": "本番の実装より先にこれを終わらせる、という人間の指示"
+    },
+    {
+      "id": "T-002",
+      "task": "CloudKitのProductionスキーマを反映する",
+      "status": "blocked",
+      "owner": "人間",
+      "blocked_by": "CloudKit Console はブラウザからの手作業でしか操作できない。AIには実行できない",
+      "passes": "CloudKit Console の Production 環境に Household / Expense / Income / ShareInvite の4レコード型が表示されている画面のスクリーンショット",
+      "evidence": "",
+      "dependencies": [],
+      "notes": "手順書は Docs/cloudkit-setup.md。一度入れた項目は二度と消せないので、名前をよく確認してから実行すること（Docs/safety.md）"
+    },
+    {
+      "id": "T-003",
+      "task": "招待コードによる共有が2台で動くことを確かめる",
+      "status": "blocked",
+      "owner": "人間 + 検品役",
+      "blocked_by": "T-002",
+      "passes": "端末Aで発行した8桁コードを端末Bで入力し、両方の画面に同じ支出が出ているスクリーンショット2枚（別々のApple IDであること）",
+      "evidence": "",
+      "dependencies": ["T-002"],
+      "notes": "コードは24時間で失効する。試すときは発行し直す"
+    },
+    {
+      "id": "T-004",
+      "task": "配信済みビルド 0.1.0 / 2026.0902.1332 を実機で確認する",
+      "status": "todo",
+      "owner": "人間",
+      "passes": "実機のスクリーンショットで、(a) 背景が白・文字が黒、(b) 金額の右側に虹色が少し覗いている、(c) テンホウのレシートで合計2,080が読める",
+      "evidence": "",
+      "dependencies": [],
+      "notes": "(c) が合わなければ T-005 に反映する"
+    },
+    {
+      "id": "T-005",
+      "task": "レシート読み取りの精度を上げる（店舗ごとの実例を積む）",
+      "status": "todo",
+      "owner": "実行役",
+      "passes": "新しく届いたレシートを再現したテストが ReceiptParserTests に1件以上追加され、CIのtestジョブが成功し、既存のテストが1件も減っていない",
+      "evidence": "",
+      "dependencies": ["T-004"],
+      "notes": "合計と日付は必須、店名は8割、明細は参考情報（Docs/requirements.md の受け入れ基準）。ルールの積み上げには限界があるので、明細の精度は深追いしない"
+    },
+    {
+      "id": "T-006",
+      "task": "開いたままのPRを片付ける",
+      "status": "todo",
+      "owner": "人間",
+      "passes": "gh pr list の出力が空になる（マージまたはクローズ済み）",
+      "evidence": "",
+      "dependencies": [],
+      "notes": "2026-09-03 調査済み。3件それぞれの推奨と根拠は下の recommendations を参照。マージ・クローズの操作は人間（Docs/safety.md）",
+      "recommendations": {
+        "PR #15 (chore/agent-harness)": "マージしてよい。CI success / 62件全通過（runs/33646378026）。Swiftのコードは1行も変えていない",
+        "PR #5 (ci/runner-availability)": "マージせずクローズを推奨。前提が誤っていた。ランナーが詰まったのは macos-26 というラベルのせいではなく一時的な混雑で、直近6回の実行はすべて macos-26 で3〜14分で完了している。macos-latest はGitHub側の都合で指す先が動くため、ある日いきなり古いXcodeでビルドされる危険がある",
+        "PR #1 (codex/initial-ios-cloud-build)": "クローズを推奨。8月20日のドラフト。project.yml に info: と entitlements: が残っており（21行目・36行目）、マージすると実機でカメラが落ちる不具合が戻る。entitlements にiCloudコンテナの指定も無く、同期も壊れる"
+      }
+    },
+    {
+      "id": "T-007",
+      "task": "生成AIによる家計コーチ機能を入れるか決める",
+      "status": "todo",
+      "owner": "人間",
+      "passes": "やる／やらない が決まり、やる場合は「何を外部へ送るか」と「プライバシーポリシーをどう直すか」が文章になっている",
+      "evidence": "",
+      "dependencies": [],
+      "notes": "レシートの文字を外部へ送るなら、利用者への約束（画像も文字も端末の外へ出さない）が変わる。コードより先に、この判断が要る"
+    }
+  ]
+}
