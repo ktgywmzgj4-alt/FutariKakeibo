@@ -339,9 +339,12 @@ final class ReceiptParserTests: XCTestCase {
             line("商品A", y: 0.20), price("¥930", y: 0.20),
             line("商品B", y: 0.24), price("¥830", y: 0.24),
             line("商品C", y: 0.28), price("¥320", y: 0.28),
+            line("お買上げ", y: 0.40), price("¥2,080", y: 0.40),
             line("レシートNo.077654", y: 0.60)
         ]
 
+        // 合計の語が読めなかった場合でも、明細の和に合う2,080を選び、
+        // 桁の大きいレシート番号のほうへは行かない。
         let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
         XCTAssertEqual(draft.amount, 2_080)
     }
