@@ -17,7 +17,7 @@ struct ExpenseRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(expense.title)
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(AppTheme.deepGreen)
+                    .foregroundStyle(AppTheme.ink)
                     .lineLimit(1)
 
                 HStack(spacing: 5) {
@@ -28,14 +28,14 @@ struct ExpenseRow: View {
                         Text("個人")
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(AppTheme.sageSoft)
+                            .background(AppTheme.positiveSoft)
                             .clipShape(Capsule())
                     }
                     if expense.isRecurring {
                         Text("定期")
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(AppTheme.terracottaSoft.opacity(0.55))
+                            .background(AppTheme.accentSoft.opacity(0.55))
                             .clipShape(Capsule())
                     }
                 }
@@ -47,7 +47,7 @@ struct ExpenseRow: View {
 
             Text(expense.amount.yenText)
                 .font(.body.monospacedDigit().weight(.bold))
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)

@@ -45,7 +45,7 @@ struct IncomeEditorView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
                         .foregroundStyle(.white)
-                        .background(canSave ? AppTheme.sage : AppTheme.secondaryText.opacity(0.4))
+                        .background(canSave ? AppTheme.positive : AppTheme.secondaryText.opacity(0.4))
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .disabled(!canSave)

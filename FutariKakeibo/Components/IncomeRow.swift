@@ -10,14 +10,14 @@ struct IncomeRow: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 42, height: 42)
-                .background(AppTheme.sage)
+                .background(AppTheme.positive)
                 .clipShape(Circle())
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(income.title)
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(AppTheme.deepGreen)
+                    .foregroundStyle(AppTheme.ink)
                     .lineLimit(1)
 
                 HStack(spacing: 5) {
@@ -27,7 +27,7 @@ struct IncomeRow: View {
                     Text(income.source.displayName)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(AppTheme.sageSoft)
+                        .background(AppTheme.positiveSoft)
                         .clipShape(Capsule())
                 }
                 .font(.caption)
@@ -38,7 +38,7 @@ struct IncomeRow: View {
 
             Text("+" + income.amount.yenText)
                 .font(.body.monospacedDigit().weight(.bold))
-                .foregroundStyle(AppTheme.sage)
+                .foregroundStyle(AppTheme.positive)
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)

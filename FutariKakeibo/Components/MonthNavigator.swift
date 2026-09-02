@@ -15,7 +15,7 @@ struct MonthNavigator: View {
             Spacer()
             Text(month.formatted(.dateTime.year().month(.wide).locale(Locale(identifier: "ja_JP"))))
                 .font(.headline)
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
             Spacer()
 
             Button { onMove(1) } label: {
@@ -24,6 +24,6 @@ struct MonthNavigator: View {
             }
             .accessibilityLabel("次の月")
         }
-        .foregroundStyle(AppTheme.terracotta)
+        .foregroundStyle(AppTheme.accent)
     }
 }

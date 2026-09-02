@@ -56,7 +56,7 @@ struct ExpenseEditorView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
                         .foregroundStyle(.white)
-                        .background(canSave ? AppTheme.terracotta : AppTheme.secondaryText.opacity(0.4))
+                        .background(canSave ? AppTheme.accent : AppTheme.secondaryText.opacity(0.4))
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .disabled(!canSave)
@@ -71,7 +71,7 @@ struct ExpenseEditorView: View {
                             .padding(.top, 8)
                     }
                     .font(.footnote)
-                    .foregroundStyle(AppTheme.deepGreen)
+                    .foregroundStyle(AppTheme.ink)
                     .appCard()
                 }
             }
@@ -148,20 +148,20 @@ struct ExpenseEditorView: View {
             HStack(spacing: 13) {
                 ZStack {
                     Circle()
-                        .fill(AppTheme.terracottaSoft.opacity(0.45))
+                        .fill(AppTheme.accentSoft.opacity(0.45))
                         .frame(width: 52, height: 52)
                     if isRecognizing {
-                        ProgressView().tint(AppTheme.terracotta)
+                        ProgressView().tint(AppTheme.accent)
                     } else {
                         Image(systemName: "doc.viewfinder.fill")
                             .font(.title2)
-                            .foregroundStyle(AppTheme.terracotta)
+                            .foregroundStyle(AppTheme.accent)
                     }
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(isRecognizing ? "レシートを読み取り中…" : "レシートから入力")
                         .font(.headline)
-                        .foregroundStyle(AppTheme.deepGreen)
+                        .foregroundStyle(AppTheme.ink)
                     Text("画像は保存・送信せず、このiPhone内で処理します")
                         .font(.caption)
                         .foregroundStyle(AppTheme.secondaryText)
@@ -193,7 +193,7 @@ struct ExpenseEditorView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(AppTheme.terracottaSoft.opacity(0.75), lineWidth: 1)
+                    .stroke(AppTheme.accentSoft.opacity(0.75), lineWidth: 1)
             )
         }
         .appCard()
@@ -203,13 +203,13 @@ struct ExpenseEditorView: View {
         VStack(spacing: 7) {
             Image(systemName: systemImage)
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(AppTheme.terracotta)
+                .foregroundStyle(AppTheme.accent)
                 .frame(width: 44, height: 44)
-                .background(AppTheme.terracottaSoft.opacity(0.35))
+                .background(AppTheme.accentSoft.opacity(0.35))
                 .clipShape(Circle())
             Text(title)
                 .font(.subheadline.weight(.bold))
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
             Text(caption)
                 .font(.caption2)
                 .foregroundStyle(AppTheme.secondaryText)
@@ -225,13 +225,13 @@ struct ExpenseEditorView: View {
             VStack(alignment: .leading, spacing: 11) {
                 Label("読み取った明細", systemImage: "list.bullet.rectangle.portrait")
                     .font(.headline)
-                    .foregroundStyle(AppTheme.deepGreen)
+                    .foregroundStyle(AppTheme.ink)
 
                 ForEach(detectedItems) { item in
                     HStack {
                         Text(item.name)
                             .font(.subheadline)
-                            .foregroundStyle(AppTheme.deepGreen)
+                            .foregroundStyle(AppTheme.ink)
                             .lineLimit(1)
                         Spacer(minLength: 8)
                         Text(item.amount.yenText)

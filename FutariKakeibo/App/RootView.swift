@@ -8,7 +8,7 @@ struct RootView: View {
             AppTheme.background.ignoresSafeArea()
             if store.isLoading {
                 ProgressView("読み込み中…")
-                    .tint(AppTheme.terracotta)
+                    .tint(AppTheme.accent)
             } else if store.household == nil {
                 OnboardingView()
             } else {
@@ -71,6 +71,6 @@ private struct MainTabView: View {
                 .tabItem { Label("設定", systemImage: "gearshape.fill") }
                 .tag(Tab.settings)
         }
-        .tint(AppTheme.terracotta)
+        .tint(AppTheme.accent)
     }
 }

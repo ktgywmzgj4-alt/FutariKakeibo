@@ -34,7 +34,8 @@ struct ReportView: View {
 
             Text(report.total.yenText)
                 .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
+                .spectrumEdge(2.5)
 
             HStack(spacing: 7) {
                 Image(systemName: differenceIcon(report))
@@ -64,7 +65,7 @@ struct ReportView: View {
                             .foregroundStyle(AppTheme.secondaryText)
                         Text(report.balance.balance.yenText)
                             .font(.subheadline.monospacedDigit().weight(.semibold))
-                            .foregroundStyle(report.balance.isNegative ? AppTheme.danger : AppTheme.sage)
+                            .foregroundStyle(report.balance.isNegative ? AppTheme.danger : AppTheme.positive)
                     }
                 }
             }
@@ -77,7 +78,7 @@ struct ReportView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("6か月の推移")
                 .font(.headline)
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
 
             let hasIncome = report.trend.contains { $0.income > 0 }
             if report.trend.allSatisfy({ $0.expense == 0 && $0.income == 0 }) {
@@ -106,8 +107,8 @@ struct ReportView: View {
                     }
                 }
                 .chartForegroundStyleScale([
-                    "支出": AppTheme.terracotta,
-                    "収入": AppTheme.sage
+                    "支出": AppTheme.accent,
+                    "収入": AppTheme.positive
                 ])
                 .chartLegend(hasIncome ? .visible : .hidden)
                 .chartYAxis {
@@ -133,7 +134,7 @@ struct ReportView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("カテゴリの内訳")
                 .font(.headline)
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
 
             if report.categories.isEmpty {
                 emptyMessage("この月の支出はまだありません", icon: "chart.pie")
@@ -156,14 +157,14 @@ struct ReportView: View {
                                 .fill(slice.category.color)
                                 .frame(width: 10, height: 10)
                             Text(slice.category.displayName)
-                                .foregroundStyle(AppTheme.deepGreen)
+                                .foregroundStyle(AppTheme.ink)
                             Spacer()
                             Text(percentText(slice.share))
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(AppTheme.secondaryText)
                             Text(slice.total.yenText)
                                 .font(.subheadline.monospacedDigit().weight(.semibold))
-                                .foregroundStyle(AppTheme.deepGreen)
+                                .foregroundStyle(AppTheme.ink)
                         }
                         .font(.subheadline)
                     }
@@ -178,7 +179,7 @@ struct ReportView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("2人の支払い")
                 .font(.headline)
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
 
             if report.total == 0 {
                 emptyMessage("支出を追加すると2人の負担が表示されます", icon: "person.2")
@@ -188,17 +189,17 @@ struct ReportView: View {
                         HStack {
                             Text(item.member.displayName)
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(AppTheme.deepGreen)
+                                .foregroundStyle(AppTheme.ink)
                             Spacer()
                             Text(percentText(item.share))
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(AppTheme.secondaryText)
                             Text(item.paid.yenText)
                                 .font(.subheadline.monospacedDigit().weight(.semibold))
-                                .foregroundStyle(AppTheme.deepGreen)
+                                .foregroundStyle(AppTheme.ink)
                         }
                         ProgressView(value: min(max(item.share, 0), 1))
-                            .tint(item.member.role == .owner ? AppTheme.terracotta : AppTheme.sage)
+                            .tint(item.member.role == .owner ? AppTheme.accent : AppTheme.positive)
                             .accessibilityLabel("\(item.member.displayName)が支払った割合")
                             .accessibilityValue(percentText(item.share))
                     }
@@ -217,7 +218,7 @@ struct ReportView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("この月で一番大きい支出")
                 .font(.headline)
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
 
             if let expense = report.largestExpense, let household = store.household {
                 ExpenseRow(expense: expense, household: household)
@@ -238,7 +239,7 @@ struct ReportView: View {
                 .foregroundStyle(AppTheme.secondaryText)
             Text(value)
                 .font(.subheadline.monospacedDigit().weight(.semibold))
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
         }
     }
 
@@ -264,7 +265,7 @@ struct ReportView: View {
 
     private func differenceColor(_ report: MonthlyReport) -> Color {
         guard report.previousTotal > 0, report.difference != 0 else { return AppTheme.secondaryText }
-        return report.difference > 0 ? AppTheme.terracotta : AppTheme.sage
+        return report.difference > 0 ? AppTheme.accent : AppTheme.positive
     }
 
     private func isSelectedMonth(_ month: Date) -> Bool {
