@@ -22,6 +22,9 @@ actor CloudKitSyncService {
         case missingRootRecord
         case invalidRecord(String)
         case shareNotAccepted
+        case inviteUnavailable
+        case inviteNotFound
+        case inviteExpired
 
         var errorDescription: String? {
             switch self {
@@ -33,6 +36,12 @@ actor CloudKitSyncService {
                 "iCloud上のデータ（\(name)）を読み取れませんでした。"
             case .shareNotAccepted:
                 "共有への参加を完了できませんでした。"
+            case .inviteUnavailable:
+                "合言葉を発行できませんでした。通信の状態を確かめて、もう一度お試しください。"
+            case .inviteNotFound:
+                "その合言葉は見つかりませんでした。入力を確かめるか、相手にもう一度発行してもらってください。"
+            case .inviteExpired:
+                "この合言葉は期限が切れています。相手にもう一度発行してもらってください。"
             }
         }
     }
@@ -107,8 +116,13 @@ actor CloudKitSyncService {
 
         let share = CKShare(rootRecord: rootRecord)
         share[CKShare.SystemFieldKey.title] = "ふたり家計簿" as CKRecordValue
-        share.publicPermission = .none
+        // 合言葉を知っている相手が参加できるようにする。合言葉は期限つきの使い切り。
+        share.publicPermission = .readWrite
         try await modifyRecords(saving: [rootRecord, share], deleting: [], in: database, atomically: true)
+        // 共有のURLはサーバー側で割り当てられる。合言葉に載せるため、保存後に取り直す。
+        if let saved = try await fetchRecord(share.recordID, from: database) as? CKShare {
+            return (location, saved)
+        }
         return (location, share)
     }
 
@@ -123,6 +137,100 @@ actor CloudKitSyncService {
             ownerName: rootRecordID.zoneID.ownerName,
             rootRecordName: rootRecordID.recordName
         )
+    }
+
+    // MARK: - 合言葉
+
+    /// 合言葉を公開データベースへ1件だけ置く。中身は共有の場所と失効時刻だけで、
+    /// 家計のデータは一切入らない。
+    func publishInvite(shareURL: URL) async throws -> ShareInvite {
+        let database = container.publicCloudDatabase
+        // まず当たらないが、万一同じ合言葉が残っていたら引き直す。
+        for _ in 0..<5 {
+            let code = ShareInvite.makeCode()
+            let recordID = inviteRecordID(for: code)
+            if try await fetchRecord(recordID, from: database) != nil { continue }
+
+            let expiresAt = Date.now.addingTimeInterval(ShareInvite.lifetime)
+            let record = CKRecord(recordType: RecordType.shareInvite, recordID: recordID)
+            record["shareURL"] = shareURL.absoluteString as CKRecordValue
+            record["expiresAt"] = expiresAt as CKRecordValue
+            _ = try await saveRecord(record, to: database)
+            return ShareInvite(code: code, shareURL: shareURL, expiresAt: expiresAt)
+        }
+        throw SyncError.inviteUnavailable
+    }
+
+    func resolveInvite(code: String) async throws -> ShareInvite {
+        let cleaned = ShareInvite.normalized(code)
+        guard cleaned.count == ShareInvite.codeLength else { throw SyncError.inviteNotFound }
+
+        guard
+            let record = try await fetchRecord(
+                inviteRecordID(for: cleaned),
+                from: container.publicCloudDatabase
+            ),
+            let urlText = record["shareURL"] as? String,
+            let url = URL(string: urlText),
+            let expiresAt = record["expiresAt"] as? Date
+        else { throw SyncError.inviteNotFound }
+
+        guard expiresAt > .now else { throw SyncError.inviteExpired }
+        return ShareInvite(code: cleaned, shareURL: url, expiresAt: expiresAt)
+    }
+
+    /// 使い終えた合言葉は残さない。消せなくても参加は済んでいるので黙って進む。
+    func consumeInvite(code: String) async {
+        let recordID = inviteRecordID(for: ShareInvite.normalized(code))
+        try? await deleteRecord(recordID, from: container.publicCloudDatabase)
+    }
+
+    /// 共有のURLから参加する。
+    func acceptShare(at url: URL) async throws -> CloudLocation {
+        let metadata = try await fetchShareMetadata(for: url)
+        return try await acceptShare(metadata)
+    }
+
+    private func inviteRecordID(for code: String) -> CKRecord.ID {
+        CKRecord.ID(recordName: "invite-\(code)")
+    }
+
+    private func deleteRecord(_ id: CKRecord.ID, from database: CKDatabase) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            database.delete(withRecordID: id) { _, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    private func fetchShareMetadata(for url: URL) async throws -> CKShare.Metadata {
+        try await withCheckedThrowingContinuation { continuation in
+            let operation = CKFetchShareMetadataOperation(shareURLs: [url])
+            operation.shouldFetchRootRecord = false
+            let found = LockedState<CKShare.Metadata?>(nil)
+            operation.perShareMetadataResultBlock = { _, result in
+                if case let .success(metadata) = result {
+                    found.withLock { $0 = metadata }
+                }
+            }
+            operation.fetchShareMetadataResultBlock = { result in
+                switch result {
+                case .success:
+                    if let metadata = found.withLock({ $0 }) {
+                        continuation.resume(returning: metadata)
+                    } else {
+                        continuation.resume(throwing: SyncError.inviteNotFound)
+                    }
+                case let .failure(error):
+                    continuation.resume(throwing: error)
+                }
+            }
+            container.add(operation)
+        }
     }
 
     func fetchSnapshot(at location: CloudLocation) async throws -> CloudSnapshot {
@@ -247,6 +355,7 @@ actor CloudKitSyncService {
         static let household = "Household"
         static let expense = "Expense"
         static let income = "Income"
+        static let shareInvite = "ShareInvite"
     }
 
     private func upsertHousehold(
