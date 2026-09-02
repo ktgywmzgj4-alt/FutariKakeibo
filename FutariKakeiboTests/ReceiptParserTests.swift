@@ -303,4 +303,16 @@ final class ReceiptParserTests: XCTestCase {
         XCTAssertFalse(draft.items.contains { $0.name.contains("タイショウ") })
         XCTAssertFalse(draft.items.contains { $0.amount == 1_361 })
     }
+
+    func testFullWidthDigitsAreNormalizedWithoutTouchingKatakana() {
+        let lines = [
+            line("ラーメン", y: 0.3), price("９３０", y: 0.3),
+            line("合計", y: 0.5), price("９３０", y: 0.5)
+        ]
+
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+
+        XCTAssertEqual(draft.amount, 930)
+        XCTAssertEqual(draft.items.first?.name, "ラーメン")
+    }
 }

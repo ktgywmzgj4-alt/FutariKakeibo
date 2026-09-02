@@ -402,11 +402,25 @@ enum ReceiptParser {
 
     // MARK: - 文字の判定
 
+    /// 数字と通貨記号だけを揃える。文字列全体を半角化すると、
+    /// 品名のカタカナまで半角になってしまう。
     private static func normalizedDigits(_ text: String) -> String {
-        (text.applyingTransform(.fullwidthToHalfwidth, reverse: false) ?? text)
-            .replacingOccurrences(of: ",", with: "")
-            .replacingOccurrences(of: "¥", with: "")
-            .replacingOccurrences(of: "￥", with: "")
+        var result = ""
+        result.reserveCapacity(text.count)
+        for character in text {
+            if character == "," || character == "，" || character == "¥" || character == "￥" {
+                continue
+            }
+            let scalars = character.unicodeScalars
+            if scalars.count == 1,
+               let scalar = scalars.first,
+               scalar.value >= 0xFF10, scalar.value <= 0xFF19 {
+                result.append(Character(UnicodeScalar(UInt8(scalar.value - 0xFF10 + 48))))
+            } else {
+                result.append(character)
+            }
+        }
+        return result
     }
 
     private static func amounts(in line: String) -> [Int] {
