@@ -24,9 +24,12 @@ enum ReceiptParser {
     ]
     /// 明細として採用しない語。
     private static let notItemKeywords = [
-        "合計", "小計", "総計", "お会計", "お支払", "消費税", "内税", "外税", "税額",
+        "合計", "小計", "総計", "お会計", "お支払", "消費税", "内税", "外税", "税額", "税合計",
         "お預り", "お預かり", "お釣", "おつり", "釣銭", "現金", "クレジット", "電子マネー",
-        "ポイント", "値引", "割引", "点数", "個数", "残高", "電話", "tel", "登録番号"
+        "ポイント", "値引", "割引", "点数", "個数", "お買上", "残高", "電話", "tel", "登録番号",
+        // レジや会計処理の記録。品名と金額の並びに見えるが買ったものではない。
+        "レジ", "スキャン", "会計機", "伝票", "承認", "処理", "取扱", "商品区分", "取引",
+        "カード", "会員", "有効期限", "対象", "タイショウ", "責no", "スno", "テーブル", "人数"
     ]
 
     // MARK: - 行
@@ -54,16 +57,27 @@ enum ReceiptParser {
     }
 
     static func rows(from lines: [RecognizedLine]) -> [Row] {
+        let sorted = lines.sorted { $0.midY < $1.midY }
+        guard !sorted.isEmpty else { return [] }
+
+        // 行の間隔は文字の高さで決まる。1枚のレシート全体の代表値を使うほうが、
+        // 断片ごとの高さで判断するより安定する。
+        let heights = sorted.map(\.height).sorted()
+        let medianHeight = heights[heights.count / 2]
+        let tolerance = max(medianHeight * 0.5, 0.003)
+
         var rows: [Row] = []
-        for line in lines.sorted(by: { $0.midY < $1.midY }) {
-            if let last = rows.last {
-                let tolerance = max(max(last.height, line.height) * rowTolerance, 0.004)
-                if abs(line.midY - last.midY) <= tolerance {
-                    rows[rows.count - 1].fragments.append(line)
-                    continue
-                }
+        // 同じ行かどうかは「その行の最初の断片」と比べる。行の平均と比べると、
+        // 断片が増えるたびに基準が下へずれ、次の行まで巻き込んでしまう。
+        var anchors: [Double] = []
+
+        for line in sorted {
+            if let anchor = anchors.last, abs(line.midY - anchor) <= tolerance {
+                rows[rows.count - 1].fragments.append(line)
+                continue
             }
             rows.append(Row(fragments: [line]))
+            anchors.append(line.midY)
         }
         return rows
     }
@@ -100,20 +114,30 @@ enum ReceiptParser {
 
     // MARK: - どこで
 
-    static func merchant(from rows: [Row]) -> String {
-        let candidates = rows.enumerated().filter { isMerchantCandidate($1) }
-        guard !candidates.isEmpty else { return "" }
+    /// 店名を探す範囲。長いレシートで明細まで候補に入らないよう、行数で区切る。
+    private static let merchantSearchRows = 10
 
-        // 店名はレシートの上の方に、他より大きな文字で刷られていることが多い。
-        let upper = candidates.filter { $0.element.midY <= 0.45 }
-        let pool = upper.isEmpty ? candidates : upper
-        let tallest = pool.max { lhs, rhs in
-            if lhs.element.height == rhs.element.height {
-                return lhs.offset > rhs.offset
-            }
-            return lhs.element.height < rhs.element.height
+    static func merchant(from rows: [Row]) -> String {
+        let head = Array(rows.prefix(merchantSearchRows))
+        let candidates = head.filter { isMerchantCandidate($0) }
+        guard !candidates.isEmpty else {
+            // 上の方が全部除外された場合だけ、全体から探す。
+            let fallback = rows.filter { isMerchantCandidate($0) }
+            return cleanedMerchant(fallback.first?.text ?? "")
         }
-        return cleanedMerchant(tallest?.element.text ?? pool[0].element.text)
+
+        // 「店」で終わる行があれば、それが一番はっきりした店名。
+        // ロゴの読み違いより、本文に刷られた正式な店名を優先する。
+        let named = candidates.filter { $0.text.contains("店") }
+        if let best = named.max(by: { $0.text.count < $1.text.count }) {
+            return cleanedMerchant(best.text)
+        }
+
+        // なければ、上部で一番大きな文字の行。
+        let tallest = candidates.max { lhs, rhs in
+            lhs.height < rhs.height
+        }
+        return cleanedMerchant(tallest?.text ?? candidates[0].text)
     }
 
     static func merchant(from lines: [String]) -> String {
@@ -129,9 +153,20 @@ enum ReceiptParser {
         if looksLikeDate(text) { return false }
         if looksLikePhoneNumber(text) { return false }
         if looksLikeAddress(text) { return false }
+        // 末尾が金額の行は明細。店名の行に値段は付かない。
+        if endsWithPrice(text) { return false }
+        // 明細の先頭につく印。
+        if text.hasPrefix("*") || text.hasPrefix("＊") { return false }
         // 数字ばかりの行は店名ではない。
         let digits = text.filter(\.isNumber).count
         return Double(digits) / Double(text.count) < 0.4
+    }
+
+    private static func endsWithPrice(_ text: String) -> Bool {
+        normalizedDigits(text).range(
+            of: #"[0-9]{1,7}\s*円?\s*[*※＊軽外内)）]?\s*$"#,
+            options: .regularExpression
+        ) != nil
     }
 
     private static func cleanedMerchant(_ text: String) -> String {
@@ -193,9 +228,18 @@ enum ReceiptParser {
         if notItemKeywords.contains(where: { lower.contains($0) }) { return nil }
         if looksLikeDate(row.text) || looksLikePhoneNumber(row.text) { return nil }
         if looksLikeAddress(row.text) { return nil }
+        // 税率や割引率の行。金額の並びに見えるが買ったものではない。
+        if row.text.contains("%") || row.text.contains("％") { return nil }
 
         let fragments = row.sortedFragments
-        guard fragments.count >= 2 else { return itemFromSingleFragment(row) }
+        guard fragments.count >= 2 else { return itemFromText(row.text) }
+
+        let nameText = fragments.dropLast().map(\.text).joined(separator: " ")
+        // 品名の側がすでに金額で終わっているなら、右端の断片は隣の行のもの。
+        // 巻き込んだ金額ではなく、品名についている金額を使う。
+        if endsWithPrice(nameText) {
+            return itemFromText(nameText)
+        }
 
         // 一番右の断片が金額、その左が品名という並びを前提にする。
         guard
@@ -203,16 +247,16 @@ enum ReceiptParser {
             isPlausibleAmount(price), price <= 999_999
         else { return nil }
 
-        let name = cleanedItemName(fragments.dropLast().map(\.text).joined(separator: " "))
+        let name = cleanedItemName(nameText)
         guard isPlausibleItemName(name) else { return nil }
         return ReceiptItem(name: name, amount: price)
     }
 
-    /// 品名と金額が1つの断片として読まれた場合。末尾の数字を金額として切り出す。
-    private static func itemFromSingleFragment(_ row: Row) -> ReceiptItem? {
-        let text = normalizedDigits(row.text)
+    /// 品名と金額が地続きに読まれた場合。末尾の数字を金額として切り出す。
+    private static func itemFromText(_ source: String) -> ReceiptItem? {
+        let text = normalizedDigits(source)
         guard
-            let match = text.range(of: #"([0-9]{1,6})\s*円?\s*[*※軽外内]?\s*$"#, options: .regularExpression)
+            let match = text.range(of: #"([0-9]{1,6})\s*円?\s*[*※＊軽外内]?\s*$"#, options: .regularExpression)
         else { return nil }
         let priceText = text[match].filter(\.isNumber)
         guard let price = Int(priceText), isPlausibleAmount(price), price <= 999_999 else { return nil }

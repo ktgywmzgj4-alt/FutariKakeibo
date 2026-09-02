@@ -199,4 +199,108 @@ final class ReceiptParserTests: XCTestCase {
         let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
         XCTAssertEqual(draft.suggestedCategory, .groceries)
     }
+
+    // MARK: - 実機で撮った実物のレシート
+
+    /// ラーメン店のレシート。ロゴが大きく、本文に正式な店名が刷られている。
+    private func ramenShopReceipt() -> [RecognizedLine] {
+        [
+            line("みんなの テンホウ", y: 0.03, height: 0.05),
+            RecognizedLine(text: "WEL COME", minX: 0.62, maxX: 0.92, midY: 0.03, height: 0.03),
+            line("岡谷長地店", y: 0.08, height: 0.03),
+            line("<レシート 兼 領収書>", y: 0.11),
+            line("テンホウ岡谷長地店", y: 0.14),
+            line("登録番号:T2100001018500", y: 0.16),
+            line("TEL:0266-27-2972", y: 0.18),
+            line("長野県岡谷市長地梨久保1-6-21", y: 0.20),
+            line("株式会社テンホウ・フーズ", y: 0.22),
+            line("2026/08/29 18:54", y: 0.24), price("担:00", y: 0.24),
+            line("肉揚味噌ラーメン", y: 0.28), price("¥930", y: 0.28),
+            line("テンホウメン", y: 0.31), price("¥830", y: 0.31),
+            line("ぎょうざ", y: 0.34), price("¥320", y: 0.34),
+            line("小計 3点", y: 0.38), price("¥2,080", y: 0.38),
+            line("合計", y: 0.42, height: 0.03), price("¥2,080", y: 0.42),
+            line("(内消費税等", y: 0.45), price("¥189)", y: 0.45),
+            line("(10%対象税込計", y: 0.47), price("¥2,080)", y: 0.47),
+            line("クレジット支払", y: 0.50), price("¥2,080", y: 0.50),
+            line("お釣", y: 0.52), price("¥0", y: 0.52)
+        ]
+    }
+
+    /// スーパーのレシート。ロゴが店名で、上部にレジや会計機の記録が並ぶ。
+    private func supermarketWithRegisterNumbers() -> [RecognizedLine] {
+        [
+            line("領収証", y: 0.02, height: 0.025),
+            line("EQVo! エクボスタイル ファミリーテーブル", y: 0.05, height: 0.045),
+            line("052-503-2116", y: 0.08),
+            line("登録番号", y: 0.11), price("T2180001109424", y: 0.11),
+            line("2026年08月30日(日)16:45", y: 0.13), price("レジ0103", y: 0.13),
+            line("責No00000103会計機103", y: 0.15),
+            line("スNo00000072小林", y: 0.17),
+            line("スキャンレジ0004", y: 0.19), price("スキャンNo6539", y: 0.19),
+            line("*天然水きりっと果実 ピン", y: 0.23), price("¥108", y: 0.23),
+            line("*えくぼちゃんたまご", y: 0.27), price("¥248", y: 0.27),
+            line("*豚小間切れ肉(中パック)", y: 0.29), price("¥396", y: 0.29),
+            line("割引 10%", y: 0.31), price("-40", y: 0.31),
+            line("*サンキスト パイン", y: 0.33), price("¥98", y: 0.33),
+            line("*ホクト カットブナシメジ", y: 0.41), price("¥99", y: 0.41),
+            line("小計", y: 0.45), price("¥1,361", y: 0.45),
+            line("(外8% タイショウ", y: 0.47), price("¥1,361)", y: 0.47),
+            line("外税計", y: 0.51), price("¥108", y: 0.51),
+            line("(税合計", y: 0.53), price("¥108)", y: 0.53),
+            line("合計", y: 0.55, height: 0.028), price("¥1,469", y: 0.55),
+            line("クレジット", y: 0.58), price("¥1,469", y: 0.58),
+            line("お釣り", y: 0.60), price("¥0", y: 0.60),
+            line("お買上点数", y: 0.62), price("9点", y: 0.62)
+        ]
+    }
+
+    func testRamenShopReceiptPrefersThePrintedShopNameOverTheLogo() {
+        let draft = ReceiptParser.parse(
+            lines: ramenShopReceipt(),
+            now: referenceNow,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.merchant, "テンホウ岡谷長地店")
+        XCTAssertEqual(draft.amount, 2_080)
+        XCTAssertEqual(draft.date, date(2026, 8, 29))
+        XCTAssertEqual(draft.items.map(\.name), ["肉揚味噌ラーメン", "テンホウメン", "ぎょうざ"])
+        XCTAssertEqual(draft.items.map(\.amount), [930, 830, 320])
+        XCTAssertEqual(draft.suggestedCategory, .dining)
+    }
+
+    /// 金額の断片が1行ぶんずれて隣の行に付くと、品名と金額の対応が全部ずれる。
+    func testAPriceThatDriftsIntoThePreviousRowDoesNotShiftEveryItem() {
+        let drifted = [
+            line("肉揚味噌ラーメン", y: 0.28), price("¥930", y: 0.28),
+            RecognizedLine(text: "¥830", minX: 0.74, maxX: 0.93, midY: 0.283, height: 0.018),
+            line("テンホウメン", y: 0.31),
+            line("合計", y: 0.42), price("¥1,760", y: 0.42)
+        ]
+
+        let draft = ReceiptParser.parse(lines: drifted, now: referenceNow, calendar: calendar)
+
+        XCTAssertEqual(draft.items.first?.name, "肉揚味噌ラーメン")
+        XCTAssertEqual(draft.items.first?.amount, 930)
+    }
+
+    func testSupermarketReceiptSkipsRegisterAndTaxRows() {
+        let draft = ReceiptParser.parse(
+            lines: supermarketWithRegisterNumbers(),
+            now: referenceNow,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.merchant, "EQVo! エクボスタイル ファミリーテーブル")
+        XCTAssertEqual(draft.amount, 1_469)
+        XCTAssertEqual(draft.date, date(2026, 8, 30))
+        XCTAssertEqual(
+            draft.items.map(\.name),
+            ["天然水きりっと果実 ピン", "えくぼちゃんたまご", "豚小間切れ肉(中パック)", "サンキスト パイン", "ホクト カットブナシメジ"]
+        )
+        XCTAssertFalse(draft.items.contains { $0.name.contains("スキャン") })
+        XCTAssertFalse(draft.items.contains { $0.name.contains("タイショウ") })
+        XCTAssertFalse(draft.items.contains { $0.amount == 1_361 })
+    }
 }
