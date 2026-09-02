@@ -36,11 +36,14 @@ Productionは作ってくれません。**人間が手で反映する必要が�
 
 ## 反映されるはずのもの
 
+**2026-09-03 追記**: `Household` に `merchantMemosData` が増えました（覚えた店の一覧）。
+まだProductionへ反映していないので、**この項目も一緒に入ります**。反映前に気づけてよかった項目です。
+
 コード（`FutariKakeibo/Services/CloudKitSyncService.swift`）が使っている項目です。
 
 | Record Type | 項目 |
 | --- | --- |
-| `Household` | id, name, monthlyBudget, ownerMemberID, membersData, categoryBudgetsData, recurringExpensesData, createdAt, updatedAt |
+| `Household` | id, name, monthlyBudget, ownerMemberID, membersData, categoryBudgetsData, recurringExpensesData, **merchantMemosData**, createdAt, updatedAt |
 | `Expense` | id, isDeleted, title, amount, date, category, paidByMemberID, splitMethod, note, recurringID, createdAt, updatedAt |
 | `Income` | id, isDeleted, title, amount, date, source, receivedByMemberID, note, createdAt, updatedAt |
 | `ShareInvite` | shareURL, expiresAt |

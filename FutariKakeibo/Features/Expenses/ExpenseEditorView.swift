@@ -22,6 +22,8 @@ struct ExpenseEditorView: View {
     @State private var recognizedText = ""
     @State private var photoItem: PhotosPickerItem?
     @State private var detectedItems: [ReceiptItem] = []
+    /// レシートから読み取ったときの店の鍵。保存できたらこの店を覚える。
+    @State private var shopKey: String?
     @State private var validationMessage: String?
     @FocusState private var focusedField: Field?
 
@@ -323,13 +325,18 @@ struct ExpenseEditorView: View {
                 // 端末の中のAIが使えるならAIに、使えなければルールに読ませる。
                 // どちらの場合も、文字は端末の外へ出ない。
                 let draft = await ReceiptInterpreter.interpret(lines: lines)
-                recognizedText = draft.recognizedText
-                detectedItems = draft.items
-                if !draft.merchant.isEmpty { title = draft.merchant }
-                if let amount = draft.amount { amountText = String(amount) }
-                if let receiptDate = draft.date { date = receiptDate }
-                category = draft.suggestedCategory
-                validationMessage = readBackMessage(for: draft)
+                // 覚えている店なら、読み取りの推測より人が直した結果を優先する。
+                let remembered = MerchantMemory.applying(
+                    store.household?.merchantMemos ?? [], to: draft
+                )
+                recognizedText = remembered.recognizedText
+                detectedItems = remembered.items
+                shopKey = remembered.shopKey
+                if !remembered.merchant.isEmpty { title = remembered.merchant }
+                if let amount = remembered.amount { amountText = String(amount) }
+                if let receiptDate = remembered.date { date = receiptDate }
+                category = remembered.suggestedCategory
+                validationMessage = readBackMessage(for: remembered)
             } catch {
                 validationMessage = error.localizedDescription
             }
@@ -376,6 +383,14 @@ struct ExpenseEditorView: View {
                 await store.updateExpense(expense)
             }
 
+            // レシートから読み取った支出なら、保存できた形でこの店を覚える。
+            // 人が直したあとの値なので、次に同じ店を読んだときはこれが出る。
+            if let shopKey {
+                await store.rememberMerchant(
+                    key: shopKey, merchant: expense.title, category: expense.category
+                )
+            }
+
             if let onSaved {
                 resetForm()
                 onSaved()
@@ -394,5 +409,6 @@ struct ExpenseEditorView: View {
         note = ""
         recognizedText = ""
         detectedItems = []
+        shopKey = nil
     }
 }

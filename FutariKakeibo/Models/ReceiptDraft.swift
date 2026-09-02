@@ -11,6 +11,10 @@ struct ReceiptDraft: Equatable, Sendable {
     var items: [ReceiptItem]
     var suggestedCategory: ExpenseCategory
     var recognizedText: String
+    /// 同じ店だと見分けるための鍵。覚えた店を引き当てるのに使う（`MerchantKey`）。
+    var shopKey: String?
+    /// 覚えていた店の情報を当てはめたかどうか。画面でそう伝えるために持つ。
+    var usedMemo: Bool
 
     init(
         merchant: String,
@@ -18,7 +22,9 @@ struct ReceiptDraft: Equatable, Sendable {
         date: Date? = nil,
         items: [ReceiptItem] = [],
         suggestedCategory: ExpenseCategory = .other,
-        recognizedText: String = ""
+        recognizedText: String = "",
+        shopKey: String? = nil,
+        usedMemo: Bool = false
     ) {
         self.merchant = merchant
         self.amount = amount
@@ -26,6 +32,8 @@ struct ReceiptDraft: Equatable, Sendable {
         self.items = items
         self.suggestedCategory = suggestedCategory
         self.recognizedText = recognizedText
+        self.shopKey = shopKey
+        self.usedMemo = usedMemo
     }
 
     static let empty = ReceiptDraft(merchant: "")

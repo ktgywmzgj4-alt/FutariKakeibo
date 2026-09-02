@@ -11,6 +11,9 @@ my $checked = 0;
 for my $path (@ARGV) {
     open my $fh, '<:encoding(UTF-8)', $path or die "cannot open $path: $!";
     local $/; my $src = <$fh>; close $fh;
+    # Windowsで保存されたファイルは行末がCRLFになる。
+    # 行continuationの判定が行末の文字に依るので、ここで揃えておく。
+    $src =~ s/\r\n/\n/g;
     $checked++;
     my @errors;
     my $line = 1;
