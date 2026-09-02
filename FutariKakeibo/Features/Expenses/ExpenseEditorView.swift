@@ -223,24 +223,18 @@ struct ExpenseEditorView: View {
     private var detectedItemsCard: some View {
         if !detectedItems.isEmpty {
             VStack(alignment: .leading, spacing: 11) {
-                Label("読み取った明細", systemImage: "list.bullet.rectangle.portrait")
+                Label("種類を推測した手がかり", systemImage: "list.bullet.rectangle.portrait")
                     .font(.headline)
                     .foregroundStyle(AppTheme.ink)
 
-                ForEach(detectedItems) { item in
-                    HStack {
-                        Text(item.name)
-                            .font(.subheadline)
-                            .foregroundStyle(AppTheme.ink)
-                            .lineLimit(1)
-                        Spacer(minLength: 8)
-                        Text(item.amount.yenText)
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundStyle(AppTheme.secondaryText)
-                    }
-                }
+                // 明細は記録しない。何を買ったかから支出の種類を推測するためだけに使う。
+                // 金額を並べると「これも記録される」と読めてしまうので出さない。
+                Text(detectedItems.map(\.name).joined(separator: "・"))
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                Text("何を買ったかの確認用です。保存されるのは合計金額だけです。")
+                Text("レシートから読み取った品名です。記録されるのは日付・店名・合計金額・種類の4つだけです。")
                     .font(.caption)
                     .foregroundStyle(AppTheme.secondaryText)
             }
