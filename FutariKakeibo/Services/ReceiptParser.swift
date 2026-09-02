@@ -28,8 +28,14 @@ enum ReceiptParser {
         "お預り", "お預かり", "お釣", "おつり", "釣銭", "現金", "クレジット", "電子マネー",
         "ポイント", "値引", "割引", "点数", "個数", "お買上", "残高", "電話", "tel", "登録番号",
         // レジや会計処理の記録。品名と金額の並びに見えるが買ったものではない。
-        "レジ", "スキャン", "会計機", "伝票", "承認", "処理", "取扱", "商品区分", "取引",
-        "カード", "会員", "有効期限", "対象", "タイショウ", "責no", "スno", "テーブル", "人数"
+        "レジ", "スキャン", "会計機", "精算機", "伝票", "承認", "処理", "取扱", "商品区分", "取引",
+        "カード", "会員", "有効期限", "対象", "タイショウ", "テーブル", "人数", "メンテナンス",
+        "no.", "no ", "＃", "#", "税率"
+    ]
+    /// 番号を示す語。桁が金額と紛らわしいため、合計を推測するときに外す。
+    private static let serialNumberKeywords = [
+        "no.", "no ", "＃", "#", "レシート", "会計券", "精算機", "会計機", "伝票",
+        "承認", "登録番号", "レジ", "会員", "スキャン", "処理"
     ]
 
     // MARK: - 行
@@ -93,12 +99,15 @@ enum ReceiptParser {
         let shopName = merchant(from: rows)
         let totalIndex = totalRowIndex(in: rows)
         let recognizedText = rows.map(\.text).joined(separator: "\n")
+        let found = items(from: rows, before: totalIndex)
+        // 明細が読めていれば、合計の候補が妥当かどうかの手がかりになる。
+        let itemsTotal = found.isEmpty ? nil : found.reduce(0) { $0 + $1.amount }
 
         return ReceiptDraft(
             merchant: shopName,
-            amount: totalAmount(from: rows),
+            amount: totalAmount(from: rows, itemsTotal: itemsTotal),
             date: receiptDate(from: rows, now: now, calendar: calendar),
-            items: items(from: rows, before: totalIndex),
+            items: found,
             suggestedCategory: category(from: recognizedText, merchant: shopName),
             recognizedText: recognizedText
         )
@@ -187,22 +196,52 @@ enum ReceiptParser {
         return !notTotalKeywords.contains { lower.contains($0) }
     }
 
-    static func totalAmount(from rows: [Row]) -> Int? {
-        if let index = totalRowIndex(in: rows),
-           let amount = amounts(in: rows[index].text).filter({ isPlausibleAmount($0) }).max() {
-            return amount
+    static func totalAmount(from rows: [Row], itemsTotal: Int? = nil) -> Int? {
+        if let index = totalRowIndex(in: rows) {
+            // 「合計」は大きく刷られることが多く、語と金額が別の行として
+            // 読まれることがある。同じ行に無ければ次の行も見る。
+            var candidates = amounts(in: rows[index].text)
+            if candidates.isEmpty, index + 1 < rows.count {
+                candidates = amounts(in: rows[index + 1].text)
+            }
+            if let amount = candidates.filter({ isPlausibleAmount($0) }).max() {
+                return amount
+            }
         }
-        // 合計の語が読めなかった場合は、金額らしい数字の最大値を使う。
-        // 電話番号や日付の行は先に除いておく。
-        let fallback = rows
-            .filter { !looksLikePhoneNumber($0.text) && !looksLikeDate($0.text) }
-            .flatMap { amounts(in: $0.text) }
-            .filter { isPlausibleAmount($0) }
-        return fallback.max()
+
+        // 合計が読めなかった場合。レシート番号や伝票番号は金額より桁が大きく、
+        // 単純な最大値だと必ずそちらを拾ってしまうので、番号の行は外す。
+        let numbered = rows.enumerated()
+            .filter { _, row in
+                !looksLikePhoneNumber(row.text)
+                    && !looksLikeDate(row.text)
+                    && !looksLikeSerialNumber(row.text)
+            }
+            .flatMap { index, row in
+                amounts(in: row.text).filter(isPlausibleAmount).map { (index: index, amount: $0) }
+            }
+        guard !numbered.isEmpty else { return nil }
+
+        // 明細が読めているなら、合計はその和以上で、税を足しても大きくは離れない。
+        // 条件に合うもののうち、レシートの下にあるものほど合計らしい。
+        if let itemsTotal, itemsTotal > 0 {
+            let upperBound = Int(Double(itemsTotal) * 1.3)
+            let plausible = numbered.filter { $0.amount >= itemsTotal && $0.amount <= upperBound }
+            if let best = plausible.max(by: { $0.index < $1.index }) {
+                return best.amount
+            }
+        }
+        return numbered.map(\.amount).max()
     }
 
     static func totalAmount(from lines: [String]) -> Int? {
         totalAmount(from: rows(from: RecognizedLine.lines(fromPlainText: lines.joined(separator: "\n"))))
+    }
+
+    /// レシート番号や伝票番号の行。金額と桁が近く紛らわしい。
+    private static func looksLikeSerialNumber(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        return serialNumberKeywords.contains { lower.contains($0) }
     }
 
     private static func isPlausibleAmount(_ value: Int) -> Bool {
@@ -211,11 +250,17 @@ enum ReceiptParser {
 
     // MARK: - 何を
 
+    /// 明細が始まらない冒頭の行数。ロゴや店名の誤読を品名として拾わないため。
+    private static let headerRows = 3
+
     static func items(from rows: [Row], before totalIndex: Int?) -> [ReceiptItem] {
         let limit = totalIndex ?? rows.count
+        // 実物のレシートは必ず数行の見出しから始まる。短い入力では飛ばさない。
+        let start = rows.count >= 8 ? min(headerRows, limit) : 0
+        guard start < limit else { return [] }
         var results: [ReceiptItem] = []
 
-        for row in rows.prefix(limit) {
+        for row in rows[start..<limit] {
             guard let item = item(from: row) else { continue }
             results.append(item)
             if results.count >= maximumItems { break }
@@ -230,6 +275,8 @@ enum ReceiptParser {
         if looksLikeAddress(row.text) { return nil }
         // 税率や割引率の行。金額の並びに見えるが買ったものではない。
         if row.text.contains("%") || row.text.contains("％") { return nil }
+        // 「2コX単118」のような数量と単価の行。品名ではない。
+        if row.text.range(of: #"[0-9]\s*[コ個][x×X]\s*単"#, options: .regularExpression) != nil { return nil }
 
         let fragments = row.sortedFragments
         guard fragments.count >= 2 else { return itemFromText(row.text) }
@@ -267,9 +314,17 @@ enum ReceiptParser {
     }
 
     private static func cleanedItemName(_ text: String) -> String {
-        text
-            .trimmingCharacters(in: CharacterSet(charactersIn: " 　*※・|-–—軽外内"))
+        var name = text
+            .trimmingCharacters(in: CharacterSet(charactersIn: " 　*※＊・|-–—軽外内"))
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        // 「外8 1501 鮮魚」のように、税区分と商品コードが品名の前につく。
+        // 品名だけ残したいので、先頭に並ぶ数字とその区切りを落とす。
+        while let range = name.range(of: #"^[0-9]{1,6}\s*"#, options: .regularExpression) {
+            let stripped = String(name[range.upperBound...])
+            if stripped.isEmpty { break }
+            name = stripped
+        }
+        return name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func isPlausibleItemName(_ name: String) -> Bool {
