@@ -63,7 +63,7 @@ struct RecurringExpenseListView: View {
             Text(monthlyFixedTotal.yenText)
                 .font(.system(size: 30, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundStyle(AppTheme.ink)
-                .spectrumEdge(2)
+                .spectrumEdge(1.2)
 
             Text("有効な定期支出 \(store.recurringExpenses.filter(\.isActive).count) 件の合計です。指定した日になると自動で支出に追加されます。")
                 .font(.footnote)

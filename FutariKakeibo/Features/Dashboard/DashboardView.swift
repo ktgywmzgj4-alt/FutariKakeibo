@@ -36,7 +36,7 @@ struct DashboardView: View {
                     Text(store.monthlyTotal.yenText)
                         .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
                         .foregroundStyle(AppTheme.ink)
-                        .spectrumEdge(2.5)
+                        .spectrumEdge(1.5)
                 }
                 Spacer()
                 Text("予算 \((store.household?.monthlyBudget ?? 0).yenText)")

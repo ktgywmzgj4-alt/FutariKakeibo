@@ -371,4 +371,60 @@ final class ReceiptParserTests: XCTestCase {
         let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
         XCTAssertFalse(draft.items.contains { $0.name.contains("コX単") })
     }
+
+    /// Selfix北名古屋のガソリンのレシート。実機で合計を¥38,125と読み違えていた。
+    /// 店番号 SS-38125 を金額として拾ってしまうのが原因だった。
+    func testStationCodeIsNotMistakenForTheTotal() {
+        let lines = [
+            line("Selfix北名古屋", y: 0.06, height: 0.035),
+            line("愛知県北名古屋市鹿田東村79", y: 0.12),
+            line("SS-38125", x: 0.62, width: 0.24, y: 0.12),
+            line("TEL:0568-54-1790", y: 0.15),
+            line("登録番号：T2170001007389", y: 0.18),
+            line("2026年08月30日 11:46", y: 0.22),
+            line("伝票No.0596", x: 0.62, width: 0.24, y: 0.22),
+            line("0200", y: 0.32), price("¥2964", y: 0.32),
+            line("レギュラーガソリン P19", y: 0.35),
+            line("19.12(L)", x: 0.58, width: 0.2, y: 0.35),
+            line("数量", y: 0.38),
+            line("@155", x: 0.66, width: 0.14, y: 0.38),
+            line("単価", y: 0.41),
+            line("合計", y: 0.48, height: 0.03), price("¥2,964", y: 0.48),
+            line("(内税分消費税", y: 0.52), price("¥269)", y: 0.52),
+            line("端末番号:0804839738125", y: 0.62)
+        ]
+
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+        XCTAssertEqual(draft.amount, 2_964)
+        XCTAssertEqual(draft.date, date(2026, 8, 30))
+    }
+
+    /// 給油機の表示。「数量 @155」「単価」は買ったものではないので明細に出さない。
+    func testFuelPumpReadoutsAreNotItems() {
+        let lines = [
+            line("0200", y: 0.32), price("¥2964", y: 0.32),
+            line("数量", y: 0.38),
+            line("@155", x: 0.66, width: 0.14, y: 0.38),
+            line("単価", y: 0.41),
+            line("合計", y: 0.48), price("¥2,964", y: 0.48)
+        ]
+
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+        XCTAssertFalse(draft.items.contains { $0.name.contains("数量") })
+        XCTAssertFalse(draft.items.contains { $0.amount == 155 })
+        XCTAssertFalse(draft.items.contains { $0.amount == 200 })
+    }
+
+    /// 商品コード、単価、給油量、カード番号の末尾。どれも金額ではない。
+    func testCodesAndUnitPricesAreNotAmounts() {
+        let lines = [
+            line("XXXXXXXXXXXX6941", y: 0.26),
+            line("ATC:004B", y: 0.28),
+            line("8620-8623 07", y: 0.30),
+            line("合計", y: 0.50), price("¥1,180", y: 0.50)
+        ]
+
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+        XCTAssertEqual(draft.amount, 1_180)
+    }
 }
