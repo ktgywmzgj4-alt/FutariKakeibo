@@ -114,8 +114,8 @@ final class AppStore: ObservableObject {
     }
 
     func createHousehold(selfName: String, partnerName: String, monthlyBudget: Int) async {
-        let owner = Member(displayName: selfName.isEmpty ? "自分" : selfName, role: .owner)
-        let partner = Member(displayName: partnerName.isEmpty ? "パートナー" : partnerName, role: .partner)
+        let owner = Member(displayName: selfName.isEmpty ? "そら" : selfName, role: .owner)
+        let partner = Member(displayName: partnerName.isEmpty ? "つばさ" : partnerName, role: .partner)
         snapshot = AppSnapshot(
             household: Household(
                 monthlyBudget: monthlyBudget,
@@ -189,7 +189,7 @@ final class AppStore: ObservableObject {
             var cleaned = member
             let name = member.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
             cleaned.displayName = name.isEmpty
-                ? (member.role == .owner ? "自分" : "パートナー")
+                ? (member.role == .owner ? "そら" : "つばさ")
                 : name
             return cleaned
         }

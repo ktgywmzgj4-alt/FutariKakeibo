@@ -2,24 +2,92 @@ import XCTest
 @testable import FutariKakeibo
 
 final class ReceiptParserTests: XCTestCase {
-    func testParsesJapaneseReceiptTotalMerchantAndDate() {
-        let text = """
-        ひだまりスーパー
-        2026年8月13日
-        食品 980
-        日用品 254
-        合計 ￥1,234
-        """
+    private let calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Tokyo") ?? .current
+        return calendar
+    }()
 
-        let draft = ReceiptParser.parse(text: text)
-
-        XCTAssertEqual(draft.merchant, "ひだまりスーパー")
-        XCTAssertEqual(draft.amount, 1_234)
-        XCTAssertEqual(draft.suggestedCategory, .groceries)
-        XCTAssertEqual(Calendar.current.component(.year, from: draft.date!), 2026)
-        XCTAssertEqual(Calendar.current.component(.month, from: draft.date!), 8)
-        XCTAssertEqual(Calendar.current.component(.day, from: draft.date!), 13)
+    /// 読み取り結果を再現するための行。x座標で品名と金額を分ける。
+    private func line(
+        _ text: String,
+        x: Double = 0.08,
+        width: Double = 0.5,
+        y: Double,
+        height: Double = 0.018
+    ) -> RecognizedLine {
+        RecognizedLine(text: text, minX: x, maxX: x + width, midY: y, height: height)
     }
+
+    private func price(_ text: String, y: Double) -> RecognizedLine {
+        RecognizedLine(text: text, minX: 0.74, maxX: 0.93, midY: y, height: 0.018)
+    }
+
+    private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        calendar.date(from: DateComponents(year: year, month: month, day: day)) ?? .distantPast
+    }
+
+    /// スーパーのレシートを想定した、位置つきの読み取り結果。
+    private func supermarketReceipt() -> [RecognizedLine] {
+        [
+            line("スーパーひだまり", y: 0.05, height: 0.045),
+            line("東京都渋谷区1-2-3", y: 0.10),
+            line("TEL 03-1234-5678", y: 0.14),
+            line("2026年8月29日 18:42", y: 0.20),
+            line("牛乳", y: 0.28), price("198", y: 0.28),
+            line("食パン", y: 0.33), price("248", y: 0.33),
+            line("たまご", y: 0.38), price("298", y: 0.38),
+            line("小計", y: 0.45), price("744", y: 0.45),
+            line("消費税", y: 0.50), price("59", y: 0.50),
+            line("合計", y: 0.55, height: 0.03), price("803", y: 0.55),
+            line("お預り", y: 0.62), price("1,000", y: 0.62),
+            line("お釣り", y: 0.67), price("197", y: 0.67)
+        ]
+    }
+
+    private var referenceNow: Date { date(2026, 9, 2) }
+
+    // MARK: - まとめて
+
+    func testReadsWhenWhereWhatAndHowMuch() {
+        let draft = ReceiptParser.parse(
+            lines: supermarketReceipt(),
+            now: referenceNow,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.merchant, "スーパーひだまり")
+        XCTAssertEqual(draft.date, date(2026, 8, 29))
+        XCTAssertEqual(draft.amount, 803)
+        XCTAssertEqual(draft.items.map(\.name), ["牛乳", "食パン", "たまご"])
+        XCTAssertEqual(draft.items.map(\.amount), [198, 248, 298])
+        XCTAssertEqual(draft.suggestedCategory, .groceries)
+    }
+
+    // MARK: - どこで
+
+    func testPicksTheLargestTextNearTheTopAsTheShopName() {
+        let lines = [
+            line("いつもありがとうございます", y: 0.03),
+            line("まるまる商店", y: 0.09, height: 0.05),
+            line("担当 山田", y: 0.15)
+        ]
+
+        XCTAssertEqual(ReceiptParser.merchant(from: ReceiptParser.rows(from: lines)), "まるまる商店")
+    }
+
+    func testSkipsAddressPhoneAndDateWhenLookingForTheShopName() {
+        let lines = [
+            line("東京都港区芝公園4-2-8", y: 0.04),
+            line("TEL 0120-123-456", y: 0.08),
+            line("2026年8月29日", y: 0.12),
+            line("あおぞらベーカリー", y: 0.16)
+        ]
+
+        XCTAssertEqual(ReceiptParser.merchant(from: ReceiptParser.rows(from: lines)), "あおぞらベーカリー")
+    }
+
+    // MARK: - いくら
 
     func testTotalKeywordWinsOverOtherNumbers() {
         let amount = ReceiptParser.totalAmount(from: [
@@ -28,5 +96,107 @@ final class ReceiptParserTests: XCTestCase {
             "合計 4,950"
         ])
         XCTAssertEqual(amount, 4_950)
+    }
+
+    func testTotalIgnoresSubtotalChangeAndDeposit() {
+        let lines = [
+            line("小計", y: 0.30), price("744", y: 0.30),
+            line("合計", y: 0.40), price("803", y: 0.40),
+            line("お預り", y: 0.50), price("5,000", y: 0.50),
+            line("お釣り", y: 0.60), price("4,197", y: 0.60)
+        ]
+
+        XCTAssertEqual(ReceiptParser.totalAmount(from: ReceiptParser.rows(from: lines)), 803)
+    }
+
+    func testTaxIncludedTotalIsStillATotal() {
+        let lines = [line("税込合計", y: 0.4), price("1,320", y: 0.4)]
+        XCTAssertEqual(ReceiptParser.totalAmount(from: ReceiptParser.rows(from: lines)), 1_320)
+    }
+
+    func testFallsBackToTheLargestAmountWithoutTheTotalKeyword() {
+        let lines = [
+            line("TEL 03-1234-5678", y: 0.1),
+            line("りんご", y: 0.3), price("180", y: 0.3),
+            line("ぶどう", y: 0.4), price("980", y: 0.4)
+        ]
+
+        XCTAssertEqual(ReceiptParser.totalAmount(from: ReceiptParser.rows(from: lines)), 980)
+    }
+
+    // MARK: - いつ
+
+    func testReadsJapaneseEraDates() {
+        XCTAssertEqual(
+            ReceiptParser.date(in: "令和8年8月29日", now: referenceNow, calendar: calendar),
+            date(2026, 8, 29)
+        )
+        XCTAssertEqual(
+            ReceiptParser.date(in: "R8.8.29", now: referenceNow, calendar: calendar),
+            date(2026, 8, 29)
+        )
+    }
+
+    func testReadsTwoDigitYears() {
+        XCTAssertEqual(
+            ReceiptParser.date(in: "26/08/29 18:42", now: referenceNow, calendar: calendar),
+            date(2026, 8, 29)
+        )
+    }
+
+    func testTreatsAYearlessDateAsThisYear() {
+        XCTAssertEqual(
+            ReceiptParser.date(in: "8月29日", now: referenceNow, calendar: calendar),
+            date(2026, 8, 29)
+        )
+    }
+
+    func testRejectsDatesFarInTheFutureOrThePast() {
+        XCTAssertNil(ReceiptParser.date(in: "2030年1月1日", now: referenceNow, calendar: calendar))
+        XCTAssertNil(ReceiptParser.date(in: "2015年1月1日", now: referenceNow, calendar: calendar))
+    }
+
+    // MARK: - 何を
+
+    func testItemsPairTheNameOnTheLeftWithThePriceOnTheRight() {
+        let draft = ReceiptParser.parse(
+            lines: supermarketReceipt(),
+            now: referenceNow,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.items.count, 3)
+        XCTAssertFalse(draft.items.contains { $0.name.contains("小計") })
+        XCTAssertFalse(draft.items.contains { $0.name.contains("東京都") })
+        XCTAssertFalse(draft.items.contains { $0.amount == 803 })
+    }
+
+    func testPlainTextReceiptStillParses() {
+        let text = """
+        ひだまりスーパー
+        2026年8月13日
+        食品 980
+        日用品 254
+        合計 ￥1,234
+        """
+
+        let draft = ReceiptParser.parse(text: text, now: referenceNow, calendar: calendar)
+
+        XCTAssertEqual(draft.merchant, "ひだまりスーパー")
+        XCTAssertEqual(draft.amount, 1_234)
+        XCTAssertEqual(draft.suggestedCategory, .groceries)
+        XCTAssertEqual(draft.date, date(2026, 8, 13))
+    }
+
+    func testShopNameDecidesTheCategoryBeforeTheLineItems() {
+        let lines = [
+            line("スーパーひだまり", y: 0.05, height: 0.05),
+            line("日用品", y: 0.3), price("254", y: 0.3),
+            line("食品", y: 0.4), price("980", y: 0.4),
+            line("合計", y: 0.5), price("1,234", y: 0.5)
+        ]
+
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+        XCTAssertEqual(draft.suggestedCategory, .groceries)
     }
 }

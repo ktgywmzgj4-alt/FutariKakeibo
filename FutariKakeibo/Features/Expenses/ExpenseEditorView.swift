@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import UIKit
 import VisionKit
 
@@ -19,6 +20,8 @@ struct ExpenseEditorView: View {
     @State private var isShowingScanner = false
     @State private var isRecognizing = false
     @State private var recognizedText = ""
+    @State private var photoItem: PhotosPickerItem?
+    @State private var detectedItems: [ReceiptItem] = []
     @State private var validationMessage: String?
     @FocusState private var focusedField: Field?
 
@@ -43,7 +46,8 @@ struct ExpenseEditorView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
-                receiptButton
+                receiptCard
+                detectedItemsCard
                 expenseFields
 
                 Button(action: save) {
@@ -92,6 +96,20 @@ struct ExpenseEditorView: View {
                 paidByMemberID = store.selectedMemberID ?? store.household?.members.first?.id
             }
         }
+        .onChange(of: photoItem) { _, newItem in
+            guard let newItem else { return }
+            photoItem = nil
+            Task { @MainActor in
+                guard
+                    let data = try? await newItem.loadTransferable(type: Data.self),
+                    let image = UIImage(data: data)
+                else {
+                    validationMessage = "写真を読み込めませんでした。別の写真を選んでください。"
+                    return
+                }
+                recognize([image])
+            }
+        }
         .sheet(isPresented: $isShowingScanner) {
             ReceiptScannerView(onCancel: {
                 isShowingScanner = false
@@ -125,15 +143,13 @@ struct ExpenseEditorView: View {
         Int(amountText.filter(\.isNumber)) ?? 0
     }
 
-    private var receiptButton: some View {
-        Button {
-            isShowingScanner = true
-        } label: {
+    private var receiptCard: some View {
+        VStack(spacing: 14) {
             HStack(spacing: 13) {
                 ZStack {
                     Circle()
                         .fill(AppTheme.terracottaSoft.opacity(0.45))
-                        .frame(width: 48, height: 48)
+                        .frame(width: 52, height: 52)
                     if isRecognizing {
                         ProgressView().tint(AppTheme.terracotta)
                     } else {
@@ -145,22 +161,91 @@ struct ExpenseEditorView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(isRecognizing ? "レシートを読み取り中…" : "レシートから入力")
                         .font(.headline)
+                        .foregroundStyle(AppTheme.deepGreen)
                     Text("画像は保存・送信せず、このiPhone内で処理します")
                         .font(.caption)
                         .foregroundStyle(AppTheme.secondaryText)
                 }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.bold())
+                Spacer(minLength: 0)
+            }
+
+            HStack(spacing: 0) {
+                Button {
+                    isShowingScanner = true
+                } label: {
+                    sourceLabel(title: "カメラ", caption: "その場で撮影する", systemImage: "camera.fill")
+                }
+                .buttonStyle(.plain)
+                .disabled(!VNDocumentCameraViewController.isSupported || isRecognizing)
+                .opacity(VNDocumentCameraViewController.isSupported ? 1 : 0.45)
+                .accessibilityHint("カメラでレシートを撮影します")
+
+                Divider().frame(height: 62)
+
+                PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
+                    sourceLabel(title: "アルバム", caption: "写真を選択する", systemImage: "photo.fill")
+                }
+                .buttonStyle(.plain)
+                .disabled(isRecognizing)
+                .accessibilityHint("保存済みの写真からレシートを選びます")
+            }
+            .background(AppTheme.background.opacity(0.7))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(AppTheme.terracottaSoft.opacity(0.75), lineWidth: 1)
+            )
+        }
+        .appCard()
+    }
+
+    private func sourceLabel(title: String, caption: String, systemImage: String) -> some View {
+        VStack(spacing: 7) {
+            Image(systemName: systemImage)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(AppTheme.terracotta)
+                .frame(width: 44, height: 44)
+                .background(AppTheme.terracottaSoft.opacity(0.35))
+                .clipShape(Circle())
+            Text(title)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(AppTheme.deepGreen)
+            Text(caption)
+                .font(.caption2)
+                .foregroundStyle(AppTheme.secondaryText)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var detectedItemsCard: some View {
+        if !detectedItems.isEmpty {
+            VStack(alignment: .leading, spacing: 11) {
+                Label("読み取った明細", systemImage: "list.bullet.rectangle.portrait")
+                    .font(.headline)
+                    .foregroundStyle(AppTheme.deepGreen)
+
+                ForEach(detectedItems) { item in
+                    HStack {
+                        Text(item.name)
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.deepGreen)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text(item.amount.yenText)
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+                }
+
+                Text("何を買ったかの確認用です。保存されるのは合計金額だけです。")
+                    .font(.caption)
                     .foregroundStyle(AppTheme.secondaryText)
             }
-            .foregroundStyle(AppTheme.deepGreen)
+            .appCard()
         }
-        .buttonStyle(.plain)
-        .disabled(!VNDocumentCameraViewController.isSupported || isRecognizing)
-        .opacity(VNDocumentCameraViewController.isSupported ? 1 : 0.55)
-        .appCard()
-        .accessibilityHint("カメラでレシートを撮影します")
     }
 
     private var expenseFields: some View {
@@ -240,18 +325,36 @@ struct ExpenseEditorView: View {
         Task { @MainActor in
             defer { isRecognizing = false }
             do {
-                let text = try await ReceiptRecognizer.recognize(images: images)
-                let draft = ReceiptParser.parse(text: text)
-                recognizedText = text
+                let lines = try await ReceiptRecognizer.recognize(images: images)
+                let draft = ReceiptParser.parse(lines: lines)
+                recognizedText = draft.recognizedText
+                detectedItems = draft.items
                 if !draft.merchant.isEmpty { title = draft.merchant }
                 if let amount = draft.amount { amountText = String(amount) }
                 if let receiptDate = draft.date { date = receiptDate }
                 category = draft.suggestedCategory
-                validationMessage = "候補を入力しました。金額や店名が正しいか、保存前に確認してください。"
+                validationMessage = readBackMessage(for: draft)
             } catch {
                 validationMessage = error.localizedDescription
             }
         }
+    }
+
+    /// 何が読み取れて何が読み取れなかったかを、保存前にはっきり伝える。
+    private func readBackMessage(for draft: ReceiptDraft) -> String {
+        var known: [String] = []
+        var missing: [String] = []
+        if draft.merchant.isEmpty { missing.append("店名") } else { known.append("店名") }
+        if draft.amount == nil { missing.append("金額") } else { known.append("金額") }
+        if draft.date == nil { missing.append("日付") } else { known.append("日付") }
+
+        if missing.isEmpty {
+            return "店名・日付・金額を読み取りました。保存前に内容を確認してください。"
+        }
+        if known.isEmpty {
+            return "うまく読み取れませんでした。明るい場所でレシート全体が入るように撮り直すか、手入力で保存してください。"
+        }
+        return "\(known.joined(separator: "・"))を読み取りました。\(missing.joined(separator: "・"))は読み取れなかったので入力してください。"
     }
 
     private func save() {
@@ -294,5 +397,6 @@ struct ExpenseEditorView: View {
         splitMethod = .equally
         note = ""
         recognizedText = ""
+        detectedItems = []
     }
 }
