@@ -115,17 +115,24 @@ final class IncomeTests: XCTestCase {
 
     func testCSVKeepsBothKindsInDateOrder() throws {
         let (household, owner, _) = makeHousehold()
+        // 書き出しは端末のタイムゾーンで日付にするため、期待値も同じ書式から作る。
+        let expenseDate = Date(timeIntervalSince1970: 1_785_000_000)
+        let incomeDate = expenseDate.addingTimeInterval(60 * 60 * 24 * 20)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "yyyy-MM-dd"
+
         let expense = Expense(
             title: "食材",
             amount: 6_480,
-            date: date(2026, 8, 2),
+            date: expenseDate,
             category: .groceries,
             paidByMemberID: owner.id
         )
         let income = Income(
             title: "8月の給与",
             amount: 300_000,
-            date: date(2026, 8, 25),
+            date: incomeDate,
             receivedByMemberID: owner.id
         )
 
@@ -140,7 +147,7 @@ final class IncomeTests: XCTestCase {
 
         XCTAssertTrue(lines[0].hasSuffix("種別,日付,内容,金額,カテゴリ,相手,分け方,メモ"))
         XCTAssertTrue(lines[1].contains("\"支出\""))
-        XCTAssertTrue(lines[1].contains("\"2026-08-02\""))
+        XCTAssertTrue(lines[1].contains("\"\(formatter.string(from: expenseDate))\""))
         XCTAssertTrue(lines[2].contains("\"収入\""))
         XCTAssertTrue(lines[2].contains("\"給与\""))
     }
