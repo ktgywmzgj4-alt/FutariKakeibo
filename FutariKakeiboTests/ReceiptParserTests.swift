@@ -315,4 +315,57 @@ final class ReceiptParserTests: XCTestCase {
         XCTAssertEqual(draft.amount, 930)
         XCTAssertEqual(draft.items.first?.name, "ラーメン")
     }
+
+    // MARK: - 合計が読みにくい形のレシート
+
+    /// 「合計」は大きく刷られ、語と金額が別の行として読まれることがある。
+    func testTotalReadsTheNextRowWhenTheAmountIsSplitOff() {
+        let lines = [
+            line("ラーメン", y: 0.30), price("¥930", y: 0.30),
+            line("合計", y: 0.50, height: 0.032),
+            price("¥2,080", y: 0.54),
+            line("レシートNo.077654", y: 0.70)
+        ]
+
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+        XCTAssertEqual(draft.amount, 2_080)
+    }
+
+    /// 合計の語が読めなかったとき、桁の大きいレシート番号を拾ってはいけない。
+    func testReceiptNumberIsNotMistakenForTheTotal() {
+        let lines = [
+            line("あおぞら商店", y: 0.05, height: 0.04),
+            line("2026/08/29", y: 0.10),
+            line("商品A", y: 0.20), price("¥930", y: 0.20),
+            line("商品B", y: 0.24), price("¥830", y: 0.24),
+            line("商品C", y: 0.28), price("¥320", y: 0.28),
+            line("レシートNo.077654", y: 0.60)
+        ]
+
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+        XCTAssertEqual(draft.amount, 2_080)
+    }
+
+    func testProductCodesAreStrippedFromItemNames() {
+        let lines = [
+            line("外8 1501 鮮魚(かご盛り)", y: 0.30), price("¥450", y: 0.30),
+            line("外8 2205 ふぐ唐揚げ", y: 0.34), price("¥690", y: 0.34),
+            line("合計", y: 0.50), price("¥1,140", y: 0.50)
+        ]
+
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+        XCTAssertEqual(draft.items.map(\.name), ["鮮魚(かご盛り)", "ふぐ唐揚げ"])
+        XCTAssertEqual(draft.amount, 1_140)
+    }
+
+    func testQuantityRowsAreNotItems() {
+        let lines = [
+            line("サクレパイン", y: 0.30),
+            line("2コX単118", y: 0.33), price("¥236", y: 0.33),
+            line("合計", y: 0.50), price("¥236", y: 0.50)
+        ]
+
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+        XCTAssertFalse(draft.items.contains { $0.name.contains("コX単") })
+    }
 }
