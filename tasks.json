@@ -28,7 +28,7 @@
       "status": "review",
       "owner": "計画役",
       "passes": "AGENTS.md / CLAUDE.md / Docs/mission.md / Docs/requirements.md / Docs/voice.md / Docs/safety.md / Docs/roles.md / tasks.json / progress.md / evals/acceptance.md が存在し、bash scripts/check_all.sh が通る",
-      "evidence": "2026-09-03 bash scripts/check_all.sh → 全5項目OK（swift structure 54 / swift escape 54 / project.pbxproj 60 refs / network URL / secret file）。10ファイルすべて作成済み。判定は人間待ち",
+      "evidence": "CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/33646378026 → test ジョブ success (4m54s)、Executed 62 tests, with 0 failures。手元: bash scripts/check_all.sh 全5項目OK。PR #15 に16ファイル（文書12 + スクリプト4）。合否の判定は人間待ち",
       "dependencies": [],
       "notes": "本番の実装より先にこれを終わらせる、という人間の指示"
     },
@@ -82,7 +82,12 @@
       "passes": "gh pr list の出力が空になる（マージまたはクローズ済み）",
       "evidence": "",
       "dependencies": [],
-      "notes": "PR #1 は古いcodexのブランチ、PR #5 は macos-latest への変更。mainへのマージは人間の承認が要る（Docs/safety.md）"
+      "notes": "2026-09-03 調査済み。3件それぞれの推奨と根拠は下の recommendations を参照。マージ・クローズの操作は人間（Docs/safety.md）",
+      "recommendations": {
+        "PR #15 (chore/agent-harness)": "マージしてよい。CI success / 62件全通過（runs/33646378026）。Swiftのコードは1行も変えていない",
+        "PR #5 (ci/runner-availability)": "マージせずクローズを推奨。前提が誤っていた。ランナーが詰まったのは macos-26 というラベルのせいではなく一時的な混雑で、直近6回の実行はすべて macos-26 で3〜14分で完了している。macos-latest はGitHub側の都合で指す先が動くため、ある日いきなり古いXcodeでビルドされる危険がある",
+        "PR #1 (codex/initial-ios-cloud-build)": "クローズを推奨。8月20日のドラフト。project.yml に info: と entitlements: が残っており（21行目・36行目）、マージすると実機でカメラが落ちる不具合が戻る。entitlements にiCloudコンテナの指定も無く、同期も壊れる"
+      }
     },
     {
       "id": "T-007",
