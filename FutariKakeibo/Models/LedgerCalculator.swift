@@ -97,4 +97,44 @@ enum LedgerCalculator {
     static func totalCategoryBudget(_ budgets: [CategoryBudget]) -> Int {
         budgets.reduce(0) { $0 + max($1.amount, 0) }
     }
+
+    // MARK: - 収入
+
+    /// 収入と支出をまとめた、その月の収支。
+    struct MonthlyBalance: Equatable, Sendable {
+        var income: Int
+        var expense: Int
+
+        var balance: Int { income - expense }
+        var isNegative: Bool { balance < 0 }
+
+        /// 収入のうち手元に残った割合。収入がなければ出さない。
+        var savingsRate: Double? {
+            guard income > 0 else { return nil }
+            return Double(balance) / Double(income)
+        }
+
+        static let zero = MonthlyBalance(income: 0, expense: 0)
+    }
+
+    static func incomes(
+        _ incomes: [Income],
+        in month: Date,
+        calendar: Calendar = .current
+    ) -> [Income] {
+        incomes.filter { calendar.isDate($0.date, equalTo: month, toGranularity: .month) }
+    }
+
+    static func totalIncome(_ incomes: [Income]) -> Int {
+        incomes.reduce(0) { $0 + $1.amount }
+    }
+
+    static func sourceTotals(_ incomes: [Income]) -> [IncomeSource: Int] {
+        Dictionary(grouping: incomes, by: \.source)
+            .mapValues { totalIncome($0) }
+    }
+
+    static func balance(incomes: [Income], expenses: [Expense]) -> MonthlyBalance {
+        MonthlyBalance(income: totalIncome(incomes), expense: total(expenses))
+    }
 }

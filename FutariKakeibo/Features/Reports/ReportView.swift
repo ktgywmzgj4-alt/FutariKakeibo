@@ -51,6 +51,23 @@ struct ReportView: View {
                 Spacer()
                 metric("記録した件数", value: "\(report.expenseCount)件")
             }
+
+            if report.income > 0 {
+                Divider().opacity(0.55)
+
+                HStack {
+                    metric("収入", value: report.income.yenText)
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("収支")
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.secondaryText)
+                        Text(report.balance.balance.yenText)
+                            .font(.subheadline.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(report.balance.isNegative ? AppTheme.danger : AppTheme.sage)
+                    }
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .appCard()
@@ -62,19 +79,37 @@ struct ReportView: View {
                 .font(.headline)
                 .foregroundStyle(AppTheme.deepGreen)
 
-            if report.trend.allSatisfy({ $0.total == 0 }) {
-                emptyMessage("支出を追加すると推移が表示されます", icon: "chart.bar")
+            let hasIncome = report.trend.contains { $0.income > 0 }
+            if report.trend.allSatisfy({ $0.expense == 0 && $0.income == 0 }) {
+                emptyMessage("記録を追加すると推移が表示されます", icon: "chart.bar")
             } else {
-                Chart(report.trend) { item in
-                    BarMark(
-                        x: .value("月", monthLabel(item.month)),
-                        y: .value("支出", item.total)
-                    )
-                    .foregroundStyle(
-                        isSelectedMonth(item.month) ? AppTheme.terracotta : AppTheme.sageSoft
-                    )
-                    .cornerRadius(6)
+                Chart {
+                    ForEach(report.trend) { item in
+                        BarMark(
+                            x: .value("月", monthLabel(item.month)),
+                            y: .value("金額", item.expense)
+                        )
+                        .foregroundStyle(by: .value("種別", "支出"))
+                        .position(by: .value("種別", "支出"))
+                        .cornerRadius(5)
+                    }
+                    if hasIncome {
+                        ForEach(report.trend) { item in
+                            BarMark(
+                                x: .value("月", monthLabel(item.month)),
+                                y: .value("金額", item.income)
+                            )
+                            .foregroundStyle(by: .value("種別", "収入"))
+                            .position(by: .value("種別", "収入"))
+                            .cornerRadius(5)
+                        }
+                    }
                 }
+                .chartForegroundStyleScale([
+                    "支出": AppTheme.terracotta,
+                    "収入": AppTheme.sage
+                ])
+                .chartLegend(hasIncome ? .visible : .hidden)
                 .chartYAxis {
                     AxisMarks(position: .leading) { value in
                         AxisGridLine()
@@ -87,7 +122,7 @@ struct ReportView: View {
                     }
                 }
                 .frame(height: 168)
-                .accessibilityLabel("月ごとの支出の推移")
+                .accessibilityLabel(hasIncome ? "月ごとの収入と支出の推移" : "月ごとの支出の推移")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

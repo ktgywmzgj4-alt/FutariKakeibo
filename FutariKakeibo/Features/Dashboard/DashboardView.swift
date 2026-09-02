@@ -10,6 +10,7 @@ struct DashboardView: View {
 
                 recurringNoticeCard
                 budgetCard
+                balanceCard
                 settlementCard
                 categoryBudgetCard
                 upcomingRecurringCard
@@ -137,6 +138,57 @@ struct DashboardView: View {
             }
         }
         .appCard()
+    }
+
+    @ViewBuilder
+    private var balanceCard: some View {
+        let balance = store.monthlyBalance
+        if balance.income > 0 {
+            VStack(alignment: .leading, spacing: 13) {
+                Label("今月の収支", systemImage: "arrow.up.arrow.down.circle.fill")
+                    .font(.headline)
+                    .foregroundStyle(AppTheme.deepGreen)
+
+                HStack(alignment: .firstTextBaseline) {
+                    Text(balance.balance.yenText)
+                        .font(.system(size: 28, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(balance.isNegative ? AppTheme.danger : AppTheme.sage)
+                    Spacer()
+                    if let rate = balance.savingsRate, rate > 0 {
+                        Text("貯蓄率 \(Int((rate * 100).rounded()))%")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+                }
+
+                HStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("収入")
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.secondaryText)
+                        Text(balance.income.yenText)
+                            .font(.subheadline.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(AppTheme.sage)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Text("支出")
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.secondaryText)
+                        Text(balance.expense.yenText)
+                            .font(.subheadline.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(AppTheme.deepGreen)
+                    }
+                }
+
+                if balance.isNegative {
+                    Text("この月は収入より支出が多くなっています。")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.danger)
+                }
+            }
+            .appCard()
+        }
     }
 
     @ViewBuilder
