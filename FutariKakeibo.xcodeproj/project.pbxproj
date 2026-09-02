@@ -55,6 +55,11 @@
 		C00000000000000000000050 /* RecurringExpenseSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000050 /* RecurringExpenseSchedulerTests.swift */; };
 		C00000000000000000000051 /* SnapshotCompatibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000051 /* SnapshotCompatibilityTests.swift */; };
 		C00000000000000000000057 /* RecognizedLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000057 /* RecognizedLine.swift */; };
+		C00000000000000000000052 /* Income.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000052 /* Income.swift */; };
+		C00000000000000000000053 /* IncomeRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000053 /* IncomeRow.swift */; };
+		C00000000000000000000054 /* IncomeEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000054 /* IncomeEditorView.swift */; };
+		C00000000000000000000055 /* EntryEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000055 /* EntryEditorView.swift */; };
+		C00000000000000000000056 /* IncomeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000056 /* IncomeTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -120,6 +125,11 @@
 		B00000000000000000000050 /* RecurringExpenseSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecurringExpenseSchedulerTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000051 /* SnapshotCompatibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotCompatibilityTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000057 /* RecognizedLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/RecognizedLine.swift; sourceTree = "<group>"; };
+		B00000000000000000000052 /* Income.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/Income.swift; sourceTree = "<group>"; };
+		B00000000000000000000053 /* IncomeRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/IncomeRow.swift; sourceTree = "<group>"; };
+		B00000000000000000000054 /* IncomeEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Incomes/IncomeEditorView.swift; sourceTree = "<group>"; };
+		B00000000000000000000055 /* EntryEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Incomes/EntryEditorView.swift; sourceTree = "<group>"; };
+		B00000000000000000000056 /* IncomeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomeTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -200,6 +210,10 @@
 				B00000000000000000000046 /* ReportView.swift */,
 				B00000000000000000000047 /* CategoryBudgetView.swift */,
 				B00000000000000000000057 /* RecognizedLine.swift */,
+				B00000000000000000000052 /* Income.swift */,
+				B00000000000000000000053 /* IncomeRow.swift */,
+				B00000000000000000000054 /* IncomeEditorView.swift */,
+				B00000000000000000000055 /* EntryEditorView.swift */,
 				B00000000000000000000031 /* Info.plist */,
 				B00000000000000000000032 /* FutariKakeibo.entitlements */,
 				B00000000000000000000033 /* PrivacyInfo.xcprivacy */,
@@ -218,6 +232,7 @@
 				B00000000000000000000049 /* MonthlyReportTests.swift */,
 				B00000000000000000000050 /* RecurringExpenseSchedulerTests.swift */,
 				B00000000000000000000051 /* SnapshotCompatibilityTests.swift */,
+				B00000000000000000000056 /* IncomeTests.swift */,
 			);
 			path = FutariKakeiboTests;
 			sourceTree = "<group>";
@@ -362,6 +377,10 @@
 				C00000000000000000000046 /* ReportView.swift in Sources */,
 				C00000000000000000000047 /* CategoryBudgetView.swift in Sources */,
 				C00000000000000000000057 /* RecognizedLine.swift in Sources */,
+				C00000000000000000000052 /* Income.swift in Sources */,
+				C00000000000000000000053 /* IncomeRow.swift in Sources */,
+				C00000000000000000000054 /* IncomeEditorView.swift in Sources */,
+				C00000000000000000000055 /* EntryEditorView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -376,6 +395,7 @@
 				C00000000000000000000049 /* MonthlyReportTests.swift in Sources */,
 				C00000000000000000000050 /* RecurringExpenseSchedulerTests.swift in Sources */,
 				C00000000000000000000051 /* SnapshotCompatibilityTests.swift in Sources */,
+				C00000000000000000000056 /* IncomeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

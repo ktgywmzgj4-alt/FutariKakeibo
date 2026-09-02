@@ -58,7 +58,7 @@ private struct MainTabView: View {
                 .tag(Tab.history)
 
             NavigationStack {
-                ExpenseEditorView { selection = .dashboard }
+                EntryEditorView { selection = .dashboard }
             }
             .tabItem { Label("追加", systemImage: "plus.circle.fill") }
             .tag(Tab.add)

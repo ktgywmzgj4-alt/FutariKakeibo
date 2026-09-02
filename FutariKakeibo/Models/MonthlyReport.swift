@@ -4,9 +4,11 @@ import Foundation
 struct MonthlyReport: Equatable, Sendable {
     struct MonthTotal: Identifiable, Equatable, Sendable {
         var month: Date
-        var total: Int
+        var expense: Int
+        var income: Int
 
         var id: Date { month }
+        var balance: Int { income - expense }
     }
 
     struct CategorySlice: Identifiable, Equatable, Sendable {
@@ -28,7 +30,10 @@ struct MonthlyReport: Equatable, Sendable {
     var month: Date
     var total: Int
     var previousTotal: Int
+    var income: Int
+    var previousIncome: Int
     var expenseCount: Int
+    var incomeCount: Int
     /// 直近数か月の推移。古い月から新しい月の順。
     var trend: [MonthTotal]
     var categories: [CategorySlice]
@@ -45,13 +50,22 @@ struct MonthlyReport: Equatable, Sendable {
         return Double(difference) / Double(previousTotal)
     }
 
-    var isEmpty: Bool { expenseCount == 0 }
+    var balance: LedgerCalculator.MonthlyBalance {
+        LedgerCalculator.MonthlyBalance(income: income, expense: total)
+    }
+
+    var previousBalance: Int { previousIncome - previousTotal }
+
+    var isEmpty: Bool { expenseCount == 0 && incomeCount == 0 }
 
     static let empty = MonthlyReport(
         month: .now,
         total: 0,
         previousTotal: 0,
+        income: 0,
+        previousIncome: 0,
         expenseCount: 0,
+        incomeCount: 0,
         trend: [],
         categories: [],
         members: [],
@@ -61,6 +75,7 @@ struct MonthlyReport: Equatable, Sendable {
 
     static func make(
         expenses: [Expense],
+        incomes: [Income] = [],
         household: Household,
         month: Date,
         trailingMonths: Int = 6,
@@ -68,11 +83,16 @@ struct MonthlyReport: Equatable, Sendable {
         calendar: Calendar = .current
     ) -> MonthlyReport {
         let monthlyExpenses = LedgerCalculator.expenses(expenses, in: month, calendar: calendar)
+        let monthlyIncomes = LedgerCalculator.incomes(incomes, in: month, calendar: calendar)
         let total = LedgerCalculator.total(monthlyExpenses)
+        let income = LedgerCalculator.totalIncome(monthlyIncomes)
 
         let previousMonth = calendar.date(byAdding: .month, value: -1, to: month)
         let previousTotal = previousMonth.map {
             LedgerCalculator.total(LedgerCalculator.expenses(expenses, in: $0, calendar: calendar))
+        } ?? 0
+        let previousIncome = previousMonth.map {
+            LedgerCalculator.totalIncome(LedgerCalculator.incomes(incomes, in: $0, calendar: calendar))
         } ?? 0
 
         let categoryTotals = LedgerCalculator.categoryTotals(monthlyExpenses)
@@ -101,9 +121,13 @@ struct MonthlyReport: Equatable, Sendable {
             month: month,
             total: total,
             previousTotal: previousTotal,
+            income: income,
+            previousIncome: previousIncome,
             expenseCount: monthlyExpenses.count,
+            incomeCount: monthlyIncomes.count,
             trend: trend(
                 expenses: expenses,
+                incomes: incomes,
                 endingAt: month,
                 count: max(trailingMonths, 1),
                 calendar: calendar
@@ -120,9 +144,10 @@ struct MonthlyReport: Equatable, Sendable {
         )
     }
 
-    /// 指定月を最後尾にした、月別合計の並び。支出のない月も0円として残す。
+    /// 指定月を最後尾にした、月別合計の並び。記録のない月も0円として残す。
     static func trend(
         expenses: [Expense],
+        incomes: [Income] = [],
         endingAt month: Date,
         count: Int,
         calendar: Calendar = .current
@@ -134,10 +159,15 @@ struct MonthlyReport: Equatable, Sendable {
                 guard let target = calendar.date(byAdding: .month, value: -offset, to: lastMonth) else {
                     return nil
                 }
-                let total = LedgerCalculator.total(
-                    LedgerCalculator.expenses(expenses, in: target, calendar: calendar)
+                return MonthTotal(
+                    month: target,
+                    expense: LedgerCalculator.total(
+                        LedgerCalculator.expenses(expenses, in: target, calendar: calendar)
+                    ),
+                    income: LedgerCalculator.totalIncome(
+                        LedgerCalculator.incomes(incomes, in: target, calendar: calendar)
+                    )
                 )
-                return MonthTotal(month: target, total: total)
             }
     }
 

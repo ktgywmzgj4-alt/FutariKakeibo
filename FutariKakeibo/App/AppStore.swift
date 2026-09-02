@@ -70,6 +70,20 @@ final class AppStore: ObservableObject {
         return LedgerCalculator.settlement(expenses: monthlyExpenses, household: household)
     }
 
+    var incomes: [Income] { snapshot.incomes }
+
+    var monthlyIncomes: [Income] {
+        LedgerCalculator.incomes(snapshot.incomes, in: selectedMonth)
+            .sorted { $0.date > $1.date }
+    }
+
+    var monthlyIncomeTotal: Int { LedgerCalculator.totalIncome(monthlyIncomes) }
+
+    /// 表示中の月の収支。収入から支出を引いた残り。
+    var monthlyBalance: LedgerCalculator.MonthlyBalance {
+        LedgerCalculator.balance(incomes: monthlyIncomes, expenses: monthlyExpenses)
+    }
+
     var recurringExpenses: [RecurringExpense] {
         snapshot.household?.recurringExpenses ?? []
     }
@@ -86,6 +100,7 @@ final class AppStore: ObservableObject {
         guard let household = snapshot.household else { return .empty }
         return MonthlyReport.make(
             expenses: snapshot.expenses,
+            incomes: snapshot.incomes,
             household: household,
             month: selectedMonth
         )
@@ -168,6 +183,65 @@ final class AppStore: ObservableObject {
                 deletedAt: deletedAt,
                 household: household
             )
+            syncState = .synced(.now)
+        } catch {
+            syncState = .failed(error.localizedDescription)
+        }
+    }
+
+    // MARK: - 収入
+
+    func addIncome(_ income: Income) async {
+        guard income.isValid else {
+            errorMessage = "内容と1円以上の金額を入力してください。"
+            return
+        }
+        snapshot.incomes.append(income)
+        snapshot.incomes.sort { $0.date > $1.date }
+        await persistLocally()
+        await uploadIncome(income)
+    }
+
+    func updateIncome(_ income: Income) async {
+        guard income.isValid else {
+            errorMessage = "内容と1円以上の金額を入力してください。"
+            return
+        }
+        guard let index = snapshot.incomes.firstIndex(where: { $0.id == income.id }) else { return }
+        var changed = income
+        changed.updatedAt = .now
+        snapshot.incomes[index] = changed
+        snapshot.incomes.sort { $0.date > $1.date }
+        await persistLocally()
+        await uploadIncome(changed)
+    }
+
+    func deleteIncome(_ income: Income) async {
+        snapshot.incomes.removeAll { $0.id == income.id }
+        let deletedAt = Date.now
+        if snapshot.household?.cloudLocation != nil {
+            snapshot.deletedIncomeIDs[income.id] = deletedAt
+        }
+        await persistLocally()
+
+        guard let household = snapshot.household, household.cloudLocation != nil else { return }
+        do {
+            try await cloudService.deleteIncome(
+                id: income.id,
+                deletedAt: deletedAt,
+                household: household
+            )
+            syncState = .synced(.now)
+        } catch {
+            syncState = .failed(error.localizedDescription)
+        }
+    }
+
+    private func uploadIncome(_ income: Income) async {
+        guard let household = snapshot.household, household.cloudLocation != nil else { return }
+        do {
+            syncState = .syncing
+            try await cloudService.saveIncome(income, household: household)
             syncState = .synced(.now)
         } catch {
             syncState = .failed(error.localizedDescription)
@@ -287,7 +361,8 @@ final class AppStore: ObservableObject {
         do {
             let result = try await cloudService.prepareShare(
                 household: household,
-                expenses: snapshot.expenses
+                expenses: snapshot.expenses,
+                incomes: snapshot.incomes
             )
             household.cloudLocation = result.0
             snapshot.household = household
@@ -320,7 +395,9 @@ final class AppStore: ObservableObject {
                 household: household,
                 selectedMemberID: selectedMember,
                 expenses: cloud.expenses,
-                deletedExpenseIDs: cloud.deletedExpenseIDs
+                incomes: cloud.incomes,
+                deletedExpenseIDs: cloud.deletedExpenseIDs,
+                deletedIncomeIDs: cloud.deletedIncomeIDs
             )
             await persistLocally()
             syncState = .synced(.now)
@@ -350,6 +427,16 @@ final class AppStore: ObservableObject {
                     household: household
                 )
             }
+            for income in snapshot.incomes {
+                try await cloudService.saveIncome(income, household: household)
+            }
+            for (id, deletedAt) in snapshot.deletedIncomeIDs {
+                try await cloudService.deleteIncome(
+                    id: id,
+                    deletedAt: deletedAt,
+                    household: household
+                )
+            }
 
             let cloud = try await cloudService.fetchSnapshot(at: location)
             let deletions = snapshot.deletedExpenseIDs.merging(cloud.deletedExpenseIDs) {
@@ -367,12 +454,31 @@ final class AppStore: ObservableObject {
                 case (nil, nil): nil
                 }
             }.sorted { $0.date > $1.date }
+            let incomeDeletions = snapshot.deletedIncomeIDs.merging(cloud.deletedIncomeIDs) {
+                max($0, $1)
+            }
+            let deletedIncomes = Set(incomeDeletions.keys)
+            let localIncomes = Dictionary(uniqueKeysWithValues: snapshot.incomes.map { ($0.id, $0) })
+            let remoteIncomes = Dictionary(uniqueKeysWithValues: cloud.incomes.map { ($0.id, $0) })
+            let mergedIncomeIDs = Set(localIncomes.keys)
+                .union(remoteIncomes.keys)
+                .subtracting(deletedIncomes)
+            let mergedIncomes = mergedIncomeIDs.compactMap { id -> Income? in
+                switch (localIncomes[id], remoteIncomes[id]) {
+                case let (local?, remote?): local.updatedAt >= remote.updatedAt ? local : remote
+                case let (local?, nil): local
+                case let (nil, remote?): remote
+                case (nil, nil): nil
+                }
+            }.sorted { $0.date > $1.date }
 
             var mergedHousehold = cloud.household
             mergedHousehold.cloudLocation = location
             snapshot.household = mergedHousehold
             snapshot.expenses = merged
             snapshot.deletedExpenseIDs = deletions
+            snapshot.incomes = mergedIncomes
+            snapshot.deletedIncomeIDs = incomeDeletions
             if snapshot.selectedMemberID.flatMap({ mergedHousehold.member(id: $0) }) == nil {
                 snapshot.selectedMemberID = mergedHousehold.members.first?.id
             }
@@ -390,7 +496,11 @@ final class AppStore: ObservableObject {
         guard let household = snapshot.household else {
             throw CocoaError(.fileNoSuchFile)
         }
-        return try CSVExporter.makeFile(expenses: snapshot.expenses, household: household)
+        return try CSVExporter.makeFile(
+            expenses: snapshot.expenses,
+            incomes: snapshot.incomes,
+            household: household
+        )
     }
 
     func eraseLocalData() async {
