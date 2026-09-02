@@ -111,7 +111,8 @@ enum ReceiptParser {
             date: receiptDate(from: rows, now: now, calendar: calendar),
             items: found,
             suggestedCategory: category(from: recognizedText, merchant: shopName),
-            recognizedText: recognizedText
+            recognizedText: recognizedText,
+            shopKey: MerchantKey.make(fromReceiptText: recognizedText, merchant: shopName)
         )
     }
 

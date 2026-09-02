@@ -276,6 +276,25 @@ final class AppStore: ObservableObject {
         await saveHousehold(household)
     }
 
+    // MARK: - 覚えた店
+
+    /// レシートから作った支出が保存されたときに、その店を覚える。
+    ///
+    /// 読み取りが「写北名古屋」と出しても、人が「Selfix北名古屋」に直して保存すれば、
+    /// 次から同じ店のレシートは最初から正しく出る。相手の端末にも同期される。
+    func rememberMerchant(key: String, merchant: String, category: ExpenseCategory) async {
+        guard var household = snapshot.household else { return }
+        let updated = MerchantMemory.remembering(
+            household.merchantMemos,
+            key: key,
+            merchant: merchant,
+            category: category
+        )
+        guard updated != household.merchantMemos else { return }
+        household.merchantMemos = updated
+        await saveHousehold(household)
+    }
+
     func updateCategoryBudgets(_ budgets: [CategoryBudget]) async {
         guard var household = snapshot.household else { return }
         household.categoryBudgets = CategoryBudget.normalized(budgets)

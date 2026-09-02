@@ -10,6 +10,8 @@ struct Household: Identifiable, Codable, Hashable, Sendable {
     var categoryBudgets: [CategoryBudget]
     /// 家賃やサブスクのひな形。実際の支出はここから月ごとに展開する。
     var recurringExpenses: [RecurringExpense]
+    /// 一度直した店の名前と種類。次に同じ店のレシートを読んだとき使う。
+    var merchantMemos: [MerchantMemo]
     var cloudLocation: CloudLocation?
     var createdAt: Date
     var updatedAt: Date
@@ -22,6 +24,7 @@ struct Household: Identifiable, Codable, Hashable, Sendable {
         ownerMemberID: UUID,
         categoryBudgets: [CategoryBudget] = [],
         recurringExpenses: [RecurringExpense] = [],
+        merchantMemos: [MerchantMemo] = [],
         cloudLocation: CloudLocation? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now
@@ -33,6 +36,7 @@ struct Household: Identifiable, Codable, Hashable, Sendable {
         self.ownerMemberID = ownerMemberID
         self.categoryBudgets = CategoryBudget.normalized(categoryBudgets)
         self.recurringExpenses = recurringExpenses
+        self.merchantMemos = merchantMemos
         self.cloudLocation = cloudLocation
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -58,6 +62,7 @@ struct Household: Identifiable, Codable, Hashable, Sendable {
         case ownerMemberID
         case categoryBudgets
         case recurringExpenses
+        case merchantMemos
         case cloudLocation
         case createdAt
         case updatedAt
@@ -74,6 +79,7 @@ struct Household: Identifiable, Codable, Hashable, Sendable {
         ownerMemberID = try container.decode(UUID.self, forKey: .ownerMemberID)
         categoryBudgets = try container.decodeIfPresent([CategoryBudget].self, forKey: .categoryBudgets) ?? []
         recurringExpenses = try container.decodeIfPresent([RecurringExpense].self, forKey: .recurringExpenses) ?? []
+        merchantMemos = try container.decodeIfPresent([MerchantMemo].self, forKey: .merchantMemos) ?? []
         cloudLocation = try container.decodeIfPresent(CloudLocation.self, forKey: .cloudLocation)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)

@@ -379,6 +379,7 @@ actor CloudKitSyncService {
         record["membersData"] = try JSONEncoder().encode(household.members) as CKRecordValue
         record["categoryBudgetsData"] = try JSONEncoder().encode(household.categoryBudgets) as CKRecordValue
         record["recurringExpensesData"] = try JSONEncoder().encode(household.recurringExpenses) as CKRecordValue
+        record["merchantMemosData"] = try JSONEncoder().encode(household.merchantMemos) as CKRecordValue
         record["createdAt"] = household.createdAt as CKRecordValue
         record["updatedAt"] = household.updatedAt as CKRecordValue
         return try await saveRecord(record, to: database)
@@ -443,6 +444,8 @@ actor CloudKitSyncService {
             .map { try JSONDecoder().decode([CategoryBudget].self, from: $0) } ?? []
         let recurringExpenses = try (record["recurringExpensesData"] as? Data)
             .map { try JSONDecoder().decode([RecurringExpense].self, from: $0) } ?? []
+        let merchantMemos = try (record["merchantMemosData"] as? Data)
+            .map { try JSONDecoder().decode([MerchantMemo].self, from: $0) } ?? []
         return Household(
             id: id,
             name: name,
@@ -451,6 +454,7 @@ actor CloudKitSyncService {
             ownerMemberID: ownerID,
             categoryBudgets: categoryBudgets,
             recurringExpenses: recurringExpenses,
+            merchantMemos: merchantMemos,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
