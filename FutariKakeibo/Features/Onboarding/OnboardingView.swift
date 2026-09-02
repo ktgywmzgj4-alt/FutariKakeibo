@@ -39,11 +39,11 @@ struct OnboardingView: View {
                         .font(.title3.bold())
                         .foregroundStyle(AppTheme.deepGreen)
 
-                    labeledField("あなたの呼び名", text: $selfName, placeholder: "例：優")
+                    labeledField("あなたの呼び名", text: $selfName, placeholder: "例：そら")
                         .textContentType(.nickname)
                         .focused($focusedField, equals: .selfName)
 
-                    labeledField("パートナーの呼び名", text: $partnerName, placeholder: "例：パートナー")
+                    labeledField("パートナーの呼び名", text: $partnerName, placeholder: "例：つばさ")
                         .textContentType(.nickname)
                         .focused($focusedField, equals: .partnerName)
 
