@@ -320,7 +320,9 @@ struct ExpenseEditorView: View {
             defer { isRecognizing = false }
             do {
                 let lines = try await ReceiptRecognizer.recognize(images: images)
-                let draft = ReceiptParser.parse(lines: lines)
+                // 端末の中のAIが使えるならAIに、使えなければルールに読ませる。
+                // どちらの場合も、文字は端末の外へ出ない。
+                let draft = await ReceiptInterpreter.interpret(lines: lines)
                 recognizedText = draft.recognizedText
                 detectedItems = draft.items
                 if !draft.merchant.isEmpty { title = draft.merchant }
