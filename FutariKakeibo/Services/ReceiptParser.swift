@@ -276,7 +276,7 @@ enum ReceiptParser {
         // 税率や割引率の行。金額の並びに見えるが買ったものではない。
         if row.text.contains("%") || row.text.contains("％") { return nil }
         // 「2コX単118」のような数量と単価の行。品名ではない。
-        if row.text.range(of: "[0-9]\s*[コ個][x×X]\s*単", options: .regularExpression) != nil { return nil }
+        if row.text.range(of: #"[0-9]\s*[コ個][x×X]\s*単"#, options: .regularExpression) != nil { return nil }
 
         let fragments = row.sortedFragments
         guard fragments.count >= 2 else { return itemFromText(row.text) }
