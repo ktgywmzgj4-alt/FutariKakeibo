@@ -35,7 +35,8 @@ struct DashboardView: View {
                         .foregroundStyle(AppTheme.secondaryText)
                     Text(store.monthlyTotal.yenText)
                         .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
-                        .foregroundStyle(AppTheme.deepGreen)
+                        .foregroundStyle(AppTheme.ink)
+                        .spectrumEdge(2.5)
                 }
                 Spacer()
                 Text("予算 \((store.household?.monthlyBudget ?? 0).yenText)")
@@ -44,7 +45,7 @@ struct DashboardView: View {
             }
 
             ProgressView(value: store.budgetProgress)
-                .tint(store.budgetProgress >= 0.9 ? AppTheme.terracotta : AppTheme.sage)
+                .tint(store.budgetProgress >= 0.9 ? AppTheme.accent : AppTheme.positive)
                 .scaleEffect(x: 1, y: 1.6)
                 .accessibilityLabel("予算の使用率")
                 .accessibilityValue("\(Int(store.budgetProgress * 100))パーセント")
@@ -70,11 +71,11 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 11) {
             Label("今月の精算", systemImage: "arrow.left.arrow.right.circle.fill")
                 .font(.headline)
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
 
             if store.settlement.amount == 0 {
                 Label("いまのところ精算はありません", systemImage: "checkmark.seal.fill")
-                    .foregroundStyle(AppTheme.sage)
+                    .foregroundStyle(AppTheme.positive)
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
                     Text(store.settlement.payer?.displayName ?? "")
@@ -84,7 +85,7 @@ struct DashboardView: View {
                     Text(store.settlement.amount.yenText)
                         .font(.title3.monospacedDigit().bold())
                 }
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
                 Text("「2人で折半」にした支出だけで計算しています。")
                     .font(.caption)
                     .foregroundStyle(AppTheme.secondaryText)
@@ -97,7 +98,7 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("カテゴリ別")
                 .font(.headline)
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
 
             let totals = LedgerCalculator.categoryTotals(store.monthlyExpenses)
                 .sorted { $0.value > $1.value }
@@ -112,7 +113,7 @@ struct DashboardView: View {
                         Text(total.yenText)
                             .monospacedDigit()
                             .fontWeight(.semibold)
-                            .foregroundStyle(AppTheme.deepGreen)
+                            .foregroundStyle(AppTheme.ink)
                     }
                 }
             }
@@ -124,7 +125,7 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("最近の支出")
                 .font(.headline)
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
 
             if let household = store.household, !store.monthlyExpenses.isEmpty {
                 ForEach(store.monthlyExpenses.prefix(4)) { expense in
@@ -147,12 +148,12 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 13) {
                 Label("今月の収支", systemImage: "arrow.up.arrow.down.circle.fill")
                     .font(.headline)
-                    .foregroundStyle(AppTheme.deepGreen)
+                    .foregroundStyle(AppTheme.ink)
 
                 HStack(alignment: .firstTextBaseline) {
                     Text(balance.balance.yenText)
                         .font(.system(size: 28, weight: .bold, design: .rounded).monospacedDigit())
-                        .foregroundStyle(balance.isNegative ? AppTheme.danger : AppTheme.sage)
+                        .foregroundStyle(balance.isNegative ? AppTheme.danger : AppTheme.positive)
                     Spacer()
                     if let rate = balance.savingsRate, rate > 0 {
                         Text("貯蓄率 \(Int((rate * 100).rounded()))%")
@@ -168,7 +169,7 @@ struct DashboardView: View {
                             .foregroundStyle(AppTheme.secondaryText)
                         Text(balance.income.yenText)
                             .font(.subheadline.monospacedDigit().weight(.semibold))
-                            .foregroundStyle(AppTheme.sage)
+                            .foregroundStyle(AppTheme.positive)
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 3) {
@@ -177,7 +178,7 @@ struct DashboardView: View {
                             .foregroundStyle(AppTheme.secondaryText)
                         Text(balance.expense.yenText)
                             .font(.subheadline.monospacedDigit().weight(.semibold))
-                            .foregroundStyle(AppTheme.deepGreen)
+                            .foregroundStyle(AppTheme.ink)
                     }
                 }
 
@@ -196,17 +197,17 @@ struct DashboardView: View {
         if store.lastRecurringInsertCount > 0 {
             HStack(spacing: 11) {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(AppTheme.sage)
+                    .foregroundStyle(AppTheme.positive)
                 Text("定期支出を \(store.lastRecurringInsertCount) 件、自動で追加しました")
                     .font(.footnote.weight(.medium))
-                    .foregroundStyle(AppTheme.deepGreen)
+                    .foregroundStyle(AppTheme.ink)
                 Spacer(minLength: 8)
                 Button("閉じる") { store.lastRecurringInsertCount = 0 }
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(AppTheme.terracotta)
+                    .foregroundStyle(AppTheme.accent)
             }
             .padding(14)
-            .background(AppTheme.sageSoft.opacity(0.45))
+            .background(AppTheme.positiveSoft.opacity(0.45))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
@@ -219,7 +220,7 @@ struct DashboardView: View {
                 HStack {
                     Text("カテゴリ別予算")
                         .font(.headline)
-                        .foregroundStyle(AppTheme.deepGreen)
+                        .foregroundStyle(AppTheme.ink)
                     Spacer()
                     if let over = statuses.first(where: \.isOverBudget) {
                         Label("\(over.category.displayName)が超過", systemImage: "exclamationmark.triangle.fill")
@@ -257,7 +258,7 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Label("この先の定期支出", systemImage: "repeat.circle.fill")
                     .font(.headline)
-                    .foregroundStyle(AppTheme.deepGreen)
+                    .foregroundStyle(AppTheme.ink)
 
                 ForEach(occurrences.prefix(3)) { occurrence in
                     HStack(spacing: 9) {
@@ -265,11 +266,11 @@ struct DashboardView: View {
                             .font(.caption.monospacedDigit().weight(.semibold))
                             .foregroundStyle(AppTheme.secondaryText)
                         Text(occurrence.template.title)
-                            .foregroundStyle(AppTheme.deepGreen)
+                            .foregroundStyle(AppTheme.ink)
                         Spacer()
                         Text(occurrence.template.amount.yenText)
                             .font(.subheadline.monospacedDigit().weight(.semibold))
-                            .foregroundStyle(AppTheme.deepGreen)
+                            .foregroundStyle(AppTheme.ink)
                     }
                     .font(.subheadline)
                 }

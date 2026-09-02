@@ -35,12 +35,12 @@ struct CategoryBudgetView: View {
         VStack(alignment: .leading, spacing: 10) {
             Label("予算の合計", systemImage: "chart.pie.fill")
                 .font(.headline)
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
 
             HStack(alignment: .firstTextBaseline) {
                 Text(enteredTotal.yenText)
                     .font(.system(size: 28, weight: .bold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(AppTheme.deepGreen)
+                    .foregroundStyle(AppTheme.ink)
                 Spacer()
                 Text("月予算 \(monthlyBudget.yenText)")
                     .font(.caption.weight(.semibold))
@@ -79,7 +79,7 @@ struct CategoryBudgetView: View {
 
                         Text(category.displayName)
                             .font(.body.weight(.semibold))
-                            .foregroundStyle(AppTheme.deepGreen)
+                            .foregroundStyle(AppTheme.ink)
 
                         Spacer(minLength: 8)
 
@@ -121,7 +121,7 @@ struct CategoryBudgetView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)
                 .foregroundStyle(.white)
-                .background(AppTheme.terracotta)
+                .background(AppTheme.accent)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }

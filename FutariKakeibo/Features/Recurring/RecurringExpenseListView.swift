@@ -58,11 +58,12 @@ struct RecurringExpenseListView: View {
         VStack(alignment: .leading, spacing: 10) {
             Label("毎月の固定費", systemImage: "repeat.circle.fill")
                 .font(.headline)
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
 
             Text(monthlyFixedTotal.yenText)
                 .font(.system(size: 30, weight: .bold, design: .rounded).monospacedDigit())
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
+                .spectrumEdge(2)
 
             Text("有効な定期支出 \(store.recurringExpenses.filter(\.isActive).count) 件の合計です。指定した日になると自動で支出に追加されます。")
                 .font(.footnote)
@@ -76,10 +77,10 @@ struct RecurringExpenseListView: View {
         VStack(spacing: 12) {
             Image(systemName: "calendar.badge.plus")
                 .font(.largeTitle)
-                .foregroundStyle(AppTheme.sage)
+                .foregroundStyle(AppTheme.positive)
             Text("まだ定期支出がありません")
                 .font(.headline)
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
             Text("家賃、電気代、通信費、動画配信などを登録しておくと、毎月の入力がいらなくなります。")
                 .font(.footnote)
                 .multilineTextAlignment(.center)
@@ -88,7 +89,7 @@ struct RecurringExpenseListView: View {
                 Label("定期支出を追加", systemImage: "plus")
             }
             .buttonStyle(.borderedProminent)
-            .tint(AppTheme.terracotta)
+            .tint(AppTheme.accent)
         }
         .frame(maxWidth: .infinity)
         .appCard()
@@ -108,7 +109,7 @@ struct RecurringExpenseListView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(template.title)
                         .font(.body.weight(.semibold))
-                        .foregroundStyle(AppTheme.deepGreen)
+                        .foregroundStyle(AppTheme.ink)
                         .lineLimit(1)
                     HStack(spacing: 5) {
                         Text(template.scheduleDescription)
@@ -118,7 +119,7 @@ struct RecurringExpenseListView: View {
                             Text("個人")
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(AppTheme.sageSoft)
+                                .background(AppTheme.positiveSoft)
                                 .clipShape(Capsule())
                         }
                     }
@@ -130,7 +131,7 @@ struct RecurringExpenseListView: View {
 
                 Text(template.amount.yenText)
                     .font(.body.monospacedDigit().weight(.bold))
-                    .foregroundStyle(template.isActive ? AppTheme.deepGreen : AppTheme.secondaryText)
+                    .foregroundStyle(template.isActive ? AppTheme.ink : AppTheme.secondaryText)
             }
 
             if let endMonth = template.endMonth {
@@ -149,7 +150,7 @@ struct RecurringExpenseListView: View {
                     }
                 ))
                 .labelsHidden()
-                .tint(AppTheme.sage)
+                .tint(AppTheme.positive)
 
                 Text(template.isActive ? "有効" : "停止中")
                     .font(.caption.weight(.semibold))
@@ -162,7 +163,7 @@ struct RecurringExpenseListView: View {
                         .font(.caption.weight(.semibold))
                 }
                 .buttonStyle(.bordered)
-                .tint(AppTheme.sage)
+                .tint(AppTheme.positive)
 
                 Button(role: .destructive) { deletingTemplate = template } label: {
                     Label("削除", systemImage: "trash")

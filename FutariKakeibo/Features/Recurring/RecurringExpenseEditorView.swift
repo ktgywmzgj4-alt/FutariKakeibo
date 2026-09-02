@@ -125,7 +125,7 @@ struct RecurringExpenseEditorView: View {
         VStack(alignment: .leading, spacing: 17) {
             Label("いつ計上するか", systemImage: "calendar.badge.clock")
                 .font(.headline)
-                .foregroundStyle(AppTheme.deepGreen)
+                .foregroundStyle(AppTheme.ink)
 
             Picker("毎月の日", selection: $dayOfMonth) {
                 ForEach(RecurringExpense.minimumDayOfMonth...RecurringExpense.maximumDayOfMonth, id: \.self) { day in
@@ -141,7 +141,7 @@ struct RecurringExpenseEditorView: View {
                 .datePickerStyle(.compact)
 
             Toggle("終了月を決める", isOn: $hasEndMonth)
-                .tint(AppTheme.sage)
+                .tint(AppTheme.positive)
 
             if hasEndMonth {
                 DatePicker("終了月", selection: $endMonth, in: startMonth..., displayedComponents: .date)
@@ -153,7 +153,7 @@ struct RecurringExpenseEditorView: View {
                 .foregroundStyle(AppTheme.secondaryText)
 
             Toggle("この定期支出を有効にする", isOn: $isActive)
-                .tint(AppTheme.sage)
+                .tint(AppTheme.positive)
         }
         .appCard()
     }
@@ -165,7 +165,7 @@ struct RecurringExpenseEditorView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)
                 .foregroundStyle(.white)
-                .background(canSave ? AppTheme.terracotta : AppTheme.secondaryText.opacity(0.4))
+                .background(canSave ? AppTheme.accent : AppTheme.secondaryText.opacity(0.4))
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .disabled(!canSave)

@@ -58,7 +58,7 @@ struct PrivacySummaryView: View {
             }
         } icon: {
             Image(systemName: icon)
-                .foregroundStyle(AppTheme.sage)
+                .foregroundStyle(AppTheme.positive)
         }
     }
 }

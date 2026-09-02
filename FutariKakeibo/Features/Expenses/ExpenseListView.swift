@@ -94,7 +94,7 @@ struct ExpenseListView: View {
                         Button { editingExpense = expense } label: {
                             Label("編集", systemImage: "pencil")
                         }
-                        .tint(AppTheme.sage)
+                        .tint(AppTheme.positive)
                     }
                 }
             }
@@ -163,8 +163,8 @@ struct ExpenseListView: View {
                 .font(.caption.weight(.semibold))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .foregroundStyle(selected ? Color.white : AppTheme.deepGreen)
-                .background(selected ? AppTheme.terracotta : AppTheme.card)
+                .foregroundStyle(selected ? Color.white : AppTheme.ink)
+                .background(selected ? AppTheme.accent : AppTheme.card)
                 .clipShape(Capsule())
         }
         .accessibilityAddTraits(selected ? .isSelected : [])

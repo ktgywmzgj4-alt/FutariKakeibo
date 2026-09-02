@@ -28,7 +28,8 @@ struct OnboardingView: View {
                 VStack(spacing: 8) {
                     Text("ふたり家計簿")
                         .font(.largeTitle.bold())
-                        .foregroundStyle(AppTheme.deepGreen)
+                        .foregroundStyle(AppTheme.ink)
+                        .spectrumEdge(2.5)
                     Text("お金の話を、やさしく、ふたりの日常に。")
                         .font(.subheadline)
                         .foregroundStyle(AppTheme.secondaryText)
@@ -37,7 +38,7 @@ struct OnboardingView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("最初の設定")
                         .font(.title3.bold())
-                        .foregroundStyle(AppTheme.deepGreen)
+                        .foregroundStyle(AppTheme.ink)
 
                     labeledField("あなたの呼び名", text: $selfName, placeholder: "例：そら")
                         .textContentType(.nickname)
@@ -75,7 +76,7 @@ struct OnboardingView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
                         .foregroundStyle(.white)
-                        .background(AppTheme.terracotta)
+                        .background(AppTheme.accent)
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .disabled(parsedBudget <= 0)

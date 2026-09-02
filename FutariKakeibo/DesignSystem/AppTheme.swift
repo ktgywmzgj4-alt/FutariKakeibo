@@ -1,16 +1,44 @@
 import SwiftUI
 
+/// 純白の紙に黒で刷った見た目を土台に、文字の右の輪郭から
+/// 虹がわずかに覗く。色は差し色ではなく、その覗く光だけが持つ。
 enum AppTheme {
-    static let background = Color(red: 1.00, green: 0.97, blue: 0.91)
-    static let card = Color(red: 1.00, green: 0.99, blue: 0.96)
-    static let terracotta = Color(red: 0.84, green: 0.31, blue: 0.16)
-    static let terracottaSoft = Color(red: 0.95, green: 0.76, blue: 0.65)
-    static let sage = Color(red: 0.48, green: 0.61, blue: 0.47)
-    static let sageSoft = Color(red: 0.83, green: 0.88, blue: 0.79)
-    static let deepGreen = Color(red: 0.13, green: 0.23, blue: 0.20)
-    static let gold = Color(red: 0.89, green: 0.69, blue: 0.38)
-    static let secondaryText = Color(red: 0.39, green: 0.38, blue: 0.33)
-    static let danger = Color(red: 0.72, green: 0.18, blue: 0.16)
+    /// 紙。純白。
+    static let background = Color.white
+    /// カード。背景と同じ白で、境界線と影だけで持ち上げる。
+    static let card = Color.white
+    /// 本文の黒。真っ黒よりわずかに沈めて、白地で目が痛くならないようにする。
+    static let ink = Color(red: 0.05, green: 0.05, blue: 0.06)
+    /// 補足の文字。
+    static let secondaryText = Color(red: 0.44, green: 0.44, blue: 0.47)
+    /// 罫線とカードの輪郭。
+    static let line = Color(red: 0.89, green: 0.89, blue: 0.91)
+    /// 押せるもの。虹の中央にある青を単色で取り出したもの。
+    static let accent = Color(red: 0.13, green: 0.44, blue: 0.94)
+    static let accentSoft = Color(red: 0.87, green: 0.92, blue: 1.00)
+    /// 良い状態。予算内、収支の黒字。
+    static let positive = Color(red: 0.09, green: 0.63, blue: 0.40)
+    static let positiveSoft = Color(red: 0.87, green: 0.96, blue: 0.91)
+    /// 注意。予算に近づいている。
+    static let warning = Color(red: 0.95, green: 0.62, blue: 0.11)
+    /// 危険。予算超過、削除。
+    static let danger = Color(red: 0.84, green: 0.15, blue: 0.24)
+
+    /// 虹。文字の輪郭から覗かせるほか、進捗や強調にも使う。
+    static let spectrumColors: [Color] = [
+        Color(red: 0.93, green: 0.20, blue: 0.28),
+        Color(red: 0.97, green: 0.55, blue: 0.13),
+        Color(red: 0.95, green: 0.80, blue: 0.16),
+        Color(red: 0.20, green: 0.72, blue: 0.44),
+        Color(red: 0.13, green: 0.50, blue: 0.93),
+        Color(red: 0.53, green: 0.31, blue: 0.85)
+    ]
+
+    static let spectrum = LinearGradient(
+        colors: spectrumColors,
+        startPoint: .leading,
+        endPoint: .trailing
+    )
 }
 
 struct AppCardModifier: ViewModifier {
@@ -18,14 +46,40 @@ struct AppCardModifier: ViewModifier {
         content
             .padding(18)
             .background(AppTheme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .shadow(color: AppTheme.deepGreen.opacity(0.07), radius: 14, y: 6)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(AppTheme.line, lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.05), radius: 10, y: 3)
+    }
+}
+
+/// 文字の右の輪郭から虹をわずかに覗かせる。
+/// 同じ文字を虹色で少し右にずらして後ろに敷き、その分だけがはみ出す。
+struct SpectrumEdgeModifier: ViewModifier {
+    var offset: CGFloat = 2
+
+    func body(content: Content) -> some View {
+        content
+            .background(alignment: .leading) {
+                content
+                    .foregroundStyle(AppTheme.spectrum)
+                    .offset(x: offset)
+                    .blur(radius: 0.4)
+                    .accessibilityHidden(true)
+            }
     }
 }
 
 extension View {
     func appCard() -> some View {
         modifier(AppCardModifier())
+    }
+
+    /// 見出しや金額など、目を引かせたい文字にだけ使う。
+    func spectrumEdge(_ offset: CGFloat = 2) -> some View {
+        modifier(SpectrumEdgeModifier(offset: offset))
     }
 }
 

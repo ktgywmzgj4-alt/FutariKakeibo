@@ -77,7 +77,7 @@ struct SettingsView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .tint(AppTheme.terracotta)
+            .tint(AppTheme.accent)
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .appCard()
@@ -138,7 +138,7 @@ struct SettingsView: View {
                     Label("iCloud共有を準備", systemImage: "person.badge.plus")
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(AppTheme.sage)
+                .tint(AppTheme.positive)
                 .disabled(store.syncState == .syncing)
             } else {
                 Text("招待された参加者だけが、この家計のデータを読み書きできます。")
@@ -161,7 +161,7 @@ struct SettingsView: View {
                             Label("招待を表示", systemImage: "person.badge.plus")
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(AppTheme.sage)
+                        .tint(AppTheme.positive)
                     }
                 }
             }
@@ -228,7 +228,7 @@ struct SettingsView: View {
     private var syncColor: Color {
         switch store.syncState {
         case .failed: AppTheme.danger
-        case .synced: AppTheme.sage
+        case .synced: AppTheme.positive
         default: AppTheme.secondaryText
         }
     }
@@ -250,7 +250,7 @@ struct SettingsView: View {
     private func sectionTitle(_ title: String, icon: String) -> some View {
         Label(title, systemImage: icon)
             .font(.headline)
-            .foregroundStyle(AppTheme.deepGreen)
+            .foregroundStyle(AppTheme.ink)
     }
 
     private func labeledField(_ label: String, text: Binding<String>) -> some View {
@@ -265,7 +265,7 @@ struct SettingsView: View {
         }
     }
 
-    private func settingsRow(_ title: String, icon: String, color: Color = AppTheme.deepGreen) -> some View {
+    private func settingsRow(_ title: String, icon: String, color: Color = AppTheme.ink) -> some View {
         HStack {
             Label(title, systemImage: icon)
             Spacer()
