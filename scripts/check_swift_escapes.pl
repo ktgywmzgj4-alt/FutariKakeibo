@@ -54,6 +54,8 @@ for my $path (@ARGV) {
                         }
                         next;
                     }
+                    # 複数行文字列では、行末の backslash は行continuationで正しい書き方。
+                    if ($multi && defined $next && $next eq "\n") { $line++; $i += 2; next }
                     unless (defined $next && $valid{$next}) {
                         push @errors, "line $line: 無効なエスケープ backslash-$next";
                     }

@@ -37,6 +37,7 @@
 		C00000000000000000000028 /* CloudShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000028 /* CloudShareInbox.swift */; };
 		C00000000000000000000029 /* ReceiptParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000029 /* ReceiptParser.swift */; };
 		C00000000000000000000030 /* ReceiptRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000030 /* ReceiptRecognizer.swift */; };
+		C00000000000000000000061 /* ReceiptInterpreter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000061 /* ReceiptInterpreter.swift */; };
 		C00000000000000000000033 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000033 /* PrivacyInfo.xcprivacy */; };
 		C00000000000000000000034 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000034 /* Assets.xcassets */; };
 		C00000000000000000000035 /* LedgerCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000035 /* LedgerCalculatorTests.swift */; };
@@ -63,6 +64,7 @@
 		C00000000000000000000058 /* ShareInvite.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000058 /* ShareInvite.swift */; };
 		C00000000000000000000059 /* SharingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000059 /* SharingView.swift */; };
 		C00000000000000000000060 /* ShareInviteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000060 /* ShareInviteTests.swift */; };
+		C00000000000000000000062 /* ReceiptInterpreterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000062 /* ReceiptInterpreterTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -106,6 +108,7 @@
 		B00000000000000000000028 /* CloudShareInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/CloudShareInbox.swift; sourceTree = "<group>"; };
 		B00000000000000000000029 /* ReceiptParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ReceiptParser.swift; sourceTree = "<group>"; };
 		B00000000000000000000030 /* ReceiptRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ReceiptRecognizer.swift; sourceTree = "<group>"; };
+		B00000000000000000000061 /* ReceiptInterpreter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ReceiptInterpreter.swift; sourceTree = "<group>"; };
 		B00000000000000000000031 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Resources/Info.plist; sourceTree = "<group>"; };
 		B00000000000000000000032 /* FutariKakeibo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Resources/FutariKakeibo.entitlements; sourceTree = "<group>"; };
 		B00000000000000000000033 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = Resources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -136,6 +139,7 @@
 		B00000000000000000000058 /* ShareInvite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/ShareInvite.swift; sourceTree = "<group>"; };
 		B00000000000000000000059 /* SharingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Settings/SharingView.swift; sourceTree = "<group>"; };
 		B00000000000000000000060 /* ShareInviteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareInviteTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000062 /* ReceiptInterpreterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptInterpreterTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -207,6 +211,7 @@
 				B00000000000000000000028 /* CloudShareInbox.swift */,
 				B00000000000000000000029 /* ReceiptParser.swift */,
 				B00000000000000000000030 /* ReceiptRecognizer.swift */,
+				B00000000000000000000061 /* ReceiptInterpreter.swift */,
 				B00000000000000000000040 /* CategoryBudget.swift */,
 				B00000000000000000000041 /* MonthlyReport.swift */,
 				B00000000000000000000042 /* RecurringExpense.swift */,
@@ -242,6 +247,7 @@
 				B00000000000000000000051 /* SnapshotCompatibilityTests.swift */,
 				B00000000000000000000056 /* IncomeTests.swift */,
 				B00000000000000000000060 /* ShareInviteTests.swift */,
+				B00000000000000000000062 /* ReceiptInterpreterTests.swift */,
 			);
 			path = FutariKakeiboTests;
 			sourceTree = "<group>";
@@ -377,6 +383,7 @@
 				C00000000000000000000028 /* CloudShareInbox.swift in Sources */,
 				C00000000000000000000029 /* ReceiptParser.swift in Sources */,
 				C00000000000000000000030 /* ReceiptRecognizer.swift in Sources */,
+				C00000000000000000000061 /* ReceiptInterpreter.swift in Sources */,
 				C00000000000000000000040 /* CategoryBudget.swift in Sources */,
 				C00000000000000000000041 /* MonthlyReport.swift in Sources */,
 				C00000000000000000000042 /* RecurringExpense.swift in Sources */,
@@ -408,6 +415,7 @@
 				C00000000000000000000051 /* SnapshotCompatibilityTests.swift in Sources */,
 				C00000000000000000000056 /* IncomeTests.swift in Sources */,
 				C00000000000000000000060 /* ShareInviteTests.swift in Sources */,
+				C00000000000000000000062 /* ReceiptInterpreterTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
