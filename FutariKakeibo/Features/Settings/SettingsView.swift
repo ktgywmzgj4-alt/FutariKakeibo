@@ -14,6 +14,7 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
+                ScreenTitle("設定")
                 householdCard
                 planningCard
                 cloudCard
@@ -24,7 +25,8 @@ struct SettingsView: View {
             .padding(.bottom, 26)
         }
         .background(AppTheme.background)
-        .navigationTitle("設定")
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: loadFields)
         .sheet(item: $exportFile, onDismiss: cleanupExportFile) { file in
             ActivityView(items: [file.url])

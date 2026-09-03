@@ -86,6 +86,27 @@ extension View {
     }
 }
 
+/// 画面のいちばん大きな見出し。
+///
+/// **虹色を出すのはここだけ。** 金額や小見出しには付けない。
+/// 全部に付けると読みにくくなり、どれが大事なのか分からなくなる。
+struct ScreenTitle: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.largeTitle.weight(.bold))
+            .foregroundStyle(AppTheme.ink)
+            .spectrumEdge(1.5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
 extension Int {
     var yenText: String {
         let formatter = NumberFormatter()

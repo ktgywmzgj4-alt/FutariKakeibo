@@ -29,7 +29,6 @@ struct OnboardingView: View {
                     Text("ふたり家計簿")
                         .font(.largeTitle.bold())
                         .foregroundStyle(AppTheme.ink)
-                        .spectrumEdge(1.5)
                     Text("お金の話を、やさしく、ふたりの日常に。")
                         .font(.subheadline)
                         .foregroundStyle(AppTheme.secondaryText)

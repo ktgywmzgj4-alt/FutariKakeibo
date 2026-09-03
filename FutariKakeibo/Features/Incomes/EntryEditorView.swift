@@ -22,6 +22,10 @@ struct EntryEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            ScreenTitle(kind == .expense ? "支出を追加" : "収入を追加")
+                .padding(.horizontal, 18)
+                .padding(.top, 4)
+
             Picker("記録する種類", selection: $kind) {
                 ForEach(Kind.allCases) { kind in
                     Text(kind.displayName).tag(kind)

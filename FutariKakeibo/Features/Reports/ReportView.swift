@@ -8,6 +8,7 @@ struct ReportView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 18) {
+                ScreenTitle("レポート")
                 MonthNavigator(month: store.selectedMonth, onMove: store.moveMonth)
 
                 let report = store.monthlyReport
@@ -21,8 +22,8 @@ struct ReportView: View {
             .padding(.bottom, 28)
         }
         .background(AppTheme.background)
-        .navigationTitle("レポート")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .refreshable { await store.refreshFromCloudIfConfigured() }
     }
 
@@ -35,7 +36,6 @@ struct ReportView: View {
             Text(report.total.yenText)
                 .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundStyle(AppTheme.ink)
-                .spectrumEdge(1.5)
 
             HStack(spacing: 7) {
                 Image(systemName: differenceIcon(report))
