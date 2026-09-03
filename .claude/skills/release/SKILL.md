@@ -20,23 +20,38 @@ gh secret list
 
 ## ビルド番号
 
-TestFlightは、**同じビルド番号を二度受け付けません。** 上げ忘れると「重複」で拒否されます。
-形式は `年.月日.時分` です。
+ここは何もしなくて構いません。**ワークフローが実行時刻から自動で作ります**（`date -u '+%Y.%m%d.%H%M'`）。
+TestFlightは同じビルド番号を二度受け付けませんが、時刻から作るので必ず前より大きくなります。
+バージョン（`MARKETING_VERSION` = `0.1.0`）は変わりません。
+
+## 実行 — これはAIにはできません
 
 ```bash
-date -u +"%Y.%m%d.%H%M"
+gh workflow run ios.yml --ref main
 ```
 
-この値を `CURRENT_PROJECT_VERSION` に入れます。バージョン（`MARKETING_VERSION`）は変えません。
+**このコマンドはAIの実行権限で止められます。**「外部への配信を起こす操作」と判定されるためで、
+`Docs/safety.md` のルールとは別の、ツール側の安全機構です。**人間に渡してください。**
 
-## 実行
+`-f upload=true` は**存在しない入力**です（2026-09-03に誤って書いていました）。
+このワークフローに `inputs` はなく、`workflow_dispatch` で起動しさえすれば
+`testflight` ジョブが動きます（`if: github.event_name == 'workflow_dispatch'`）。
 
-```bash
-gh workflow run ios.yml --ref <ブランチ名> -f upload=true
-gh run list --workflow=ios.yml --limit 1
-```
+### PCが無いとき
+
+GitHubのWeb画面から、スマホのブラウザでも実行できます。
+
+1. `https://github.com/<owner>/<repo>/actions` を開く
+2. 左の一覧から **iOS build and tests** を選ぶ
+3. 右上の **Run workflow** → Branch が `main` であることを確認 → 緑の **Run workflow**
 
 およそ15分かかります（テスト8分 + アーカイブと送信7分）。
+
+起動したかどうかは、AIの権限でも確認できます。
+
+```bash
+gh run list --workflow=ios.yml --event workflow_dispatch --limit 1
+```
 
 ## 結果の確認
 
