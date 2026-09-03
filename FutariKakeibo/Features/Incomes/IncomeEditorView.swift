@@ -61,7 +61,7 @@ struct IncomeEditorView: View {
             .padding(18)
         }
         .background(AppTheme.background)
-        .navigationTitle(originalIncome == nil ? "収入を追加" : "収入を編集")
+        .navigationTitle(originalIncome == nil ? "" : "収入を編集")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if originalIncome != nil {

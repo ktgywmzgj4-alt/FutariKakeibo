@@ -181,4 +181,70 @@ final class MerchantMemoTests: XCTestCase {
         let decoded = try JSONDecoder().decode([MerchantMemo].self, from: data)
         XCTAssertEqual(decoded, [memo])
     }
+
+    // MARK: - 支出に残る店名
+
+    /// 店名は支出そのものにも残る。あとから「どこで使ったか」を見返せるように。
+    func testExpenseKeepsTheShopName() {
+        let expense = Expense(
+            title: "ガソリン",
+            amount: 2_964,
+            category: .transportation,
+            paidByMemberID: UUID(),
+            merchant: "  Selfix北名古屋  "
+        )
+        XCTAssertEqual(expense.merchant, "Selfix北名古屋")
+    }
+
+    /// 手入力の支出には店名が無い。空文字ではなく無しとして扱う。
+    func testBlankShopNameBecomesNil() {
+        let expense = Expense(
+            title: "電車",
+            amount: 320,
+            category: .transportation,
+            paidByMemberID: UUID(),
+            merchant: "   "
+        )
+        XCTAssertNil(expense.merchant)
+    }
+
+    /// 店名を持たない古いデータも、そのまま読める。
+    func testOldExpenseWithoutShopNameStillDecodes() throws {
+        let json = """
+        {
+          "id": "\(UUID().uuidString)",
+          "title": "食材",
+          "amount": 1280,
+          "date": 700000000,
+          "category": "groceries",
+          "paidByMemberID": "\(UUID().uuidString)",
+          "splitMethod": "equally",
+          "note": "",
+          "createdAt": 700000000,
+          "updatedAt": 700000000
+        }
+        """
+
+        let expense = try JSONDecoder().decode(Expense.self, from: Data(json.utf8))
+        XCTAssertNil(expense.merchant)
+        XCTAssertEqual(expense.amount, 1_280)
+    }
+
+    /// 忘れたら、次に同じ店を読んでも当てはまらない。
+    func testForgottenShopIsNoLongerApplied() {
+        let memos = [
+            MerchantMemo(key: "invoice:1", merchant: "覚えた店", category: .dining, updatedAt: now)
+        ]
+        let draft = ReceiptDraft(
+            merchant: "読み取った名前",
+            suggestedCategory: .other,
+            shopKey: "invoice:1"
+        )
+        XCTAssertEqual(MerchantMemory.applying(memos, to: draft).merchant, "覚えた店")
+
+        let afterForgetting = memos.filter { $0.key != "invoice:1" }
+        let applied = MerchantMemory.applying(afterForgetting, to: draft)
+        XCTAssertEqual(applied.merchant, "読み取った名前")
+        XCTAssertFalse(applied.usedMemo)
+    }
 }

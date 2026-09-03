@@ -44,7 +44,7 @@ Productionは作ってくれません。**人間が手で反映する必要が�
 | Record Type | 項目 |
 | --- | --- |
 | `Household` | id, name, monthlyBudget, ownerMemberID, membersData, categoryBudgetsData, recurringExpensesData, **merchantMemosData**, createdAt, updatedAt |
-| `Expense` | id, isDeleted, title, amount, date, category, paidByMemberID, splitMethod, note, recurringID, createdAt, updatedAt |
+| `Expense` | id, isDeleted, title, amount, date, category, paidByMemberID, splitMethod, note, **merchant**, recurringID, createdAt, updatedAt |
 | `Income` | id, isDeleted, title, amount, date, source, receivedByMemberID, note, createdAt, updatedAt |
 | `ShareInvite` | shareURL, expiresAt |
 

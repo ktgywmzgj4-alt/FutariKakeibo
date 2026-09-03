@@ -29,6 +29,10 @@ struct ExpenseListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            ScreenTitle(mode == .expense ? "支出履歴" : "収入の記録")
+                .padding(.horizontal, 18)
+                .padding(.bottom, 10)
+
             MonthNavigator(month: store.selectedMonth, onMove: store.moveMonth)
                 .padding(.horizontal, 18)
 
@@ -49,7 +53,8 @@ struct ExpenseListView: View {
             }
         }
         .background(AppTheme.background)
-        .navigationTitle(mode == .expense ? "支出履歴" : "収入の記録")
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "内容やメモを検索")
         .sheet(item: $editingExpense) { expense in
             NavigationStack {

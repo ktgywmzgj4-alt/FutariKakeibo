@@ -6,6 +6,7 @@ struct DashboardView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 18) {
+                ScreenTitle("ふたりのホーム")
                 MonthNavigator(month: store.selectedMonth, onMove: store.moveMonth)
 
                 recurringNoticeCard
@@ -21,8 +22,8 @@ struct DashboardView: View {
             .padding(.bottom, 28)
         }
         .background(AppTheme.background)
-        .navigationTitle("ふたりのホーム")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .refreshable { await store.refreshFromCloudIfConfigured() }
     }
 
@@ -36,7 +37,6 @@ struct DashboardView: View {
                     Text(store.monthlyTotal.yenText)
                         .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
                         .foregroundStyle(AppTheme.ink)
-                        .spectrumEdge(1.5)
                 }
                 Spacer()
                 Text("予算 \((store.household?.monthlyBudget ?? 0).yenText)")

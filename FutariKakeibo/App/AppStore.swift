@@ -295,6 +295,18 @@ final class AppStore: ObservableObject {
         await saveHousehold(household)
     }
 
+    /// 間違って覚えた店を忘れる。
+    ///
+    /// 覚え直すには同じ店のレシートをもう一度撮るしかない、では詰むため、
+    /// 画面から消せるようにしておく。
+    func forgetMerchant(key: String) async {
+        guard var household = snapshot.household else { return }
+        let updated = household.merchantMemos.filter { $0.key != key }
+        guard updated.count != household.merchantMemos.count else { return }
+        household.merchantMemos = updated
+        await saveHousehold(household)
+    }
+
     func updateCategoryBudgets(_ budgets: [CategoryBudget]) async {
         guard var household = snapshot.household else { return }
         household.categoryBudgets = CategoryBudget.normalized(budgets)

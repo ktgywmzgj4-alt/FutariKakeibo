@@ -23,6 +23,8 @@ struct Expense: Identifiable, Codable, Hashable, Sendable {
     var paidByMemberID: UUID
     var splitMethod: SplitMethod
     var note: String
+    /// どこで買ったか。レシートから読み取るか、覚えた店から選ぶ。手入力の支出ではnil。
+    var merchant: String?
     /// 定期支出のひな形から自動で作られた場合、そのひな形のID。手入力ならnil。
     var recurringID: UUID?
     var createdAt: Date
@@ -37,6 +39,7 @@ struct Expense: Identifiable, Codable, Hashable, Sendable {
         paidByMemberID: UUID,
         splitMethod: SplitMethod = .equally,
         note: String = "",
+        merchant: String? = nil,
         recurringID: UUID? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now
@@ -49,6 +52,8 @@ struct Expense: Identifiable, Codable, Hashable, Sendable {
         self.paidByMemberID = paidByMemberID
         self.splitMethod = splitMethod
         self.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shop = merchant?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.merchant = shop.isEmpty ? nil : shop
         self.recurringID = recurringID
         self.createdAt = createdAt
         self.updatedAt = updatedAt

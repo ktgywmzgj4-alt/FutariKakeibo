@@ -11,6 +11,7 @@ struct ExpenseEditorView: View {
     private let onSaved: (() -> Void)?
 
     @State private var title: String
+    @State private var merchant: String
     @State private var amountText: String
     @State private var date: Date
     @State private var category: ExpenseCategory
@@ -28,6 +29,7 @@ struct ExpenseEditorView: View {
     @FocusState private var focusedField: Field?
 
     private enum Field {
+        case merchant
         case title
         case amount
         case note
@@ -37,6 +39,7 @@ struct ExpenseEditorView: View {
         originalExpense = expense
         self.onSaved = onSaved
         _title = State(initialValue: expense?.title ?? "")
+        _merchant = State(initialValue: expense?.merchant ?? "")
         _amountText = State(initialValue: expense.map { String($0.amount) } ?? "")
         _date = State(initialValue: expense?.date ?? .now)
         _category = State(initialValue: expense?.category ?? .groceries)
@@ -80,7 +83,8 @@ struct ExpenseEditorView: View {
             .padding(18)
         }
         .background(AppTheme.background)
-        .navigationTitle(originalExpense == nil ? "支出を追加" : "支出を編集")
+        // 追加タブでは EntryEditorView が大きな見出しを出すので、ここでは空にする。
+        .navigationTitle(originalExpense == nil ? "" : "支出を編集")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if originalExpense != nil {
@@ -134,8 +138,63 @@ struct ExpenseEditorView: View {
         }
     }
 
+    /// 覚えている店の一覧。新しく使ったものが上に来る。
+    private var rememberedShops: [MerchantMemo] {
+        (store.household?.merchantMemos ?? []).sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    /// いま入力されている店名に対応する、覚えた1件。忘れる操作の対象になる。
+    private var matchedShop: MerchantMemo? {
+        let name = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+        return rememberedShops.first { $0.merchant == name }
+    }
+
+    /// 覚えた店から選ぶ、または間違って覚えた店を忘れる。
+    @ViewBuilder
+    private var shopMenu: some View {
+        if !rememberedShops.isEmpty {
+            Menu {
+                Section("覚えている店") {
+                    ForEach(rememberedShops) { shop in
+                        Button {
+                            merchant = shop.merchant
+                            category = shop.category
+                        } label: {
+                            Label(shop.merchant, systemImage: shop.category.systemImage)
+                        }
+                    }
+                }
+                if let matchedShop {
+                    Section {
+                        Button(role: .destructive) {
+                            Task { await store.forgetMerchant(key: matchedShop.key) }
+                        } label: {
+                            Label("「\(matchedShop.merchant)」を忘れる", systemImage: "trash")
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(AppTheme.accent)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("覚えている店から選ぶ")
+        }
+    }
+
+    /// 保存する名前。内容が空なら店名を使う。
+    /// レシートを読んだ直後は内容が空なので、そのまま保存できるようにしておく。
+    private var effectiveTitle: String {
+        let typed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return typed.isEmpty ? merchant.trimmingCharacters(in: .whitespacesAndNewlines) : typed
+    }
+
     private var canSave: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !effectiveTitle.isEmpty
             && parsedAmount > 0
             && paidByMemberID != nil
             && !isRecognizing
@@ -246,8 +305,17 @@ struct ExpenseEditorView: View {
 
     private var expenseFields: some View {
         VStack(spacing: 17) {
+            field("店名") {
+                HStack(spacing: 10) {
+                    TextField("例：Selfix北名古屋", text: $merchant)
+                        .textInputAutocapitalization(.never)
+                        .focused($focusedField, equals: .merchant)
+                    shopMenu
+                }
+            }
+
             field("内容") {
-                TextField("例：スーパーで食材", text: $title)
+                TextField("例：ガソリン（空欄なら店名を使います）", text: $title)
                     .textInputAutocapitalization(.never)
                     .focused($focusedField, equals: .title)
             }
@@ -332,7 +400,7 @@ struct ExpenseEditorView: View {
                 recognizedText = remembered.recognizedText
                 detectedItems = remembered.items
                 shopKey = remembered.shopKey
-                if !remembered.merchant.isEmpty { title = remembered.merchant }
+                if !remembered.merchant.isEmpty { merchant = remembered.merchant }
                 if let amount = remembered.amount { amountText = String(amount) }
                 if let receiptDate = remembered.date { date = receiptDate }
                 category = remembered.suggestedCategory
@@ -365,13 +433,14 @@ struct ExpenseEditorView: View {
         focusedField = nil
         let expense = Expense(
             id: originalExpense?.id ?? UUID(),
-            title: title,
+            title: effectiveTitle,
             amount: parsedAmount,
             date: date,
             category: category,
             paidByMemberID: paidByMemberID,
             splitMethod: splitMethod,
             note: note,
+            merchant: merchant,
             createdAt: originalExpense?.createdAt ?? .now,
             updatedAt: .now
         )
@@ -387,7 +456,9 @@ struct ExpenseEditorView: View {
             // 人が直したあとの値なので、次に同じ店を読んだときはこれが出る。
             if let shopKey {
                 await store.rememberMerchant(
-                    key: shopKey, merchant: expense.title, category: expense.category
+                    key: shopKey,
+                    merchant: expense.merchant ?? expense.title,
+                    category: expense.category
                 )
             }
 
@@ -402,6 +473,7 @@ struct ExpenseEditorView: View {
 
     private func resetForm() {
         title = ""
+        merchant = ""
         amountText = ""
         date = .now
         category = .groceries

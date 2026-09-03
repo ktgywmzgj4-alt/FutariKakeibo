@@ -415,6 +415,7 @@ actor CloudKitSyncService {
         record["paidByMemberID"] = expense.paidByMemberID.uuidString as CKRecordValue
         record["splitMethod"] = expense.splitMethod.rawValue as CKRecordValue
         record["note"] = expense.note as CKRecordValue
+        record["merchant"] = (expense.merchant ?? "") as CKRecordValue
         // 定期支出から作られた回かどうかは後から変わらないため、ある場合だけ書き込む。
         if let recurringID = expense.recurringID {
             record["recurringID"] = recurringID.uuidString as CKRecordValue
@@ -488,6 +489,7 @@ actor CloudKitSyncService {
             paidByMemberID: paidByID,
             splitMethod: splitMethod,
             note: record["note"] as? String ?? "",
+            merchant: record["merchant"] as? String,
             recurringID: (record["recurringID"] as? String).flatMap(UUID.init(uuidString:)),
             createdAt: createdAt,
             updatedAt: updatedAt
