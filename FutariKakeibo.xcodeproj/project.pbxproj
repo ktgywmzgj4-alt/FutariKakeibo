@@ -69,6 +69,7 @@
 		C00000000000000000000062 /* ReceiptInterpreterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000062 /* ReceiptInterpreterTests.swift */; };
 		C00000000000000000000065 /* ReceiptImageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000065 /* ReceiptImageData.swift */; };
 		C00000000000000000000066 /* ReceiptImageProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000066 /* ReceiptImageProcessor.swift */; };
+		C00000000000000000000072 /* ReceiptImageRectifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000072 /* ReceiptImageRectifier.swift */; };
 		C00000000000000000000067 /* ReceiptImageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000067 /* ReceiptImageStore.swift */; };
 		C00000000000000000000068 /* ReceiptImageLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000068 /* ReceiptImageLibrary.swift */; };
 		C00000000000000000000069 /* ReceiptThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000069 /* ReceiptThumbnail.swift */; };
@@ -153,6 +154,7 @@
 		B00000000000000000000062 /* ReceiptInterpreterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptInterpreterTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000065 /* ReceiptImageData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/ReceiptImageData.swift; sourceTree = "<group>"; };
 		B00000000000000000000066 /* ReceiptImageProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ReceiptImageProcessor.swift; sourceTree = "<group>"; };
+		B00000000000000000000072 /* ReceiptImageRectifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ReceiptImageRectifier.swift; sourceTree = "<group>"; };
 		B00000000000000000000067 /* ReceiptImageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Persistence/ReceiptImageStore.swift; sourceTree = "<group>"; };
 		B00000000000000000000068 /* ReceiptImageLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ReceiptImageLibrary.swift; sourceTree = "<group>"; };
 		B00000000000000000000069 /* ReceiptThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/ReceiptThumbnail.swift; sourceTree = "<group>"; };
@@ -251,6 +253,7 @@
 				B00000000000000000000033 /* PrivacyInfo.xcprivacy */,
 				B00000000000000000000065 /* ReceiptImageData.swift */,
 				B00000000000000000000066 /* ReceiptImageProcessor.swift */,
+				B00000000000000000000072 /* ReceiptImageRectifier.swift */,
 				B00000000000000000000067 /* ReceiptImageStore.swift */,
 				B00000000000000000000068 /* ReceiptImageLibrary.swift */,
 				B00000000000000000000069 /* ReceiptThumbnail.swift */,
@@ -429,6 +432,7 @@
 				C00000000000000000000055 /* EntryEditorView.swift in Sources */,
 				C00000000000000000000065 /* ReceiptImageData.swift in Sources */,
 				C00000000000000000000066 /* ReceiptImageProcessor.swift in Sources */,
+				C00000000000000000000072 /* ReceiptImageRectifier.swift in Sources */,
 				C00000000000000000000067 /* ReceiptImageStore.swift in Sources */,
 				C00000000000000000000068 /* ReceiptImageLibrary.swift in Sources */,
 				C00000000000000000000069 /* ReceiptThumbnail.swift in Sources */,

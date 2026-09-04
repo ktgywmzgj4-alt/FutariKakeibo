@@ -8,6 +8,12 @@ enum ReceiptParser {
     /// 同じ行とみなす縦のずれ。文字の高さに対する割合。
     private static let rowTolerance = 0.7
     private static let maximumItems = 12
+    /// 斜めから撮ったときに直す傾きの上限。左端から右端までの間に、
+    /// 画像の高さの35%ぶん動くところまで。これを超える値は読み取りの失敗とみなす。
+    private static let maximumSkew = 0.35
+    /// 傾きの代表値を数えるときの、断片の最小の横幅。
+    /// 短い断片は端の座標が近すぎて、傾きが当てにならない。
+    private static let skewSampleMinimumWidth = 0.05
 
     /// 合計を示す語。これがある行の金額を最優先で使う。
     private static let totalKeywords = ["合計", "総計", "お会計", "お支払", "ご請求", "total"]
@@ -71,13 +77,39 @@ enum ReceiptParser {
         }
     }
 
+    /// 斜めから撮ったときの、1枚ぶんの傾き。
+    ///
+    /// 断片ごとの値はばらつくので中央値を使う。1か所の読み違いでは動かない。
+    /// `maximumSkew` を超える値は読み取りの失敗とみなして捨てる。まっすぐ撮った1枚を
+    /// でたらめな傾きで動かすほうが、傾きを直さないより害が大きい。
+    static func skew(of lines: [RecognizedLine]) -> Double {
+        let samples = lines
+            .filter { $0.maxX - $0.minX >= skewSampleMinimumWidth }
+            .map(\.slope)
+            .sorted()
+        guard !samples.isEmpty else { return 0 }
+        let median = samples[samples.count / 2]
+        return abs(median) <= maximumSkew ? median : 0
+    }
+
+    /// 傾きぶんを戻した縦位置。その行が画像の左右の中央を通る高さにあたる。
+    private static func deskewedMidY(_ line: RecognizedLine, skew: Double) -> Double {
+        line.midY - skew * (line.midX - 0.5)
+    }
+
     static func rows(from lines: [RecognizedLine]) -> [Row] {
-        let sorted = lines.sorted { $0.midY < $1.midY }
+        // 斜めから撮ると、右にある金額がひとつ下の行の品名と同じ高さに来る。
+        // 縦位置だけで並べるとその2つが同じ行にまとまり、値段がひとつずつずれる。
+        // 並べる前に傾きぶんを戻す。正面から撮った1枚では傾きが0になり、何も動かない。
+        let slant = skew(of: lines)
+        let sorted = lines
+            .map { (line: $0, y: deskewedMidY($0, skew: slant)) }
+            .sorted { $0.y < $1.y }
         guard !sorted.isEmpty else { return [] }
 
         // 行の間隔は文字の高さで決まる。1枚のレシート全体の代表値を使うほうが、
         // 断片ごとの高さで判断するより安定する。
-        let heights = sorted.map(\.height).sorted()
+        let heights = sorted.map { $0.line.height }.sorted()
         let medianHeight = heights[heights.count / 2]
         let tolerance = max(medianHeight * 0.5, 0.003)
 
@@ -86,13 +118,13 @@ enum ReceiptParser {
         // 断片が増えるたびに基準が下へずれ、次の行まで巻き込んでしまう。
         var anchors: [Double] = []
 
-        for line in sorted {
-            if let anchor = anchors.last, abs(line.midY - anchor) <= tolerance {
-                rows[rows.count - 1].fragments.append(line)
+        for entry in sorted {
+            if let anchor = anchors.last, abs(entry.y - anchor) <= tolerance {
+                rows[rows.count - 1].fragments.append(entry.line)
                 continue
             }
-            rows.append(Row(fragments: [line]))
-            anchors.append(line.midY)
+            rows.append(Row(fragments: [entry.line]))
+            anchors.append(entry.y)
         }
         return rows
     }

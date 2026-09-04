@@ -551,7 +551,10 @@ final class AppStore: ObservableObject {
 
     /// 合言葉を発行して相手を招く。共有の用意と合言葉の発行をまとめて行う。
     func startSharingWithCode() async {
-        guard var household = snapshot.household else { return }
+        guard var household = snapshot.household else {
+            errorMessage = Self.inviteFailureMessage(for: nil)
+            return
+        }
         isPreparingInvite = true
         syncState = .syncing
         defer { isPreparingInvite = false }
@@ -573,7 +576,35 @@ final class AppStore: ObservableObject {
             syncState = .synced(.now)
         } catch {
             syncState = .failed(error.localizedDescription)
-            errorMessage = error.localizedDescription
+            errorMessage = Self.inviteFailureMessage(for: error)
+        }
+    }
+
+    /// 合言葉のやりとりが失敗したときに画面に出す言葉。
+    ///
+    /// 中身の分かっている失敗は、そのまま出す。利用者に直せることがあるから
+    /// （iCloudにサインインしていない、合言葉の期限が切れている、など）。
+    /// それ以外はiCloud側の言葉が英語で出てしまうので、短い日本語に置き換える。
+    nonisolated static func inviteFailureMessage(
+        for error: Error?,
+        fallback: String = "合言葉を発行できませんでした。もう一度お試しください。"
+    ) -> String {
+        guard let error else { return fallback }
+
+        if let syncError = error as? CloudKitSyncService.SyncError,
+           let description = syncError.errorDescription {
+            return description
+        }
+        guard let cloudError = error as? CKError else { return fallback }
+        switch cloudError.code {
+        case .notAuthenticated, .managedAccountRestricted:
+            return "iCloudにサインインしてから、もう一度お試しください。"
+        case .networkUnavailable, .networkFailure, .serviceUnavailable, .requestRateLimited:
+            return "iCloudにつながりませんでした。通信の状態を確かめて、もう一度お試しください。"
+        case .quotaExceeded:
+            return "iCloudの空き容量が足りません。空けてから、もう一度お試しください。"
+        default:
+            return fallback
         }
     }
 
@@ -608,7 +639,10 @@ final class AppStore: ObservableObject {
             return true
         } catch {
             syncState = .failed(error.localizedDescription)
-            errorMessage = error.localizedDescription
+            errorMessage = Self.inviteFailureMessage(
+                for: error,
+                fallback: "この合言葉では参加できませんでした。もう一度お試しください。"
+            )
             return false
         }
     }

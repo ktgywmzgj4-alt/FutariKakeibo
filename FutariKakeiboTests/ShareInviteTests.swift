@@ -1,3 +1,4 @@
+import CloudKit
 import XCTest
 @testable import FutariKakeibo
 
@@ -49,5 +50,54 @@ final class ShareInviteTests: XCTestCase {
         )
         XCTAssertFalse(fresh.isExpired)
         XCTAssertTrue(fresh.remainingDescription.contains("時間"))
+    }
+
+    // MARK: - 失敗したときに出す言葉
+
+    /// 何が起きたか分からない失敗でも、日本語で短く伝える。
+    /// iCloudの返す言葉は英語なので、そのまま出さない。
+    func testAnUnknownFailureIsExplainedInPlainJapanese() {
+        let message = AppStore.inviteFailureMessage(
+            for: NSError(domain: "test", code: -1, userInfo: nil)
+        )
+        XCTAssertEqual(message, "合言葉を発行できませんでした。もう一度お試しください。")
+    }
+
+    /// 家計が無いなど、そもそも始められないときも同じ言葉を出す。黙って終わらない。
+    func testNoErrorAtAllStillProducesAMessage() {
+        XCTAssertEqual(
+            AppStore.inviteFailureMessage(for: nil),
+            "合言葉を発行できませんでした。もう一度お試しください。"
+        )
+    }
+
+    /// 利用者が自分で直せる失敗は、何をすればよいかまで伝える。
+    func testNotSignedInTellsThePersonWhatToDo() {
+        let message = AppStore.inviteFailureMessage(for: CKError(.notAuthenticated))
+        XCTAssertTrue(message.contains("iCloudにサインイン"), message)
+    }
+
+    func testANetworkFailureMentionsTheConnection() {
+        let message = AppStore.inviteFailureMessage(for: CKError(.networkUnavailable))
+        XCTAssertTrue(message.contains("通信"), message)
+    }
+
+    /// もともと日本語の説明を持っている失敗は、その言葉のまま出す。
+    /// ひとまとめの「発行できませんでした」で上書きしない。
+    func testAKnownFailureKeepsItsOwnWords() {
+        let message = AppStore.inviteFailureMessage(
+            for: CloudKitSyncService.SyncError.inviteExpired
+        )
+        XCTAssertTrue(message.contains("期限"), message)
+        XCTAssertFalse(message.contains("発行できませんでした"), message)
+    }
+
+    /// 参加するときの失敗に「発行できませんでした」とは出さない。
+    func testJoiningUsesItsOwnWording() {
+        let message = AppStore.inviteFailureMessage(
+            for: NSError(domain: "test", code: -1, userInfo: nil),
+            fallback: "この合言葉では参加できませんでした。もう一度お試しください。"
+        )
+        XCTAssertEqual(message, "この合言葉では参加できませんでした。もう一度お試しください。")
     }
 }

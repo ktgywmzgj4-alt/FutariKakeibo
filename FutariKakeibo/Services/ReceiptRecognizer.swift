@@ -26,12 +26,16 @@ enum ReceiptRecognizer {
     }
 
     private static func recognize(image: UIImage) async throws -> [RecognizedLine] {
-        guard let cgImage = image.cgImage else {
+        // 斜めから撮った1枚は、先に正面から撮った形へ直す。
+        // 四隅が見つからなければ、向きだけそろえた元の画像がそのまま返る。
+        let prepared = await ReceiptImageRectifier.rectified(image)
+        guard let cgImage = prepared.cgImage else {
             throw RecognitionError.invalidImage
         }
         // 写真は撮った向きの情報を別に持っている。cgImageだけを渡すと
         // 横倒しのまま読み取ってしまうため、向きも一緒に伝える。
-        let orientation = cgOrientation(image.imageOrientation)
+        // 補正できた1枚は立った状態（`.up`）で返るので、ここは素通りになる。
+        let orientation = ReceiptImageRectifier.cgOrientation(prepared.imageOrientation)
 
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -58,7 +62,8 @@ enum ReceiptRecognizer {
                             maxX: Double(box.maxX),
                             // Visionの原点は左下。上を0にして読み順に合わせる。
                             midY: Double(1 - box.midY),
-                            height: Double(box.height)
+                            height: Double(box.height),
+                            slope: baselineSlope(of: observation)
                         )
                     }
                     continuation.resume(returning: lines)
@@ -69,17 +74,16 @@ enum ReceiptRecognizer {
         }
     }
 
-    private static func cgOrientation(_ orientation: UIImage.Orientation) -> CGImagePropertyOrientation {
-        switch orientation {
-        case .up: .up
-        case .upMirrored: .upMirrored
-        case .down: .down
-        case .downMirrored: .downMirrored
-        case .left: .left
-        case .leftMirrored: .leftMirrored
-        case .right: .right
-        case .rightMirrored: .rightMirrored
-        @unknown default: .up
-        }
+    /// 読み取った文字の下辺の傾き。
+    ///
+    /// Visionは文字の四隅を返すので、行がどれだけ傾いているかを直接測れる。
+    /// 台形補正で直しきれなかったぶんが、ここに残る。
+    /// Visionの原点は左下、`RecognizedLine` は左上なので、符号を逆にして持つ。
+    private static func baselineSlope(of observation: VNRecognizedTextObservation) -> Double {
+        let run = Double(observation.bottomRight.x - observation.bottomLeft.x)
+        // 短すぎる断片は両端が近く、傾きが跳ね上がる。測れなかったことにする。
+        guard run > 0.001 else { return 0 }
+        let rise = Double(observation.bottomRight.y - observation.bottomLeft.y)
+        return -rise / run
     }
 }
