@@ -43,7 +43,7 @@ struct RecurringExpenseEditorView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 18) {
+            VStack(spacing: AppTheme.cardSpacing) {
                 contentCard
                 scheduleCard
                 saveButton
@@ -51,7 +51,7 @@ struct RecurringExpenseEditorView: View {
                     noticeText
                 }
             }
-            .padding(18)
+            .padding(AppTheme.screenPadding)
             .padding(.bottom, 24)
         }
         .background(AppTheme.background)

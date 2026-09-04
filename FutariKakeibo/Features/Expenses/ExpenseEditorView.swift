@@ -50,7 +50,7 @@ struct ExpenseEditorView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 18) {
+            VStack(spacing: AppTheme.cardSpacing) {
                 receiptCard
                 detectedItemsCard
                 expenseFields
@@ -80,7 +80,7 @@ struct ExpenseEditorView: View {
                     .appCard()
                 }
             }
-            .padding(18)
+            .padding(AppTheme.screenPadding)
         }
         .background(AppTheme.background)
         // 追加タブでは EntryEditorView が大きな見出しを出すので、ここでは空にする。
@@ -208,21 +208,21 @@ struct ExpenseEditorView: View {
         VStack(spacing: 14) {
             HStack(spacing: 13) {
                 ZStack {
-                    Circle()
-                        .fill(AppTheme.accentSoft.opacity(0.45))
-                        .frame(width: 52, height: 52)
                     if isRecognizing {
                         ProgressView().tint(AppTheme.accent)
                     } else {
-                        Image(systemName: "doc.viewfinder.fill")
-                            .font(.title2)
+                        Image(systemName: "doc.viewfinder")
+                            .font(.system(size: 34, weight: .semibold))
                             .foregroundStyle(AppTheme.accent)
                     }
                 }
+                .frame(width: 52, height: 52)
+
                 VStack(alignment: .leading, spacing: 3) {
                     Text(isRecognizing ? "レシートを読み取り中…" : "レシートから入力")
                         .font(.headline)
                         .foregroundStyle(AppTheme.ink)
+                    // 実装の実態に合わせた文言。端末の外へは出さない。
                     Text("画像は保存・送信せず、このiPhone内で処理します")
                         .font(.caption)
                         .foregroundStyle(AppTheme.secondaryText)
@@ -230,6 +230,9 @@ struct ExpenseEditorView: View {
                 Spacer(minLength: 0)
             }
 
+            Divider().overlay(AppTheme.line)
+
+            // カメラとアルバムは同じ大きさで横に並べる。
             HStack(spacing: 0) {
                 Button {
                     isShowingScanner = true
@@ -241,7 +244,7 @@ struct ExpenseEditorView: View {
                 .opacity(VNDocumentCameraViewController.isSupported ? 1 : 0.45)
                 .accessibilityHint("カメラでレシートを撮影します")
 
-                Divider().frame(height: 62)
+                Divider().frame(height: 56).overlay(AppTheme.line)
 
                 PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
                     sourceLabel(title: "アルバム", caption: "写真を選択する", systemImage: "photo.fill")
@@ -250,12 +253,6 @@ struct ExpenseEditorView: View {
                 .disabled(isRecognizing)
                 .accessibilityHint("保存済みの写真からレシートを選びます")
             }
-            .background(AppTheme.background.opacity(0.7))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(AppTheme.accentSoft.opacity(0.75), lineWidth: 1)
-            )
         }
         .appCard()
     }
@@ -263,11 +260,9 @@ struct ExpenseEditorView: View {
     private func sourceLabel(title: String, caption: String, systemImage: String) -> some View {
         VStack(spacing: 7) {
             Image(systemName: systemImage)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: 30, weight: .semibold))
                 .foregroundStyle(AppTheme.accent)
-                .frame(width: 44, height: 44)
-                .background(AppTheme.accentSoft.opacity(0.35))
-                .clipShape(Circle())
+                .frame(height: 40)
             Text(title)
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(AppTheme.ink)
@@ -342,18 +337,44 @@ struct ExpenseEditorView: View {
 
             if let household = store.household {
                 Picker("支払った人", selection: $paidByMemberID) {
-                    ForEach(household.members) { member in
-                        Text(member.displayName).tag(Optional(member.id))
+                    ForEach(Array(household.members.enumerated()), id: \.element.id) { index, member in
+                        // 支払った人にも、その人の識別色を使う。
+                        Label {
+                            Text(member.displayName)
+                        } icon: {
+                            Image(systemName: "person.crop.circle.fill")
+                                .foregroundStyle(AppTheme.memberColor(at: index))
+                        }
+                        .tag(Optional(member.id))
                     }
                 }
             }
 
-            Picker("分け方", selection: $splitMethod) {
+            // 折半か個人か。選ばれているほうを白地にブルーの枠と文字で示す。
+            HStack(spacing: 10) {
                 ForEach(Expense.SplitMethod.allCases) { method in
-                    Text(method.displayName).tag(method)
+                    Button {
+                        splitMethod = method
+                    } label: {
+                        Text(method.displayName)
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .foregroundStyle(splitMethod == method ? AppTheme.accent : AppTheme.secondaryText)
+                            .background(splitMethod == method ? AppTheme.card : AppTheme.accentSoft.opacity(0.5))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(
+                                        splitMethod == method ? AppTheme.accent : AppTheme.line,
+                                        lineWidth: splitMethod == method ? 1.5 : 1
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(splitMethod == method ? [.isSelected, .isButton] : .isButton)
                 }
             }
-            .pickerStyle(.segmented)
 
             field("メモ（任意）") {
                 TextField("あとで分かる補足", text: $note, axis: .vertical)

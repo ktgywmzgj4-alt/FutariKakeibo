@@ -7,7 +7,7 @@ struct ReportView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 18) {
+            LazyVStack(spacing: AppTheme.cardSpacing) {
                 ScreenTitle("レポート")
                 MonthNavigator(month: store.selectedMonth, onMove: store.moveMonth)
 
@@ -18,7 +18,7 @@ struct ReportView: View {
                 memberCard(report)
                 highlightCard(report)
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, AppTheme.screenPadding)
             .padding(.bottom, 28)
         }
         .background(AppTheme.background)

@@ -30,11 +30,11 @@ struct ExpenseListView: View {
     var body: some View {
         VStack(spacing: 0) {
             ScreenTitle(mode == .expense ? "支出履歴" : "収入の記録")
-                .padding(.horizontal, 18)
+                .padding(.horizontal, AppTheme.screenPadding)
                 .padding(.bottom, 10)
 
             MonthNavigator(month: store.selectedMonth, onMove: store.moveMonth)
-                .padding(.horizontal, 18)
+                .padding(.horizontal, AppTheme.screenPadding)
 
             Picker("表示する種類", selection: $mode) {
                 ForEach(EntryEditorView.Kind.allCases) { kind in
@@ -42,7 +42,7 @@ struct ExpenseListView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .padding(.horizontal, 18)
+            .padding(.horizontal, AppTheme.screenPadding)
             .padding(.bottom, 4)
 
             if mode == .expense {
@@ -154,7 +154,7 @@ struct ExpenseListView: View {
                     filterChip(title: category.displayName, category: category)
                 }
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, AppTheme.screenPadding)
             .padding(.vertical, 9)
         }
     }

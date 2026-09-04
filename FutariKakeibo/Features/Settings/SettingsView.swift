@@ -13,7 +13,7 @@ struct SettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 18) {
+            VStack(spacing: AppTheme.cardSpacing) {
                 ScreenTitle("設定")
                 householdCard
                 planningCard
@@ -21,7 +21,7 @@ struct SettingsView: View {
                 dataCard
                 aboutCard
             }
-            .padding(18)
+            .padding(AppTheme.screenPadding)
             .padding(.bottom, 26)
         }
         .background(AppTheme.background)
