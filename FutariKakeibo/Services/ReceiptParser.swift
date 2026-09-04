@@ -18,10 +18,17 @@ enum ReceiptParser {
         "ポイント", "値引", "割引", "点数", "個数", "残高", "前回"
     ]
     /// 店名として採用しない語。
+    ///
+    /// 「領収書」は「領収害」と読み違えられる（白馬のカフェのレシート）。
+    /// 1文字の違いで素通りしないよう、判定は「領収」までにしてある。
     private static let notMerchantKeywords = [
-        "領収書", "領収証", "レシート", "receipt", "合計", "小計", "電話", "tel",
-        "登録番号", "責任者", "担当", "レジ", "no.", "様", "店舗", "住所", "取扱"
+        "領収", "レシート", "receipt", "合計", "小計", "電話", "tel",
+        "登録番号", "責任者", "担当", "レジ", "no.", "様", "店舗", "住所", "取扱",
+        "www.", ".com", ".co.jp"
     ]
+    /// 店名の前に付いて一緒に読まれるラベル。店名ではないので落とす。
+    /// 長いものから先に並べる（「登録名称」を「名称」より先に外す）。
+    private static let merchantLabels = ["登録名称", "登録名", "屋号", "店名", "名称"]
     /// 明細として採用しない語。
     private static let notItemKeywords = [
         "合計", "小計", "総計", "お会計", "お支払", "消費税", "内税", "外税", "税額", "税合計",
@@ -182,8 +189,15 @@ enum ReceiptParser {
     }
 
     private static func cleanedMerchant(_ text: String) -> String {
-        text
-            .trimmingCharacters(in: CharacterSet(charactersIn: " 　*※-–—・|"))
+        var value = text
+        // 「登録名称 株式会社マナの森」のように、ラベルごと1行に読まれることがある。
+        // 頭に付いているときだけ落とす。店名の途中に出てきたら触らない。
+        for label in merchantLabels where value.hasPrefix(label) {
+            value = String(value.dropFirst(label.count))
+            break
+        }
+        return value
+            .trimmingCharacters(in: CharacterSet(charactersIn: " 　*※-–—・|:："))
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -202,12 +216,23 @@ enum ReceiptParser {
     static func totalAmount(from rows: [Row], itemsTotal: Int? = nil) -> Int? {
         if let index = totalRowIndex(in: rows) {
             // 「合計」は大きく刷られることが多く、語と金額が別の行として
-            // 読まれることがある。同じ行に無ければ次の行も見る。
+            // 読まれることがある。同じ行に無ければ下の行も見る。
+            //
+            // ただし、あいだに税率の行が挟まることがある。パン屋のレシートで
+            // 「合計」の次が「(税率 8%対象額」になり、そこから 8 を拾って
+            // ¥8 と記録した。税の内訳の行は飛ばして、金額のある行まで数行だけ探す。
             var candidates = amounts(in: rows[index].text)
-            if candidates.isEmpty, index + 1 < rows.count {
-                candidates = amounts(in: rows[index + 1].text)
+            var lookahead = index + 1
+            while candidates.isEmpty, lookahead < rows.count, lookahead <= index + totalLookaheadRows {
+                let text = rows[lookahead].text
+                lookahead += 1
+                if isTaxDetailRow(text) { continue }
+                candidates = amounts(in: text)
             }
-            if let amount = candidates.filter({ isPlausibleAmount($0) }).max() {
+            // 明細が読めているなら、合計がその和を大きく下回ることはない。
+            // 下回る候補は読み違いなので、下の一般の探索にまかせる。
+            if let amount = candidates.filter({ isPlausibleAmount($0) }).max(),
+               isConsistentWithItems(amount, itemsTotal: itemsTotal) {
                 return amount
             }
         }
@@ -250,6 +275,25 @@ enum ReceiptParser {
 
     static func totalAmount(from lines: [String]) -> Int? {
         totalAmount(from: rows(from: RecognizedLine.lines(fromPlainText: lines.joined(separator: "\n"))))
+    }
+
+    /// 「合計」の語から下へ何行まで金額を探すか。
+    private static let totalLookaheadRows = 3
+
+    /// 税率や内訳だけの行。合計の金額はここには無い。
+    private static func isTaxDetailRow(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        return ["税率", "対象額", "対象計", "消費税", "内税", "外税", "税額"]
+            .contains { lower.contains($0) }
+    }
+
+    /// 読めた明細の和と見比べて、合計としてありえる大きさか。
+    ///
+    /// 値引きがあると合計は明細の和より小さくなるので、少しは下を許す。
+    /// 桁がひとつ違うような候補だけを落とす。
+    private static func isConsistentWithItems(_ amount: Int, itemsTotal: Int?) -> Bool {
+        guard let itemsTotal, itemsTotal > 0 else { return true }
+        return Double(amount) >= Double(itemsTotal) * 0.6
     }
 
     /// レシート番号や伝票番号の行。金額と桁が近く紛らわしい。
@@ -500,7 +544,8 @@ enum ReceiptParser {
     private static func amounts(in line: String) -> [Int] {
         let normalized = normalizedDigits(line)
         guard let regex = try? NSRegularExpression(
-            pattern: #"(?<![-0-9A-Za-z@－])(?<![0-9]\.)([0-9]{1,7})(?![-0-9A-Za-z－])(?!\.[0-9])"#
+            // 末尾に % を足したのは、「(税率 8%対象額」の 8 を合計として拾ったため。
+            pattern: #"(?<![-0-9A-Za-z@－])(?<![0-9]\.)([0-9]{1,7})(?![-0-9A-Za-z－%％])(?!\.[0-9])"#
         ) else {
             return []
         }

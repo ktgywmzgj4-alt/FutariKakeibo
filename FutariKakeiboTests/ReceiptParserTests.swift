@@ -427,4 +427,115 @@ final class ReceiptParserTests: XCTestCase {
         let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
         XCTAssertEqual(draft.amount, 1_180)
     }
+
+    // MARK: - 2026-09-04 実機で外した実物のレシート
+
+    /// 白馬のカフェ。1行目の `[領収書]` が `[領収害]` と読まれ、それを店名にしていた。
+    /// 「領収書」で弾いていたので、1文字違うだけで素通りした。
+    private func cafeReceiptWithReceiptHeading() -> [RecognizedLine] {
+        [
+            line("[領収害]", y: 0.05, height: 0.022),
+            line("CHAVATY HAKUBA", y: 0.08, height: 0.022),
+            line("長野県 北安曇郡", y: 0.11),
+            line("白馬村 北城 12056", y: 0.14),
+            line("TEL:0261-72-2474", y: 0.17),
+            line("登録番号:T9100001017140", y: 0.20),
+            line("2026/08/28 10:25:21", y: 0.25),
+            line("レジ:0007 担当:0001", y: 0.28),
+            line("伝票名:伝票00078069", y: 0.31),
+            line("サマーリリカル中井ラテ", y: 0.37),
+            line("¥780 1点", y: 0.40), price("¥780", y: 0.40),
+            line("単)C 抹茶ラテ", y: 0.44),
+            line("オリジナル", y: 0.47),
+            line("¥780 1点", y: 0.50), price("¥780", y: 0.50),
+            line("小計 2点", y: 0.55), price("¥1,560", y: 0.55),
+            line("合計", y: 0.60, height: 0.03), price("¥1,560", y: 0.60),
+            line("(10%標準対象", y: 0.63), price("¥1,560)", y: 0.63),
+            line("お預り", y: 0.69), price("¥1,560", y: 0.69),
+            line("お釣り", y: 0.72), price("¥0", y: 0.72)
+        ]
+    }
+
+    func testReceiptHeadingIsNotTheShopNameEvenWhenMisread() {
+        let draft = ReceiptParser.parse(
+            lines: cafeReceiptWithReceiptHeading(),
+            now: referenceNow,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.merchant, "CHAVATY HAKUBA")
+        XCTAssertEqual(draft.amount, 1_560)
+        XCTAssertEqual(draft.date, date(2026, 8, 28))
+    }
+
+    /// パン屋。ロゴが黒地に白抜きで読めず、`登録名称 株式会社マナの森` の行が店名になっていた。
+    /// さらに合計が ¥8 になった。「合計」の語は読めたが金額が離れた行として読まれ、
+    /// あいだに `(税率 8%対象額` が入ったため、そこから 8 を拾っていた。
+    private func bakeryReceiptWithLabelledName() -> [RecognizedLine] {
+        [
+            line("登録番号 T6180001124618", y: 0.06),
+            line("登録名称 株式会社マナの森", y: 0.09),
+            line("北名古屋市熊之庄八幡213", y: 0.12),
+            line("TEL/FAX 0568-23-0533", y: 0.15),
+            line("www.mana-mori.com", y: 0.18),
+            line("2026年 8月 1日(土)12:04 #000002", y: 0.23),
+            line("000001 000001 0641", y: 0.26),
+            line("内8 バケットピッツァ", y: 0.33), price("¥388", y: 0.33),
+            line("内8 ねぎ味噌ベーコンタルテ", y: 0.36), price("¥388", y: 0.36),
+            line("内8 エビカツサンド", y: 0.39), price("¥540", y: 0.39),
+            line("内8 塩パンスモークチキン", y: 0.42), price("¥583", y: 0.42),
+            line("内8 オサツデニッシュ", y: 0.45), price("¥302", y: 0.45),
+            line("小計", y: 0.52), price("¥2,201", y: 0.52),
+            line("(内税対象額", y: 0.55), price("¥2,201)", y: 0.55),
+            line("買上点数", y: 0.58), price("5点", y: 0.58),
+            line("合計", y: 0.64, height: 0.032),
+            line("(税率 8%対象額", y: 0.67),
+            price("¥2,201", y: 0.70),
+            line("(内消費税等 8%", y: 0.73), price("¥163)", y: 0.73),
+            line("クレジット", y: 0.77), price("¥2,201", y: 0.77)
+        ]
+    }
+
+    func testBakeryReceiptReadsTheTotalPastTheTaxRateRow() {
+        let draft = ReceiptParser.parse(
+            lines: bakeryReceiptWithLabelledName(),
+            now: referenceNow,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.amount, 2_201)
+        XCTAssertEqual(draft.merchant, "株式会社マナの森")
+        XCTAssertEqual(draft.date, date(2026, 8, 1))
+    }
+
+    /// 税率の `8%` の 8 は金額ではない。合計の金額が別の行にあるときに拾っていた。
+    func testAPercentageIsNeverAnAmount() {
+        let lines = [
+            line("パン工房", y: 0.05, height: 0.04),
+            line("2026/08/01", y: 0.10),
+            line("食パン", y: 0.20), price("¥300", y: 0.20),
+            line("合計", y: 0.40, height: 0.03),
+            line("(税率 8%対象額", y: 0.45),
+            price("¥300", y: 0.50)
+        ]
+
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+        XCTAssertEqual(draft.amount, 300)
+    }
+
+    /// 合計の語のあとに読めた数字が、明細の合計よりずっと小さいときは信じない。
+    func testATotalFarBelowTheItemsIsRejected() {
+        let lines = [
+            line("あおぞら商店", y: 0.05, height: 0.04),
+            line("2026/08/29", y: 0.10),
+            line("商品A", y: 0.20), price("¥1,200", y: 0.20),
+            line("商品B", y: 0.24), price("¥800", y: 0.24),
+            line("合計", y: 0.40, height: 0.03),
+            line("5点", y: 0.45),
+            price("¥2,000", y: 0.50)
+        ]
+
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+        XCTAssertEqual(draft.amount, 2_000)
+    }
 }
