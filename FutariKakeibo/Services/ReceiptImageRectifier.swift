@@ -182,6 +182,21 @@ enum ReceiptImageRectifier {
         Double(hypot(b.x - a.x, b.y - a.y))
     }
 
+    /// そのまま計算に使える大きさか。
+    ///
+    /// Core Imageの画像は「無限に広い」ことがあり、`extent` に無限大や NaN が入る。
+    /// それを画素の位置に掛けると、以降の計算がまるごと壊れる。
+    ///
+    /// `CGRect` に `isFinite` は無い。SwiftUI が同じ名前のものを内部用に持っているが、
+    /// アプリからは使えない（`package` のため）。四隅を自分で確かめる。
+    private static func isUsable(extent: CGRect) -> Bool {
+        guard !extent.isNull, !extent.isInfinite else { return false }
+        return extent.origin.x.isFinite
+            && extent.origin.y.isFinite
+            && extent.size.width.isFinite
+            && extent.size.height.isFinite
+    }
+
     // MARK: - 台形をのばす
 
     private static func perspectiveCorrected(
@@ -192,7 +207,7 @@ enum ReceiptImageRectifier {
         // Core Image 側も同じ向きに立てる。これで Vision の返した座標がそのまま使える。
         let source = CIImage(cgImage: image).oriented(orientation)
         let extent = source.extent
-        guard extent.isFinite, extent.width > 0, extent.height > 0 else { return nil }
+        guard isUsable(extent: extent), extent.width > 0, extent.height > 0 else { return nil }
 
         // Vision も Core Image も原点は左下。割合を画素の位置に戻すだけでよい。
         func place(_ normalized: CGPoint) -> CGPoint {
@@ -212,7 +227,7 @@ enum ReceiptImageRectifier {
 
         guard let output = filter.outputImage else { return nil }
         let result = output.extent
-        guard result.isFinite, result.width >= 1, result.height >= 1 else { return nil }
+        guard isUsable(extent: result), result.width >= 1, result.height >= 1 else { return nil }
         // 文字がつぶれるほど小さくなったら、直さないほうがまし。
         let correctedArea = Double(result.width) * Double(result.height)
         let sourceArea = Double(extent.width) * Double(extent.height)
