@@ -284,14 +284,24 @@ enum ReceiptParser {
         }
     }
 
-    /// 読めた明細の和と見比べて、合計としてありえる大きさか。
+    /// 読めた明細の和と見比べて、合計としてありえる大きさか。**上下の両方を見る。**
     ///
-    /// 値引きがあると合計は明細の和より小さくなるので、少しは下を許す。
-    /// 桁がひとつ違うような候補だけを落とす。端末内のAIの答えもここで確かめる。
-    static func isConsistentWithItems(_ amount: Int, itemsTotal: Int?) -> Bool {
-        guard let itemsTotal, itemsTotal > 0 else { return true }
-        return Double(amount) >= Double(itemsTotal) * 0.6
+    /// 下は、値引きがあると合計が和より小さくなるので少し許す（6割まで）。
+    /// 上は、外税や読み落とした明細のぶんだけ大きくなる。桁がひとつ増えた答え
+    /// （3,374 のつもりが 33,740）を落とすのが目的なので、3倍までは許す。
+    ///
+    /// **明細を上限まで拾ったときは、上を見ない。** そこで打ち切っただけで、
+    /// 下にまだ品物が続いているかもしれない。打ち切った和と比べても意味がない。
+    static func isConsistentWithItems(_ amount: Int, items: [ReceiptItem]) -> Bool {
+        let itemsTotal = items.reduce(0) { $0 + $1.amount }
+        guard itemsTotal > 0 else { return true }
+        guard Double(amount) >= Double(itemsTotal) * lowerConsistencyRatio else { return false }
+        guard items.count < maximumItems else { return true }
+        return Double(amount) <= Double(itemsTotal) * upperConsistencyRatio
     }
+
+    private static let lowerConsistencyRatio = 0.6
+    private static let upperConsistencyRatio = 3.0
 
     /// 合計の候補。どの行のどの数字を、なぜ選んだか（選ばなかったか）を持つ。
     struct TotalCandidate: Equatable, Sendable {
@@ -729,14 +739,45 @@ enum ReceiptParser {
     /// 桁区切りのカンマが **ピリオド** として読まれたものをつなぐ。
     ///
     /// コノミヤのレシートで `¥3,374` が `¥3. 374` と読まれ、3 と 374 に割れて
-    /// 合計が3円になった。**3桁ちょうどが続くときだけ**つなぐので、
-    /// 給油量の `19.12` や `0.5` のような本当の小数には触らない。
+    /// 合計が3円になった。つなぐのは次を**すべて**満たすときだけ。
+    ///
+    /// - ピリオドの前が数字
+    /// - その数字の並びが `0` ひとつだけではない（`0.398` は重さ。金額は0で始まらない）
+    /// - ピリオドの後ろに数字が **ちょうど3桁** 続く（`19.12` は給油量。桁区切りではない）
     private static func joinedThousands(_ text: String) -> String {
-        text.replacingOccurrences(
-            of: #"(?<=[0-9])\.[ 　]?(?=[0-9]{3}(?![0-9]))"#,
-            with: "",
-            options: .regularExpression
-        )
+        guard text.contains(".") else { return text }
+        let characters = Array(text)
+        var result = ""
+        var index = 0
+        while index < characters.count {
+            guard characters[index] == ".",
+                  let previous = result.last, previous.isNumber,
+                  !integerPartIsZero(result)
+            else {
+                result.append(characters[index])
+                index += 1
+                continue
+            }
+            var ahead = index + 1
+            if ahead < characters.count, characters[ahead] == " " || characters[ahead] == "\u{3000}" {
+                ahead += 1
+            }
+            let digits = characters[ahead...].prefix { $0.isNumber }
+            guard digits.count == 3 else {
+                result.append(characters[index])
+                index += 1
+                continue
+            }
+            // ピリオド（と続く空白）を飛ばして、前後の数字をつなげる。
+            index = ahead
+        }
+        return result
+    }
+
+    /// ピリオドの前の数字の並びが `0` ひとつだけか。`0.398` のような重さを見分ける。
+    private static func integerPartIsZero(_ text: String) -> Bool {
+        let digits = text.reversed().prefix { $0.isNumber }
+        return digits.count == 1 && digits.first == "0"
     }
 
     /// 数字の並びから金額を拾う。

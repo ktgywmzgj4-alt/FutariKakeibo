@@ -819,11 +819,20 @@ final class ReceiptParserTests: XCTestCase {
         XCTAssertEqual(ReceiptParser.totalAmount(from: ["合計 ¥3. 374"]), 3_374)
         XCTAssertEqual(ReceiptParser.totalAmount(from: ["合計 ¥3.374"]), 3_374)
         XCTAssertEqual(ReceiptParser.totalAmount(from: ["合計 ¥12.345"]), 12_345)
+        // 0で始まるように見えるが、整数の側は「10」なのでつなぐ。
+        XCTAssertEqual(ReceiptParser.totalAmount(from: ["合計 ¥10.500"]), 10_500)
+        // レシートに小数第3位まで刷られることは稀で、桁区切りのほうがずっと多い。
+        XCTAssertEqual(ReceiptParser.totalAmount(from: ["合計 ¥1.234"]), 1_234)
     }
 
-    /// 小数はつなげない。給油量の `19.12(L)` を 1912 にしてはいけない。
-    func testARealDecimalIsNotJoined() {
+    /// 本当の小数はつなげない。
+    func testRealDecimalsAreNotJoined() {
+        // 給油量。3桁続かないので桁区切りではない。19 も 12 も金額にしない。
+        XCTAssertNil(ReceiptParser.totalAmount(from: ["合計 19.12"]))
+        // 重さ。金額が0で始まることはないので、これは小数。
+        XCTAssertNil(ReceiptParser.totalAmount(from: ["合計 0.398"]))
         XCTAssertNotEqual(ReceiptParser.totalAmount(from: ["数量 19.12"]), 1_912)
+        XCTAssertNotEqual(ReceiptParser.totalAmount(from: ["合計 0.398"]), 398)
     }
 
     /// 税・値引き・点数の行の数字は、合計の候補にしない。
