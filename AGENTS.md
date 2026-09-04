@@ -118,4 +118,5 @@ iPhone向け。すでに動いていて、TestFlightで実機に配信済みで�
 | TestFlightへの配信をAIが実行しようとする | `gh workflow run` はAIの実行権限で止められる。`Docs/safety.md` のルールとは別の、ツール側の安全機構。**人間に渡す**（スマホのブラウザからでも実行できる。`.claude/skills/release/SKILL.md`） |
 | レシート解析の調整 | 直すと別の箇所が壊れる。**実物のレシートからテストを起こしてから**触ること |
 | `CKRecord.parent` に `.deleteSelf` | Appleの決まりで参照は `.none` のみ。違うと**CloudKitが例外を投げ、Swiftのcatchでは捕まらずアプリごと落ちる**。合言葉の発行だけが落ちていた（共有前は保存が入口で引き返すため、そこが初めて動く場所だった） |
+| `CGRect.isFinite` | **存在しない。** SwiftUIが同名のものを内部用（`package`）に持っているので、補完には出るのにビルドで弾かれる。`isNull` / `isInfinite` と各成分の `isFinite` を自分で見る |
 | CloudKitの「例外」と「失敗」 | Appleの文章は書き分けている。**throws an exception = 落ちる**（catchできない）、the operation fails = エラーが返る。ドキュメントに exception と書いてあったら、そこは絶対に守る |
