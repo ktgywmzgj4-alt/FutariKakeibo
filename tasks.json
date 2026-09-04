@@ -123,10 +123,10 @@
     {
       "id": "T-010",
       "task": "レシート画像を保管できるようにする",
-      "status": "doing",
+      "status": "review",
       "owner": "実行役",
       "passes": "支出に receiptImageID だけを持たせ、画像は別ファイルとCloudKitの ReceiptImage（CKAsset）に置く。一覧はiCloudへ取りに行かない。支出を消すと画像も消える。bash scripts/check_all.sh とCIのテストが全件通る",
-      "evidence": "",
+      "evidence": "CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/33836587968 → test ジョブ success (8分41秒)、Executed 102 tests, with 0 failures（新規10件を含む。mainは92件だった）。手元: bash scripts/check_all.sh 全5項目OK。PR #23。実機での動作は未確認（T-012）",
       "dependencies": [],
       "notes": "原寸は読み取り後に破棄し、長辺1600px・JPEG 0.7の1枚（数百KB）と長辺240pxの縮小画像だけを残す。まだ送れていない画像は pendingReceiptImageIDs に残し、容量整理でも消さない（端末内が唯一の原本のため）"
     },
