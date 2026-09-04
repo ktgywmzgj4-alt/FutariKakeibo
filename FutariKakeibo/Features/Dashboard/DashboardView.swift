@@ -5,8 +5,13 @@ struct DashboardView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 18) {
-                ScreenTitle("ふたりのホーム")
+            LazyVStack(spacing: AppTheme.cardSpacing) {
+                VStack(alignment: .leading, spacing: 10) {
+                    ScreenTitle("ふたりのホーム")
+                    memberRow
+                }
+                .padding(.bottom, 2)
+
                 MonthNavigator(month: store.selectedMonth, onMove: store.moveMonth)
 
                 recurringNoticeCard
@@ -18,7 +23,8 @@ struct DashboardView: View {
                 categoryCard
                 recentCard
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, AppTheme.screenPadding)
+            .padding(.top, 4)
             .padding(.bottom, 28)
         }
         .background(AppTheme.background)
@@ -44,8 +50,11 @@ struct DashboardView: View {
                     .foregroundStyle(AppTheme.secondaryText)
             }
 
+            // 通常の予算バーはブルー。超えたときだけ赤にする。
             ProgressView(value: store.budgetProgress)
-                .tint(store.budgetProgress >= 0.9 ? AppTheme.accent : AppTheme.positive)
+                .tint(store.monthlyTotal > (store.household?.monthlyBudget ?? 0)
+                    ? AppTheme.danger
+                    : AppTheme.accent)
                 .scaleEffect(x: 1, y: 1.6)
                 .accessibilityLabel("予算の使用率")
                 .accessibilityValue("\(Int(store.budgetProgress * 100))パーセント")
@@ -77,21 +86,50 @@ struct DashboardView: View {
                 Label("いまのところ精算はありません", systemImage: "checkmark.seal.fill")
                     .foregroundStyle(AppTheme.positive)
             } else {
-                HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Text(store.settlement.payer?.displayName ?? "")
-                    Text("→")
-                    Text(store.settlement.receiver?.displayName ?? "")
-                    Spacer()
+                // 精算の2人にも、ホーム上部と同じ人物の色を使う。
+                HStack(spacing: 10) {
+                    if let payer = store.settlement.payer {
+                        MemberTag(name: payer.displayName, color: memberColor(payer.id), avatarSize: 24)
+                    }
+                    Image(systemName: "arrow.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(AppTheme.secondaryText)
+                    if let receiver = store.settlement.receiver {
+                        MemberTag(name: receiver.displayName, color: memberColor(receiver.id), avatarSize: 24)
+                    }
+                    Spacer(minLength: 8)
                     Text(store.settlement.amount.yenText)
                         .font(.title3.monospacedDigit().bold())
+                        .foregroundStyle(AppTheme.ink)
                 }
-                .foregroundStyle(AppTheme.ink)
                 Text("「2人で折半」にした支出だけで計算しています。")
                     .font(.caption)
                     .foregroundStyle(AppTheme.secondaryText)
             }
         }
         .appCard()
+    }
+
+    private func memberColor(_ id: UUID?) -> Color {
+        store.household?.color(of: id) ?? AppTheme.accent
+    }
+
+    /// 見出しのすぐ下。いま誰の家計を見ているかを、色と一緒に示す。
+    /// 1人で使っている場合は1人だけ出す。架空の相手は作らない。
+    @ViewBuilder
+    private var memberRow: some View {
+        if let household = store.household, !household.members.isEmpty {
+            HStack(spacing: 16) {
+                ForEach(Array(household.members.enumerated()), id: \.element.id) { index, member in
+                    MemberTag(
+                        name: member.displayName,
+                        color: AppTheme.memberColor(at: index),
+                        avatarSize: 30
+                    )
+                }
+                Spacer(minLength: 0)
+            }
+        }
     }
 
     private var categoryCard: some View {
@@ -106,9 +144,13 @@ struct DashboardView: View {
                 emptyMessage("支出を追加すると内訳が表示されます", icon: "chart.pie")
             } else {
                 ForEach(Array(totals.prefix(5)), id: \.key) { category, total in
-                    HStack {
-                        Label(category.displayName, systemImage: category.systemImage)
+                    HStack(spacing: 10) {
+                        Image(systemName: category.systemImage)
+                            .font(.subheadline)
                             .foregroundStyle(category.color)
+                            .frame(width: 22)
+                        Text(category.displayName)
+                            .foregroundStyle(AppTheme.ink)
                         Spacer()
                         Text(total.yenText)
                             .monospacedDigit()
@@ -153,7 +195,7 @@ struct DashboardView: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(balance.balance.yenText)
                         .font(.system(size: 28, weight: .bold, design: .rounded).monospacedDigit())
-                        .foregroundStyle(balance.isNegative ? AppTheme.danger : AppTheme.positive)
+                        .foregroundStyle(balance.isNegative ? AppTheme.danger : AppTheme.ink)
                     Spacer()
                     if let rate = balance.savingsRate, rate > 0 {
                         Text("貯蓄率 \(Int((rate * 100).rounded()))%")
@@ -169,7 +211,7 @@ struct DashboardView: View {
                             .foregroundStyle(AppTheme.secondaryText)
                         Text(balance.income.yenText)
                             .font(.subheadline.monospacedDigit().weight(.semibold))
-                            .foregroundStyle(AppTheme.positive)
+                            .foregroundStyle(AppTheme.ink)
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 3) {

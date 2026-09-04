@@ -1,8 +1,8 @@
 import SwiftUI
 
 extension ExpenseCategory {
-    /// カテゴリの色は虹の並びから取る。白地でも沈まないよう彩度を保ちつつ、
-    /// 隣り合うカテゴリが見分けられる間隔を空けている。
+    /// グラフと内訳でカテゴリを見分けるための色。
+    /// 文字は黒に統一しているので、色が付くのはアイコンとグラフの面だけ。
     var color: Color {
         switch self {
         case .groceries: Color(red: 0.93, green: 0.20, blue: 0.28)

@@ -36,7 +36,7 @@ struct IncomeEditorView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 18) {
+            VStack(spacing: AppTheme.cardSpacing) {
                 incomeFields
 
                 Button(action: save) {
@@ -58,7 +58,7 @@ struct IncomeEditorView: View {
                     }
                 }
             }
-            .padding(18)
+            .padding(AppTheme.screenPadding)
         }
         .background(AppTheme.background)
         .navigationTitle(originalIncome == nil ? "" : "収入を編集")

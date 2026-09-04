@@ -23,7 +23,7 @@ struct EntryEditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             ScreenTitle(kind == .expense ? "支出を追加" : "収入を追加")
-                .padding(.horizontal, 18)
+                .padding(.horizontal, AppTheme.screenPadding)
                 .padding(.top, 4)
 
             Picker("記録する種類", selection: $kind) {
@@ -32,7 +32,7 @@ struct EntryEditorView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .padding(.horizontal, 18)
+            .padding(.horizontal, AppTheme.screenPadding)
             .padding(.top, 10)
             .padding(.bottom, 8)
 

@@ -9,7 +9,7 @@ struct RecurringExpenseListView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 18) {
+            VStack(spacing: AppTheme.cardSpacing) {
                 summaryCard
 
                 if store.recurringExpenses.isEmpty {
@@ -20,7 +20,7 @@ struct RecurringExpenseListView: View {
                     }
                 }
             }
-            .padding(18)
+            .padding(AppTheme.screenPadding)
             .padding(.bottom, 26)
         }
         .background(AppTheme.background)

@@ -12,7 +12,7 @@ struct SharingView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 18) {
+            VStack(spacing: AppTheme.cardSpacing) {
                 stateCard
                 if let invite = store.shareInvite {
                     codeCard(invite)
@@ -22,7 +22,7 @@ struct SharingView: View {
                 joinCard
                 noticeCard
             }
-            .padding(18)
+            .padding(AppTheme.screenPadding)
             .padding(.bottom, 26)
         }
         .background(AppTheme.background)
