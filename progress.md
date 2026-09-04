@@ -7,6 +7,18 @@
 
 ---
 
+## 2026-09-04 アプリアイコンを差し替えた（実機未確認）
+
+がま口に¥、留め金ふたつが**ふたりの色**（`AppTheme` の accent と coral）。人間が描いた原案を、
+**形は1pxも変えず色だけ**そろえた。留め金は #2D5BD1 / #EE5D59、地はまっ白、袋はまっ黒。
+
+**`AppIcon` と `BrandMark` は同じ絵で、初回コミットから一度も変わっていなかった。**
+その間に見た目は2回作り直されていたので、顔だけが前の世代のまま残っていた。両方入れ替えた。
+
+作り直すときは `python3 scripts/recolour_app_icon.py Docs/app-icon-source.png <出力先>`。
+**PillowもMacも要らない**（`scripts/pngio.py` が zlib だけで PNG を読み書きする）。
+原案は `Docs/app-icon-source.png` に置いてある。色を変えたくなったら、そこからやり直せる。
+
 ## 2026-09-04 CloudKitのProductionスキーマを反映した（T-002 完了）
 
 半年ちかく止まっていた前提が外れた。Production に `Household` `Expense` `Income`
