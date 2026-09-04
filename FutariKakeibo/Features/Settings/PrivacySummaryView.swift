@@ -9,8 +9,23 @@ struct PrivacySummaryView: View {
                 Section("レシート") {
                     privacyRow(
                         "端末内で読み取り",
-                        detail: "撮影画像はOCRのためだけに使い、保存・共有・外部送信しません。",
+                        detail: "文字の読み取りはこのiPhoneの中だけで行い、外部のサーバーへは送りません。",
                         icon: "doc.viewfinder"
+                    )
+                    privacyRow(
+                        "画像は縮小して保存",
+                        detail: "「レシート画像を保存」がONのときだけ、縮小した1枚を残します。原寸の写真は残しません。",
+                        icon: "photo.on.rectangle.angled"
+                    )
+                    privacyRow(
+                        "共有中は相手も見られる",
+                        detail: "iCloud共有を有効にしている場合、保存したレシート画像は招待した相手も見られます。それ以外の人には渡りません。",
+                        icon: "person.2"
+                    )
+                    privacyRow(
+                        "支出を消せば画像も消える",
+                        detail: "支出を削除すると、その支出のレシート画像も、このiPhoneとiCloudの両方から消えます。",
+                        icon: "trash"
                     )
                 }
 

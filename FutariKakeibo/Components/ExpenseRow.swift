@@ -38,6 +38,10 @@ struct ExpenseRow: View {
                             .background(AppTheme.accentSoft.opacity(0.55))
                             .clipShape(Capsule())
                     }
+                    // レシートがある印。一覧では端末内の小さな画像しか読まない。
+                    if let receiptImageID = expense.receiptImageID {
+                        ReceiptThumbnail(imageID: receiptImageID, size: 18)
+                    }
                 }
                 .font(.caption)
                 .foregroundStyle(AppTheme.secondaryText)
@@ -54,7 +58,8 @@ struct ExpenseRow: View {
         .accessibilityLabel(
             "\(expense.title)、\(expense.amount.yenText)、\(expense.category.displayName)、" +
             "\(household.member(id: expense.paidByMemberID)?.displayName ?? "不明")が支払い" +
-            (expense.isRecurring ? "、定期支出" : "")
+            (expense.isRecurring ? "、定期支出" : "") +
+            (expense.hasReceiptImage ? "、レシートあり" : "")
         )
     }
 }

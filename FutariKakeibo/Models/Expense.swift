@@ -27,6 +27,11 @@ struct Expense: Identifiable, Codable, Hashable, Sendable {
     var merchant: String?
     /// 定期支出のひな形から自動で作られた場合、そのひな形のID。手入力ならnil。
     var recurringID: UUID?
+    /// 紐付いたレシート画像のID。画像そのものはここに持たない。
+    ///
+    /// 実体はファイル（`ReceiptImageStore`）とiCloud（`ReceiptImage` レコード）にある。
+    /// 支出のデータは軽いままにしておきたいので、ここには参照だけを置く。
+    var receiptImageID: UUID?
     var createdAt: Date
     var updatedAt: Date
 
@@ -41,6 +46,7 @@ struct Expense: Identifiable, Codable, Hashable, Sendable {
         note: String = "",
         merchant: String? = nil,
         recurringID: UUID? = nil,
+        receiptImageID: UUID? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
@@ -55,6 +61,7 @@ struct Expense: Identifiable, Codable, Hashable, Sendable {
         let shop = merchant?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         self.merchant = shop.isEmpty ? nil : shop
         self.recurringID = recurringID
+        self.receiptImageID = receiptImageID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -65,5 +72,9 @@ struct Expense: Identifiable, Codable, Hashable, Sendable {
 
     var isRecurring: Bool {
         recurringID != nil
+    }
+
+    var hasReceiptImage: Bool {
+        receiptImageID != nil
     }
 }
