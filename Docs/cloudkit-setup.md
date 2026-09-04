@@ -7,6 +7,22 @@ Appleのアカウントにログインする必要があります。
 CloudKitのProductionに入れた項目は、**二度と消せません。名前も変えられません。**
 打ち間違えたまま反映すると、その名前が永久に残ります。
 
+## 2026-09-04 反映は済んでいます
+
+**この手順は一度完了しました。** Production に `Household` `Expense` `Income`
+`ReceiptImage` `ShareInvite` の5つが入っています（`tasks.json` の `T-002`）。
+次に項目やレコード型が増えたときに、また同じ手順を使ってください。
+
+そのときのための記録です。
+
+- **Devの項目は自動では増えません。** Macが無く開発ビルドを動かせないため、
+  Console の `Record Types` から**手で作る**ことになります
+- **手で作った型には索引が付きません。** 一覧をまとめて読む型（いまは `Expense` と `Income`）は、
+  `Indexes` に `recordName` の `Queryable` を自分で足してください。無いと読み込みが失敗します
+- **型の選び間違いに注意。** 一度は `ShareInvite` の `expiresAt` を `STRING` で作りかけました
+  （正しくは `DATE/TIME`）。Deploy前の差分画面で気づいて直せましたが、入れていたら直せませんでした。
+  **手順7の「1つずつ読む」は形式ではありません**
+
 ## なぜ必要か
 
 CloudKitには「Development（開発用）」と「Production（本番用）」の2つの環境があります。

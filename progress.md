@@ -7,6 +7,22 @@
 
 ---
 
+## 2026-09-04 CloudKitのProductionスキーマを反映した（T-002 完了）
+
+半年ちかく止まっていた前提が外れた。Production に `Household` `Expense` `Income`
+`ReceiptImage` `ShareInvite` の5つが入った。**共有機能を実機で試せる状態になった**（`T-003`）。
+
+**Devの設計図は、収入機能を足す前で止まっていた。** Macが無いので開発ビルドを動かせず、
+CloudKitが項目を自動で作る道が最初から無かった。3レコード型と17項目を**Consoleで手作りした**。
+次に項目が増えたときも同じことが要る。`Docs/cloudkit-setup.md` に手順がある。
+
+**`ShareInvite` の `expiresAt` を STRING で作りかけていた。** 正しくは DATE/TIME。
+Deploy前の差分画面で見つけてDevのうちに直した。**差分を1項目ずつ読むのは形式ではなく、実際に1件見つかる。**
+入れてしまえば型は永久に変えられず、合言葉の発行が壊れていた。
+
+**手で作ったレコード型には索引が付かない。** `recordName` の Queryable を `Expense` と `Income` に
+自分で足した（一覧を読む2つだけに要る）。無いと読み込みが失敗する。
+
 ## 2026-09-04 レシート画像を保管できるようにした（実機未確認）
 
 支出が持つのは `receiptImageID` だけ。画像の実体は別ファイル（`ReceiptImageStore`）と
