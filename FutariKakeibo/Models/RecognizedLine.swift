@@ -12,19 +12,30 @@ struct RecognizedLine: Equatable, Sendable {
     var midY: Double
     /// 文字の高さ。画像の高さに対する割合。店名は他より大きく写ることが多い。
     var height: Double
+    /// この断片の傾き。左端から右端へ1進むあいだに `midY` がどれだけ増えるか。
+    ///
+    /// 斜めから撮ると、同じ行でも右へ行くほど上（または下）へずれる。
+    /// 読み取りは文字の四隅を返すので、行の傾きをここに直接測って入れられる。
+    /// 正面から撮った写真と、位置の分からない文字列では 0。
+    var slope: Double
+
+    /// 断片の中央の横位置。傾きぶんを戻すときの基準になる。
+    var midX: Double { (minX + maxX) / 2 }
 
     init(
         text: String,
         minX: Double = 0,
         maxX: Double = 1,
         midY: Double = 0,
-        height: Double = 0.02
+        height: Double = 0.02,
+        slope: Double = 0
     ) {
         self.text = text
         self.minX = minX
         self.maxX = maxX
         self.midY = midY
         self.height = height
+        self.slope = slope
     }
 
     /// 位置の分からない文字列（貼り付けたテキストやテスト）から作る。

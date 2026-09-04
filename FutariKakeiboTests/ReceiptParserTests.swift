@@ -538,4 +538,107 @@ final class ReceiptParserTests: XCTestCase {
         let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
         XCTAssertEqual(draft.amount, 2_000)
     }
+
+    // MARK: - 斜めから撮ったレシート
+
+    /// 斜めから撮った1枚を再現する。
+    ///
+    /// 実物の写真では、同じ行でも右端にある金額のほうが、左端にある品名より
+    /// 上（または下）へずれる。ずれ幅は「中央からの横の距離 × 傾き」。
+    /// `slope` には、読み取りが文字の四隅から測った傾きをそのまま入れる。
+    private func slanted(_ lines: [RecognizedLine], slope: Double) -> [RecognizedLine] {
+        lines.map { source in
+            var moved = source
+            moved.slope = slope
+            moved.midY = source.midY + slope * (source.midX - 0.5)
+            return moved
+        }
+    }
+
+    /// 品名が左、金額が右に離れて並ぶ、ごく普通のレシート。
+    private func cornerStoreReceipt() -> [RecognizedLine] {
+        [
+            line("まちかどストア", y: 0.06, height: 0.045),
+            line("東京都杉並区4-5-6", y: 0.11),
+            line("TEL 03-9876-5432", y: 0.15),
+            line("2026年8月30日 10:12", y: 0.19),
+            line("りんご", y: 0.30), price("198", y: 0.30),
+            line("食パン", y: 0.35), price("248", y: 0.35),
+            line("たまご", y: 0.40), price("298", y: 0.40),
+            line("合計", y: 0.50, height: 0.03), price("744", y: 0.50)
+        ]
+    }
+
+    /// 斜めから撮ると、右にある金額がひとつ下の行の品名と同じ高さに来る。
+    ///
+    /// 直す前は「食パン 198円」「たまご 248円」と、**ひとつずつずれた値段**が付いていた。
+    /// 金額そのものは読めているので気づきにくい。
+    func testASlantedPhotoStillPairsEachNameWithItsOwnPrice() {
+        let draft = ReceiptParser.parse(
+            lines: slanted(cornerStoreReceipt(), slope: 0.10),
+            now: referenceNow,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.items, [
+            ReceiptItem(name: "りんご", amount: 198),
+            ReceiptItem(name: "食パン", amount: 248),
+            ReceiptItem(name: "たまご", amount: 298)
+        ])
+        XCTAssertEqual(draft.amount, 744)
+        XCTAssertEqual(draft.merchant, "まちかどストア")
+    }
+
+    /// 傾きを直したあとの結果は、正面から撮った1枚とまったく同じでなければならない。
+    func testASlantedPhotoReadsTheSameAsAStraightOne() {
+        let straight = ReceiptParser.parse(
+            lines: cornerStoreReceipt(),
+            now: referenceNow,
+            calendar: calendar
+        )
+        let slantedDraft = ReceiptParser.parse(
+            lines: slanted(cornerStoreReceipt(), slope: -0.08),
+            now: referenceNow,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(slantedDraft.items, straight.items)
+        XCTAssertEqual(slantedDraft.amount, straight.amount)
+        XCTAssertEqual(slantedDraft.merchant, straight.merchant)
+        XCTAssertEqual(slantedDraft.date, straight.date)
+    }
+
+    /// 読み取りがありえない傾きを返してきたら、使わない。
+    ///
+    /// 正面から撮った1枚の位置はそのままで、傾きの値だけが壊れている状態。
+    /// これを信じて動かすと、まっすぐ撮った写真まで崩れてしまう。
+    func testAnImpossibleTiltIsIgnored() {
+        var lines = cornerStoreReceipt()
+        for index in lines.indices {
+            lines[index].slope = 5.0
+        }
+
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+
+        XCTAssertEqual(draft.items, [
+            ReceiptItem(name: "りんご", amount: 198),
+            ReceiptItem(name: "食パン", amount: 248),
+            ReceiptItem(name: "たまご", amount: 298)
+        ])
+        XCTAssertEqual(draft.amount, 744)
+    }
+
+    /// 傾きは1枚ぶんの中央値で決める。1か所の読み違いで全体が動かないこと。
+    func testOneBadlyMeasuredFragmentDoesNotTiltTheWholeReceipt() {
+        var lines = slanted(cornerStoreReceipt(), slope: 0.10)
+        lines[4].slope = -4.0
+
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+
+        XCTAssertEqual(draft.items, [
+            ReceiptItem(name: "りんご", amount: 198),
+            ReceiptItem(name: "食パン", amount: 248),
+            ReceiptItem(name: "たまご", amount: 298)
+        ])
+    }
 }

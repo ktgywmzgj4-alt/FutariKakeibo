@@ -112,9 +112,13 @@ actor CloudKitSyncService {
 
         if let shareReference = rootRecord.share {
             let existingRecord = try await fetchRecord(shareReference.recordID, from: database)
-            if let existingShare = existingRecord as? CKShare {
-                return (location, existingShare)
+            guard let existingShare = existingRecord as? CKShare else {
+                // すでに共有されている印はあるのに、その共有が読めなかった。
+                // ここで新しい CKShare を作ると同じレコードを二重に共有することになり、
+                // CloudKit が例外を投げてアプリごと落ちる。作らずに引き返す。
+                throw SyncError.inviteUnavailable
             }
+            return (location, existingShare)
         }
 
         let share = CKShare(rootRecord: rootRecord)
@@ -316,7 +320,7 @@ actor CloudKitSyncService {
            remoteDeletedAt >= deletedAt {
             return
         }
-        record.parent = CKRecord.Reference(recordID: rootID, action: .deleteSelf)
+        record.parent = parentReference(to: rootID)
         record["id"] = id.uuidString as CKRecordValue
         record["isDeleted"] = NSNumber(value: true) as CKRecordValue
         record["updatedAt"] = deletedAt as CKRecordValue
@@ -345,7 +349,7 @@ actor CloudKitSyncService {
            remoteDeletedAt >= deletedAt {
             return
         }
-        record.parent = CKRecord.Reference(recordID: rootID, action: .deleteSelf)
+        record.parent = parentReference(to: rootID)
         record["id"] = id.uuidString as CKRecordValue
         record["isDeleted"] = NSNumber(value: true) as CKRecordValue
         record["updatedAt"] = deletedAt as CKRecordValue
@@ -376,7 +380,7 @@ actor CloudKitSyncService {
         // レシート画像は撮ったあと変わらない。すでに載っているなら送り直さない。
         if record["asset"] as? CKAsset != nil { return }
 
-        record.parent = CKRecord.Reference(recordID: rootID, action: .deleteSelf)
+        record.parent = parentReference(to: rootID)
         record["id"] = id.uuidString as CKRecordValue
         record["expenseID"] = expenseID.uuidString as CKRecordValue
         record["asset"] = CKAsset(fileURL: displayFileURL)
@@ -448,6 +452,22 @@ actor CloudKitSyncService {
         static let receiptImage = "ReceiptImage"
     }
 
+    /// 支出・収入・レシート画像を、家計のレコードの「子」にする印。
+    /// この親子関係があるから、相手を招いたときに家計まるごとが相手に渡る。
+    ///
+    /// **参照の種類は必ず `.none` にする。**
+    /// Appleの決まりで、`parent` に `.deleteSelf` を入れると CloudKit が例外を投げる。
+    /// Objective-Cの例外なので Swift の `catch` では捕まえられず、**アプリごと落ちる**。
+    ///
+    /// 共有を始めるまで `cloudLocation` は空で、保存はどれも入口で引き返す。
+    /// つまりこの行が初めて動くのは合言葉を発行したときで、そこだけが落ちていた。
+    ///
+    /// 親を消したら子も消える動きは無くなるが、家計のレコードを消すことはなく、
+    /// やめるときはゾーンごと消すので、実際に困る場面はない。
+    private func parentReference(to recordID: CKRecord.ID) -> CKRecord.Reference {
+        CKRecord.Reference(recordID: recordID, action: .none)
+    }
+
     private func upsertHousehold(
         _ household: Household,
         at location: CloudLocation,
@@ -495,7 +515,7 @@ actor CloudKitSyncService {
            remoteUpdatedAt > expense.updatedAt {
             return
         }
-        record.parent = CKRecord.Reference(recordID: householdRecordID, action: .deleteSelf)
+        record.parent = parentReference(to: householdRecordID)
         record["id"] = expense.id.uuidString as CKRecordValue
         record["isDeleted"] = NSNumber(value: false) as CKRecordValue
         record["title"] = expense.title as CKRecordValue
@@ -620,7 +640,7 @@ actor CloudKitSyncService {
            remoteUpdatedAt > income.updatedAt {
             return
         }
-        record.parent = CKRecord.Reference(recordID: householdRecordID, action: .deleteSelf)
+        record.parent = parentReference(to: householdRecordID)
         record["id"] = income.id.uuidString as CKRecordValue
         record["isDeleted"] = NSNumber(value: false) as CKRecordValue
         record["title"] = income.title as CKRecordValue
@@ -729,7 +749,9 @@ actor CloudKitSyncService {
     ) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let operation = CKModifyRecordsOperation(recordsToSave: records, recordIDsToDelete: recordIDs)
-            operation.savePolicy = .changedKeys
+            // 保存の仕方は既定（サーバー側が変わっていなければ保存する）のままにする。
+            // ここを通るのは共有（CKShare）の作成だけで、CKShareの保存に
+            // `.changedKeys` は使えない。
             operation.isAtomic = atomically
             operation.modifyRecordsResultBlock = { result in
                 continuation.resume(with: result)
