@@ -746,4 +746,139 @@ final class ReceiptParserTests: XCTestCase {
         XCTAssertEqual(ReceiptParser.category(from: "", merchant: "スーパーひだまり"), .groceries)
         XCTAssertEqual(ReceiptParser.category(from: "", merchant: "マックスバリュ"), .groceries)
     }
+
+    // MARK: - コノミヤのレシート（実物）
+
+    /// 名古屋のスーパー。読み取りの文字は取れているのに、
+    /// **店名「城西店」・金額 25円・種類「その他」** になった。
+    ///
+    /// 並びは実機が出した読み取り結果そのまま。とくに次の2つが効いている。
+    /// - 「合計」の語が読めておらず、金額の行だけが残っている
+    /// - 桁区切りのカンマが **ピリオド** として読まれている（`¥3. 374`）
+    /// - 店名は上部では「城西店」だけで、チェーン名は**下の広告**にしか出てこない
+    private func konomiyaReceipt() -> [RecognizedLine] {
+        [
+            line("城西店", y: 0.020, height: 0.024),
+            line("052-938-5776", y: 0.033),
+            line("事業者番号：T5120001001831", y: 0.046),
+            line("**** 領収証 ****", y: 0.059),
+            line("2026年8月 2日（日）20:25 #000023", y: 0.072),
+            line("009903精算機3 6476", y: 0.085),
+            line("お会計券 #000002 R7797 20:25", y: 0.098),
+            line("129037 129037", y: 0.111),
+            line("ぶなしめじ", y: 0.140), price("¥98", y: 0.140),
+            line("まうれん車", y: 0.153), price("¥258", y: 0.153),
+            line("フィリピ ンバナナ", y: 0.166), price("¥158", y: 0.166),
+            line("パッと使える魚切りベーコン", y: 0.179), price("¥398", y: 0.179),
+            line("ブルーバリー", y: 0.192), price("¥298", y: 0.192),
+            line("バター10gに切れてる", y: 0.205), price("¥378", y: 0.205),
+            line("北海道純生クリーム35％", y: 0.218), price("¥418", y: 0.218),
+            line("株水おいしい牛乳", y: 0.231), price("¥188", y: 0.231),
+            line("備長炭火焼旨焼鳥もも3本", y: 0.244), price("¥474", y: 0.244),
+            line("値引", y: 0.257), price("-250", y: 0.257),
+            line("※ えびマヨ細巻", y: 0.270), price("¥498", y: 0.270),
+            line("値引", y: 0.283), price("-200", y: 0.283),
+            line("※ポテトサラダ（大）", y: 0.296), price("¥328", y: 0.296),
+            line("値引", y: 0.309), price("-100", y: 0.309),
+            line("氷結無糖GF7%", y: 0.322), price("¥178", y: 0.322),
+            line("小計", y: 0.350), price("¥3,122", y: 0.350),
+            line("（外税 8%対象額", y: 0.363), price("¥2,944)", y: 0.363),
+            line("外税額 8%", y: 0.376), price("¥235", y: 0.376),
+            line("（外税 10%対象額", y: 0.389), price("¥178)", y: 0.389),
+            line("外税額 10%", y: 0.402), price("¥17", y: 0.402),
+            line("買上点数", y: 0.415), price("12点", y: 0.415),
+            line("¥3. 374", x: 0.60, width: 0.30, y: 0.440),
+            line("(税率 8%対象額", y: 0.453), price("¥3,179)", y: 0.453),
+            line("(内消費税等 8%", y: 0.466), price("¥235)", y: 0.466),
+            line("税率10%対象額", y: 0.479), price("¥195", y: 0.479),
+            line("(内消費寺10%", y: 0.492), price("¥17)", y: 0.492),
+            line("クレシ ット", y: 0.505), price("¥3.374", y: 0.505),
+            line("(内消費税等", y: 0.518), price("¥252)", y: 0.518),
+            line("※マークは軽減税率対象です。", y: 0.540),
+            line("コノミヤ 城西店", y: 0.570, height: 0.030),
+            line("スタッフ募集中！", y: 0.600, height: 0.030)
+        ]
+    }
+
+    func testKonomiyaReceiptReadsTheShopTheAmountAndTheKind() {
+        let draft = ReceiptParser.parse(
+            lines: konomiyaReceipt(),
+            now: date(2026, 8, 10),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.merchant, "コノミヤ 城西店")
+        XCTAssertEqual(draft.amount, 3_374)
+        XCTAssertEqual(draft.suggestedCategory, .groceries)
+        XCTAssertEqual(draft.date, date(2026, 8, 2))
+    }
+
+    /// 桁区切りのカンマがピリオドとして読まれても、1つの金額として扱う。
+    /// `¥3. 374` を 3 と 374 に割ると、合計が 3円 になる。
+    func testAThousandsCommaReadAsAPeriodIsStillOneAmount() {
+        XCTAssertEqual(ReceiptParser.totalAmount(from: ["合計 ¥3. 374"]), 3_374)
+        XCTAssertEqual(ReceiptParser.totalAmount(from: ["合計 ¥3.374"]), 3_374)
+        XCTAssertEqual(ReceiptParser.totalAmount(from: ["合計 ¥12.345"]), 12_345)
+    }
+
+    /// 小数はつなげない。給油量の `19.12(L)` を 1912 にしてはいけない。
+    func testARealDecimalIsNotJoined() {
+        XCTAssertNotEqual(ReceiptParser.totalAmount(from: ["数量 19.12"]), 1_912)
+    }
+
+    /// 税・値引き・点数の行の数字は、合計の候補にしない。
+    func testTaxDiscountAndCountRowsAreNeverTheTotal() {
+        let lines = [
+            line("さくら青果", y: 0.05, height: 0.03),
+            line("2026/08/02", y: 0.10),
+            line("トマト", y: 0.20), price("¥500", y: 0.20),
+            line("値引", y: 0.24), price("-100", y: 0.24),
+            line("買上点数", y: 0.28), price("9999点", y: 0.28),
+            line("(税率 8%対象額", y: 0.32), price("¥8,888", y: 0.32),
+            line("合計", y: 0.40), price("¥400", y: 0.40)
+        ]
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+        XCTAssertEqual(draft.amount, 400)
+    }
+
+    /// 上部に支店名しか出ていなくても、チェーン名を落とさない。
+    /// レシートのどこかに「チェーン名＋支店名」が刷られていれば、そちらを使う。
+    func testAChainNameIsRecoveredFromElsewhereOnTheReceipt() {
+        let lines = [
+            line("城西店", y: 0.05, height: 0.024),
+            line("2026/08/02", y: 0.10),
+            line("合計", y: 0.30), price("¥1,000", y: 0.30),
+            line("コノミヤ 城西店", y: 0.50, height: 0.030),
+            line("スタッフ募集中！", y: 0.54, height: 0.030)
+        ]
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+        XCTAssertEqual(draft.merchant, "コノミヤ 城西店")
+    }
+
+    /// 求人の広告は店名ではない。
+    func testStaffWantedAdvertsAreNotTheShopName() {
+        for text in ["スタッフ募集中！", "従業員割引有り", "ご応募お待ちしています"] {
+            let lines = [
+                line(text, y: 0.05, height: 0.03),
+                line("2026/08/02", y: 0.10),
+                line("合計", y: 0.30), price("¥1,000", y: 0.30)
+            ]
+            let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+            XCTAssertNotEqual(draft.merchant, text)
+        }
+    }
+
+    /// 食料品の名前が並んでいれば食費。店名で決まらないときの二段目。
+    func testGroceryItemsDecideTheKindWhenTheShopIsUnknown() {
+        let kind = ReceiptParser.category(
+            from: "",
+            merchant: "アイウエオ商会",
+            items: [
+                ReceiptItem(name: "ぶなしめじ", amount: 98),
+                ReceiptItem(name: "株水おいしい牛乳", amount: 188),
+                ReceiptItem(name: "フィリピ ンバナナ", amount: 158)
+            ]
+        )
+        XCTAssertEqual(kind, .groceries)
+    }
 }

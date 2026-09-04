@@ -40,7 +40,13 @@ enum ReceiptInterpreter {
             draft.merchant = merchant
         }
 
-        if let total = answer.total, total > 0, total <= 9_999_999 {
+        // AIの合計は、**読めた明細の和とつじつまが合うときだけ**受け取る。
+        // 上限だけを見ていたので、コノミヤのレシートで 25 という答えがそのまま通り、
+        // ルールが出した 3,374 を上書きしていた。これでは「AIを足したことで
+        // 悪くなることはない」と言えない。
+        let itemsTotal = base.items.isEmpty ? nil : base.items.reduce(0) { $0 + $1.amount }
+        if let total = answer.total, total > 0, total <= 9_999_999,
+           ReceiptParser.isConsistentWithItems(total, itemsTotal: itemsTotal) {
             draft.amount = total
         }
 

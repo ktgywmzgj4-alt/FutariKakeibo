@@ -15,14 +15,6 @@ enum ReceiptParser {
     /// 短い断片は端の座標が近すぎて、傾きが当てにならない。
     private static let skewSampleMinimumWidth = 0.05
 
-    /// 合計を示す語。これがある行の金額を最優先で使う。
-    private static let totalKeywords = ["合計", "総計", "お会計", "お支払", "ご請求", "total"]
-    /// 合計と紛らわしいが違うもの。これらを含む行は合計として扱わない。
-    private static let notTotalKeywords = [
-        "小計", "対象計", "内税", "外税", "消費税", "税額",
-        "お預り", "お預かり", "預り", "お釣", "おつり", "釣銭", "現金",
-        "ポイント", "値引", "割引", "点数", "個数", "残高", "前回"
-    ]
     /// 店名として採用しない語。
     ///
     /// 「領収書」は「領収害」と読み違えられる（白馬のカフェのレシート）。
@@ -33,7 +25,9 @@ enum ReceiptParser {
         "www.", ".com", ".co.jp",
         // 店の案内書き。店名の近くに刷られるので、外さないと店名として拾われる
         // （マクドナルドのレシートで「営業時間 24時間営業」が店名になっていた）。
-        "営業時間", "時間営業", "定休", "駐車場のご案内", "ご来店"
+        "営業時間", "時間営業", "定休", "駐車場のご案内", "ご来店",
+        // レシートの下に刷られる求人広告。文字が大きいので店名として拾われやすい。
+        "募集", "従業員割引", "副業", "応募", "求人", "アルバイト", "活躍中"
     ]
     /// 店名の前に付いて一緒に読まれるラベル。店名ではないので落とす。
     /// 長いものから先に並べる（「登録名称」を「名称」より先に外す）。
@@ -171,30 +165,70 @@ enum ReceiptParser {
     /// 店名を探す範囲。長いレシートで明細まで候補に入らないよう、行数で区切る。
     private static let merchantSearchRows = 10
 
+    /// 店名の候補と、その点数。
+    struct MerchantCandidate: Equatable, Sendable {
+        var text: String
+        var rowIndex: Int
+        var score: Int
+        var reason: String
+    }
+
     static func merchant(from rows: [Row]) -> String {
-        let head = Array(rows.prefix(merchantSearchRows))
-        let candidates = head.filter { isMerchantCandidate($0) }
-        guard !candidates.isEmpty else {
-            // 上の方が全部除外された場合だけ、全体から探す。
-            let fallback = rows.filter { isMerchantCandidate($0) }
-            return cleanedMerchant(fallback.first?.text ?? "")
+        let candidates = merchantCandidates(in: rows)
+        logCandidates("店名", candidates.map { ($0.text, $0.score, $0.reason) })
+        guard let best = candidates.max(by: { $0.score < $1.score }) else { return "" }
+
+        // 上部にはロゴしか無く、支店名だけが文字として読めることがある
+        // （コノミヤのレシートで「城西店」だけになった）。
+        // レシートのどこかに「チェーン名＋支店名」が刷られていれば、そちらを使う。
+        // **完全に読めなくても、チェーン名を落とさない。**
+        let fuller = candidates
+            .filter { $0.text != best.text && $0.text.contains(best.text) }
+            .max { $0.text.count < $1.text.count }
+        let chosen = fuller ?? best
+        logChoice("店名", chosen.text, chosen.score, fuller == nil ? chosen.reason : "チェーン名を拾い直した")
+        return cleanedMerchant(chosen.text)
+    }
+
+    /// 店名の候補を集めて点数をつける。
+    ///
+    /// 候補はレシート全体から集める。点は**上にあること**をいちばん重く見る。
+    /// 下の広告にもチェーン名が出るので、集めるのは全体、選ぶのは上、という形。
+    static func merchantCandidates(in rows: [Row]) -> [MerchantCandidate] {
+        let heights = rows.map(\.height).sorted()
+        let medianHeight = heights.isEmpty ? 0.02 : max(heights[heights.count / 2], 0.001)
+        var seen: [String: Int] = [:]
+        for row in rows where isMerchantCandidate(row) {
+            seen[row.text, default: 0] += 1
         }
 
-        // 「店」で終わる行があれば、それが一番はっきりした店名。
-        // ロゴの読み違いより、本文に刷られた正式な店名を優先する。
-        let named = candidates.filter { $0.text.contains("店") }
-        if let best = named.max(by: { $0.text.count < $1.text.count }) {
-            return cleanedMerchant(best.text)
+        return rows.enumerated().compactMap { index, row in
+            guard isMerchantCandidate(row) else { return nil }
+            var score = 0
+            var reasons: [String] = []
+            if index < merchantSearchRows {
+                score += 60
+                reasons.append("レシートの上")
+            }
+            if row.text.contains("店") {
+                score += 40
+                reasons.append("店が付く")
+            }
+            // 大きい文字ほど店名らしい。ロゴが飛び抜けても効きすぎないよう頭を抑える。
+            let size = min(50, Int(30.0 * row.height / medianHeight))
+            score += size
+            reasons.append("文字の大きさ\(size)")
+            if (seen[row.text] ?? 0) >= 2 {
+                score += 30
+                reasons.append("2か所以上に出る")
+            }
+            return MerchantCandidate(
+                text: row.text,
+                rowIndex: index,
+                score: score,
+                reason: reasons.joined(separator: " / ")
+            )
         }
-
-        // なければ、上部で一番大きな文字の行。
-        // 同じ大きさが並んだときは、**レシートの上にあるほう**を選ぶ。
-        // 店名はいちばん上に刷られ、その下に案内書きが続くため。
-        var tallest: Row?
-        for candidate in candidates where candidate.height > (tallest?.height ?? -1) {
-            tallest = candidate
-        }
-        return cleanedMerchant(tallest?.text ?? candidates[0].text)
     }
 
     static func merchant(from lines: [String]) -> String {
@@ -241,74 +275,153 @@ enum ReceiptParser {
 
     // MARK: - いくら
 
+    /// 明細を探す範囲の終わり。ここより下は支払いの内訳なので品名は無い。
     private static func totalRowIndex(in rows: [Row]) -> Int? {
-        rows.lastIndex { isTotalRow($0) }
+        rows.lastIndex { row in
+            hasStrongTotalKeyword(row.text)
+                && !isNeverTotalRow(row.text)
+                && !isSideAmountRow(row.text)
+        }
     }
 
-    private static func isTotalRow(_ row: Row) -> Bool {
-        let lower = row.text.lowercased()
-        guard totalKeywords.contains(where: { lower.contains($0) }) else { return false }
-        return !notTotalKeywords.contains { lower.contains($0) }
+    /// 読めた明細の和と見比べて、合計としてありえる大きさか。
+    ///
+    /// 値引きがあると合計は明細の和より小さくなるので、少しは下を許す。
+    /// 桁がひとつ違うような候補だけを落とす。端末内のAIの答えもここで確かめる。
+    static func isConsistentWithItems(_ amount: Int, itemsTotal: Int?) -> Bool {
+        guard let itemsTotal, itemsTotal > 0 else { return true }
+        return Double(amount) >= Double(itemsTotal) * 0.6
+    }
+
+    /// 合計の候補。どの行のどの数字を、なぜ選んだか（選ばなかったか）を持つ。
+    struct TotalCandidate: Equatable, Sendable {
+        var amount: Int
+        var rowIndex: Int
+        var score: Int
+        var reason: String
+    }
+
+    /// 合計を示す語。いちばん強い手がかり。
+    private static let strongTotalKeywords = [
+        "合計", "総計", "お会計", "お支払", "支払合計", "ご請求", "現計", "お買上", "クレジット"
+    ]
+    /// 数字は載っているが支払額ではない行。**合計の語があっても**候補にしない。
+    private static let neverTotalKeywords = [
+        "点数", "買上点", "単価", "数量", "ポイント", "残高", "前回", "有効期限", "会員", "枚数"
+    ]
+    /// 税・値引き・預り金の行。合計の語が同じ行に無ければ候補にしない。
+    /// 「税込合計」のように合計の語がある行は残す。
+    private static let sideAmountKeywords = [
+        "税率", "対象額", "対象計", "消費税", "内税", "外税", "税額", "小計",
+        "値引", "割引", "お預り", "お預かり", "預り", "お釣", "おつり", "釣銭"
+    ]
+
+    private static func hasStrongTotalKeyword(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        return strongTotalKeywords.contains { lower.contains($0) } || lower.contains("total")
+    }
+
+    private static func isNeverTotalRow(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        return neverTotalKeywords.contains { lower.contains($0) }
+    }
+
+    private static func isSideAmountRow(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        return sideAmountKeywords.contains { lower.contains($0) }
+    }
+
+    /// 合計の候補を集めて点数をつける。
+    ///
+    /// **最大値でも最後の数字でもなく、点数のいちばん高いものを採る。**
+    /// レシートには金額と同じ形の数字が山ほどある（時刻・伝票番号・税額・単価）。
+    /// どれを外すかを先に決め、残ったものに手がかりの数で点をつける。
+    static func totalCandidates(in rows: [Row], itemsTotal: Int? = nil) -> [TotalCandidate] {
+        // 「合計」の語と金額が別の行に分かれて読まれることがある。
+        // 語の下で最初に金額が出てくる行にも、少し低い点を渡す。
+        var lookahead: Set<Int> = []
+        for index in rows.indices where hasStrongTotalKeyword(rows[index].text) {
+            guard amounts(in: rows[index].text).isEmpty else { continue }
+            var next = index + 1
+            while next < rows.count, next <= index + totalLookaheadRows {
+                let text = rows[next].text
+                if !isSideAmountRow(text), !isNeverTotalRow(text), !amounts(in: text).isEmpty {
+                    lookahead.insert(next)
+                    break
+                }
+                next += 1
+            }
+        }
+
+        var found: [(amount: Int, index: Int, marked: Bool)] = []
+        var seen: [Int: Int] = [:]
+        for (index, row) in rows.enumerated() {
+            let text = row.text
+            if looksLikePhoneNumber(text) || looksLikeDate(text) || looksLikeSerialNumber(text) {
+                continue
+            }
+            if isNeverTotalRow(text) { continue }
+            let strong = hasStrongTotalKeyword(text)
+            if !strong, isSideAmountRow(text) { continue }
+
+            let marked = currencyAmounts(in: text).filter(isPlausibleAmount)
+            let values = marked.isEmpty ? amounts(in: text).filter(isPlausibleAmount) : marked
+            for value in values {
+                found.append((value, index, !marked.isEmpty))
+                seen[value, default: 0] += 1
+            }
+        }
+
+        let lastIndex = max(rows.count - 1, 1)
+        return found.map { entry in
+            var score = 0
+            var reasons: [String] = []
+            if hasStrongTotalKeyword(rows[entry.index].text) {
+                score += 200
+                reasons.append("合計の語")
+            } else if lookahead.contains(entry.index) {
+                score += 170
+                reasons.append("合計の語の直下")
+            }
+            if entry.marked {
+                score += 40
+                reasons.append("通貨の印")
+            }
+            let depth = Int(30.0 * Double(entry.index) / Double(lastIndex))
+            score += depth
+            reasons.append("下から\(depth)")
+            if let itemsTotal, itemsTotal > 0 {
+                if entry.amount >= itemsTotal, Double(entry.amount) <= Double(itemsTotal) * 1.3 {
+                    score += 80
+                    reasons.append("明細の和と合う")
+                } else if Double(entry.amount) < Double(itemsTotal) * 0.6 {
+                    // 明細の和より桁がひとつ小さい。読み違いとみなす。
+                    score -= 250
+                    reasons.append("明細の和より小さすぎる")
+                }
+            }
+            if (seen[entry.amount] ?? 0) >= 2 {
+                score += 40
+                reasons.append("2か所以上に出る")
+            }
+            return TotalCandidate(
+                amount: entry.amount,
+                rowIndex: entry.index,
+                score: score,
+                reason: reasons.joined(separator: " / ")
+            )
+        }
     }
 
     static func totalAmount(from rows: [Row], itemsTotal: Int? = nil) -> Int? {
-        if let index = totalRowIndex(in: rows) {
-            // 「合計」は大きく刷られることが多く、語と金額が別の行として
-            // 読まれることがある。同じ行に無ければ下の行も見る。
-            //
-            // ただし、あいだに税率の行が挟まることがある。パン屋のレシートで
-            // 「合計」の次が「(税率 8%対象額」になり、そこから 8 を拾って
-            // ¥8 と記録した。税の内訳の行は飛ばして、金額のある行まで数行だけ探す。
-            var candidates = amounts(in: rows[index].text)
-            var lookahead = index + 1
-            while candidates.isEmpty, lookahead < rows.count, lookahead <= index + totalLookaheadRows {
-                let text = rows[lookahead].text
-                lookahead += 1
-                if isTaxDetailRow(text) { continue }
-                candidates = amounts(in: text)
-            }
-            // 明細が読めているなら、合計がその和を大きく下回ることはない。
-            // 下回る候補は読み違いなので、下の一般の探索にまかせる。
-            if let amount = candidates.filter({ isPlausibleAmount($0) }).max(),
-               isConsistentWithItems(amount, itemsTotal: itemsTotal) {
-                return amount
-            }
-        }
-
-        // 合計が読めなかった場合。「合計」が大きく刷られていると、次の行の
-        // 「内税分消費税」まで巻き込んで1行になり、合計の行だと判定できなくなる。
-        //
-        // このとき単純な最大値を取ると、店番号や端末番号のほうが桁が大きいので
-        // 必ずそちらを拾う（Selfixのレシートで店番号 SS-38125 を合計にしていた）。
-        // ¥ の付いた数字があれば、それだけを見る。番号に通貨の印は付かない。
-        let usable = Array(rows.enumerated()).filter { pair in
-            !looksLikePhoneNumber(pair.element.text)
-                && !looksLikeDate(pair.element.text)
-                && !looksLikeSerialNumber(pair.element.text)
-        }
-        let marked = usable.flatMap { pair in
-            currencyAmounts(in: pair.element.text)
-                .filter(isPlausibleAmount)
-                .map { (index: pair.offset, amount: $0) }
-        }
-        let plain = usable.flatMap { pair in
-            amounts(in: pair.element.text)
-                .filter(isPlausibleAmount)
-                .map { (index: pair.offset, amount: $0) }
-        }
-        let numbered = marked.isEmpty ? plain : marked
-        guard !numbered.isEmpty else { return nil }
-
-        // 明細が読めているなら、合計はその和以上で、税を足しても大きくは離れない。
-        // 条件に合うもののうち、レシートの下にあるものほど合計らしい。
-        if let itemsTotal, itemsTotal > 0 {
-            let upperBound = Int(Double(itemsTotal) * 1.3)
-            let plausible = numbered.filter { $0.amount >= itemsTotal && $0.amount <= upperBound }
-            if let best = plausible.max(by: { $0.index < $1.index }) {
-                return best.amount
-            }
-        }
-        return numbered.map(\.amount).max()
+        let candidates = totalCandidates(in: rows, itemsTotal: itemsTotal)
+        logCandidates("合計", candidates.map { ("\($0.amount)", $0.score, $0.reason) })
+        guard let best = candidates.max(by: { lhs, rhs in
+            // 点数が同じなら大きいほうを採る。合計は明細より小さくならない。
+            (lhs.score, lhs.amount) < (rhs.score, rhs.amount)
+        }) else { return nil }
+        logChoice("合計", "\(best.amount)", best.score, best.reason)
+        return best.amount
     }
 
     static func totalAmount(from lines: [String]) -> Int? {
@@ -317,22 +430,6 @@ enum ReceiptParser {
 
     /// 「合計」の語から下へ何行まで金額を探すか。
     private static let totalLookaheadRows = 3
-
-    /// 税率や内訳だけの行。合計の金額はここには無い。
-    private static func isTaxDetailRow(_ text: String) -> Bool {
-        let lower = text.lowercased()
-        return ["税率", "対象額", "対象計", "消費税", "内税", "外税", "税額"]
-            .contains { lower.contains($0) }
-    }
-
-    /// 読めた明細の和と見比べて、合計としてありえる大きさか。
-    ///
-    /// 値引きがあると合計は明細の和より小さくなるので、少しは下を許す。
-    /// 桁がひとつ違うような候補だけを落とす。
-    private static func isConsistentWithItems(_ amount: Int, itemsTotal: Int?) -> Bool {
-        guard let itemsTotal, itemsTotal > 0 else { return true }
-        return Double(amount) >= Double(itemsTotal) * 0.6
-    }
 
     /// レシート番号や伝票番号の行。金額と桁が近く紛らわしい。
     private static func looksLikeSerialNumber(_ text: String) -> Bool {
@@ -537,7 +634,12 @@ enum ReceiptParser {
         // 外食の語を含みうる名前は、ここに明示して取り戻す。
         (.groceries, [
             "スーパー", "食品", "コンビニ", "market", "mart", "ローソン", "セブン",
-            "ファミリーマート", "マックスバリュ", "イオン", "業務スーパー", "青果", "精肉", "鮮魚"
+            "ファミリーマート", "マックスバリュ", "イオン", "業務スーパー", "青果", "精肉", "鮮魚",
+            "コノミヤ", "バロー", "アピタ", "ヤオコー", "ライフ", "西友", "サミット", "生協", "コープ",
+            // 買ったものの名前。店名で決まらないときの二段目に効く。
+            // **スーパーにしか無いもの**を選んである。外食の店にも出るものは入れない。
+            "牛乳", "たまご", "野菜", "豆腐", "納豆", "ヨーグルト", "しめじ", "ほうれん草",
+            "キャベツ", "にんじん", "玉ねぎ", "食パン", "バナナ", "生クリーム", "ベーコン"
         ]),
         (.entertainment, ["映画", "シネマ", "カラオケ", "チケット"])
     ]
@@ -578,6 +680,29 @@ enum ReceiptParser {
         return best?.category
     }
 
+    // MARK: - 何を見て決めたか（DEBUGのみ）
+
+    /// 候補と点数を出す。実機で外したとき、何を見て決めたかを追えるようにする。
+    /// 配信するビルドでは1行も出ない。
+    private static func logCandidates(_ label: String, _ entries: [(String, Int, String)]) {
+        #if DEBUG
+        guard !entries.isEmpty else {
+            print("[レシート解析] \(label): 候補なし")
+            return
+        }
+        print("[レシート解析] \(label) の候補 \(entries.count)件")
+        for entry in entries.sorted(by: { $0.1 > $1.1 }) {
+            print("  \(entry.1)点  \(entry.0)  ← \(entry.2)")
+        }
+        #endif
+    }
+
+    private static func logChoice(_ label: String, _ value: String, _ score: Int, _ reason: String) {
+        #if DEBUG
+        print("[レシート解析] \(label) は「\(value)」に決めた（\(score)点 / \(reason)）")
+        #endif
+    }
+
     // MARK: - 文字の判定
 
     /// 数字と通貨記号だけを揃える。文字列全体を半角化すると、
@@ -598,7 +723,20 @@ enum ReceiptParser {
                 result.append(character)
             }
         }
-        return result
+        return joinedThousands(result)
+    }
+
+    /// 桁区切りのカンマが **ピリオド** として読まれたものをつなぐ。
+    ///
+    /// コノミヤのレシートで `¥3,374` が `¥3. 374` と読まれ、3 と 374 に割れて
+    /// 合計が3円になった。**3桁ちょうどが続くときだけ**つなぐので、
+    /// 給油量の `19.12` や `0.5` のような本当の小数には触らない。
+    private static func joinedThousands(_ text: String) -> String {
+        text.replacingOccurrences(
+            of: #"(?<=[0-9])\.[ 　]?(?=[0-9]{3}(?![0-9]))"#,
+            with: "",
+            options: .regularExpression
+        )
     }
 
     /// 数字の並びから金額を拾う。
@@ -627,6 +765,7 @@ enum ReceiptParser {
     /// ¥ や 円 の付いた数字だけを拾う。
     /// 店番号にも伝票番号にも通貨の印は付かないので、これだけで大半を落とせる。
     private static func currencyAmounts(in line: String) -> [Int] {
+        let line = joinedThousands(line)
         let patterns = [#"[¥￥]\s*([0-9,０-９，]{1,11})"#, #"([0-9,０-９，]{1,11})\s*円"#]
         var found: [Int] = []
         for pattern in patterns {

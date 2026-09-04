@@ -89,7 +89,9 @@ actor CloudKitSyncService {
         expenses: [Expense],
         incomes: [Income] = []
     ) async throws -> (CloudLocation, CKShare) {
-        guard try await accountStatus() == .available else {
+        let status = try await accountStatus()
+        log("iCloudアカウントの状態: \(status.rawValue)")
+        guard status == .available else {
             throw SyncError.iCloudUnavailable
         }
 
@@ -131,27 +133,81 @@ actor CloudKitSyncService {
         // 共有のURLはサーバー側で割り当てられ、こちらで作った `share` には入らない。
         // 以前はここで保存の戻り値を捨てて取り直していたが、取り直しが空を返すと
         // URLの無い手元の `share` をそのまま返してしまい、合言葉が発行できなかった。
-        let saved = try await modifyRecords(
-            saving: [rootRecord, share],
-            deleting: [],
-            in: database,
-            atomically: true
-        )
+        let saved: [CKRecord]
+        do {
+            saved = try await modifyRecords(
+                saving: [rootRecord, share],
+                deleting: [],
+                in: database,
+                atomically: true
+            )
+        } catch {
+            log("共有の作成", error: error)
+            throw error
+        }
+        log("共有を作った。返ってきたレコード \(saved.count)件")
         let savedShare = saved.compactMap { $0 as? CKShare }.first ?? share
         return (location, try await withShareURL(savedShare, in: database))
     }
 
-    /// 共有のURLが入った `CKShare` を返す。入っていなければ取り直す。
+    /// 共有のURLが入った `CKShare` を返す。
     ///
-    /// URLが無いと合言葉に載せるものが無く、相手は参加できない。
-    /// どうしても取れないときは、**どこで詰まったかが分かる形で**失敗させる。
+    /// **URLはサーバーが「保存の応答」で渡すもので、レコードを読んだだけでは付いてこない。**
+    /// 実機で「共有のURLをiCloudから受け取れませんでした」と出たのはこれが理由だった。
+    /// 一度目の発行で共有そのものは出来ていたので、二度目からは「すでにある共有」の
+    /// 枝に入り、取り直したレコードにURLが無いまま失敗し続けていた。
+    ///
+    /// そこで、無ければ **もう一度保存して受け取り直す**。
     private func withShareURL(_ share: CKShare, in database: CKDatabase) async throws -> CKShare {
-        if share.url != nil { return share }
-        if let refetched = try await fetchRecord(share.recordID, from: database) as? CKShare,
-           refetched.url != nil {
+        if let url = share.url {
+            log("共有のURLは保存の応答から受け取った（\(url.host ?? "-")）")
+            return share
+        }
+
+        let refetched = try await fetchRecord(share.recordID, from: database) as? CKShare
+        if let refetched, refetched.url != nil {
+            log("共有のURLは読み直して受け取った")
             return refetched
         }
-        throw SyncError.inviteUnavailable("共有のURLをiCloudから受け取れませんでした")
+
+        // 読んでも付いてこないので、保存し直して応答から受け取る。
+        // 合言葉を知っている相手が参加できる形にそろえてから送る。
+        let target = refetched ?? share
+        target.publicPermission = .readWrite
+        let resaved = try await modifyRecords(
+            saving: [target],
+            deleting: [],
+            in: database,
+            atomically: false
+        )
+        if let saved = resaved.compactMap({ $0 as? CKShare }).first, saved.url != nil {
+            log("共有のURLは保存し直して受け取った")
+            return saved
+        }
+        throw SyncError.inviteUnavailable("共有を保存し直してもURLが返りませんでした")
+    }
+
+    /// 何が起きたかを開発中だけ残す。配信するビルドでは1行も出ない。
+    private nonisolated func log(_ message: @autoclosure () -> String) {
+        #if DEBUG
+        print("[共有] \(message())")
+        #endif
+    }
+
+    /// CloudKitの失敗を、番号と中身つきで残す。「URLがnilだった」で終わらせない。
+    private nonisolated func log(_ label: String, error: Error) {
+        #if DEBUG
+        if let cloudError = error as? CKError {
+            print("[共有] \(label) が失敗: CKError \(cloudError.errorCode) \(cloudError.localizedDescription)")
+            if let partial = cloudError.partialErrorsByItemID, !partial.isEmpty {
+                for (id, inner) in partial {
+                    print("[共有]   \(id): \(inner.localizedDescription)")
+                }
+            }
+        } else {
+            print("[共有] \(label) が失敗: \(error.localizedDescription)")
+        }
+        #endif
     }
 
     func acceptShare(_ metadata: CKShare.Metadata) async throws -> CloudLocation {
