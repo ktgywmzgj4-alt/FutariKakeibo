@@ -22,7 +22,8 @@ actor CloudKitSyncService {
         case missingRootRecord
         case invalidRecord(String)
         case shareNotAccepted
-        case inviteUnavailable
+        /// 合言葉を出すところまで行けなかった。どこで詰まったかを文字で持つ。
+        case inviteUnavailable(String)
         case inviteNotFound
         case inviteExpired
         case receiptImageMissing
@@ -37,8 +38,8 @@ actor CloudKitSyncService {
                 "iCloud上のデータ（\(name)）を読み取れませんでした。"
             case .shareNotAccepted:
                 "共有への参加を完了できませんでした。"
-            case .inviteUnavailable:
-                "合言葉を発行できませんでした。通信の状態を確かめて、もう一度お試しください。"
+            case let .inviteUnavailable(reason):
+                "合言葉を発行できませんでした。通信の状態を確かめて、もう一度お試しください。\n（\(reason)）"
             case .inviteNotFound:
                 "その合言葉は見つかりませんでした。入力を確かめるか、相手にもう一度発行してもらってください。"
             case .inviteExpired:
@@ -116,21 +117,41 @@ actor CloudKitSyncService {
                 // すでに共有されている印はあるのに、その共有が読めなかった。
                 // ここで新しい CKShare を作ると同じレコードを二重に共有することになり、
                 // CloudKit が例外を投げてアプリごと落ちる。作らずに引き返す。
-                throw SyncError.inviteUnavailable
+                throw SyncError.inviteUnavailable("いまある共有を読み直せませんでした")
             }
-            return (location, existingShare)
+            return (location, try await withShareURL(existingShare, in: database))
         }
 
         let share = CKShare(rootRecord: rootRecord)
         share[CKShare.SystemFieldKey.title] = "ふたり家計簿" as CKRecordValue
         // 合言葉を知っている相手が参加できるようにする。合言葉は期限つきの使い切り。
         share.publicPermission = .readWrite
-        try await modifyRecords(saving: [rootRecord, share], deleting: [], in: database, atomically: true)
-        // 共有のURLはサーバー側で割り当てられる。合言葉に載せるため、保存後に取り直す。
-        if let saved = try await fetchRecord(share.recordID, from: database) as? CKShare {
-            return (location, saved)
+
+        // **保存したときにサーバーが返す CKShare を使う。**
+        // 共有のURLはサーバー側で割り当てられ、こちらで作った `share` には入らない。
+        // 以前はここで保存の戻り値を捨てて取り直していたが、取り直しが空を返すと
+        // URLの無い手元の `share` をそのまま返してしまい、合言葉が発行できなかった。
+        let saved = try await modifyRecords(
+            saving: [rootRecord, share],
+            deleting: [],
+            in: database,
+            atomically: true
+        )
+        let savedShare = saved.compactMap { $0 as? CKShare }.first ?? share
+        return (location, try await withShareURL(savedShare, in: database))
+    }
+
+    /// 共有のURLが入った `CKShare` を返す。入っていなければ取り直す。
+    ///
+    /// URLが無いと合言葉に載せるものが無く、相手は参加できない。
+    /// どうしても取れないときは、**どこで詰まったかが分かる形で**失敗させる。
+    private func withShareURL(_ share: CKShare, in database: CKDatabase) async throws -> CKShare {
+        if share.url != nil { return share }
+        if let refetched = try await fetchRecord(share.recordID, from: database) as? CKShare,
+           refetched.url != nil {
+            return refetched
         }
-        return (location, share)
+        throw SyncError.inviteUnavailable("共有のURLをiCloudから受け取れませんでした")
     }
 
     func acceptShare(_ metadata: CKShare.Metadata) async throws -> CloudLocation {
@@ -165,7 +186,7 @@ actor CloudKitSyncService {
             _ = try await saveRecord(record, to: database)
             return ShareInvite(code: code, shareURL: shareURL, expiresAt: expiresAt)
         }
-        throw SyncError.inviteUnavailable
+        throw SyncError.inviteUnavailable("合言葉が作れませんでした")
     }
 
     func resolveInvite(code: String) async throws -> ShareInvite {
@@ -741,20 +762,37 @@ actor CloudKitSyncService {
         }
     }
 
+    /// レコードをまとめて保存し、**サーバーが返したレコードをそのまま返す**。
+    ///
+    /// 共有（`CKShare`）のURLのように、値をサーバー側が決める項目がある。
+    /// 保存の戻り値を捨てると、その値を受け取れない。
+    @discardableResult
     private func modifyRecords(
         saving records: [CKRecord],
         deleting recordIDs: [CKRecord.ID],
         in database: CKDatabase,
         atomically: Bool
-    ) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+    ) async throws -> [CKRecord] {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[CKRecord], Error>) in
             let operation = CKModifyRecordsOperation(recordsToSave: records, recordIDsToDelete: recordIDs)
             // 保存の仕方は既定（サーバー側が変わっていなければ保存する）のままにする。
             // ここを通るのは共有（CKShare）の作成だけで、CKShareの保存に
             // `.changedKeys` は使えない。
             operation.isAtomic = atomically
+
+            let saved = LockedState<[CKRecord]>([])
+            operation.perRecordSaveBlock = { _, result in
+                if case let .success(record) = result {
+                    saved.withLock { $0.append(record) }
+                }
+            }
             operation.modifyRecordsResultBlock = { result in
-                continuation.resume(with: result)
+                switch result {
+                case .success:
+                    continuation.resume(returning: saved.withLock { $0 })
+                case let .failure(error):
+                    continuation.resume(throwing: error)
+                }
             }
             database.add(operation)
         }

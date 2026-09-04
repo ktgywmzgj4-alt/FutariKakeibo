@@ -570,7 +570,7 @@ final class AppStore: ObservableObject {
             await persistLocally()
 
             guard let url = result.1.url else {
-                throw CloudKitSyncService.SyncError.inviteUnavailable
+                throw CloudKitSyncService.SyncError.inviteUnavailable("共有のURLが空でした")
             }
             shareInvite = try await cloudService.publishInvite(shareURL: url)
             syncState = .synced(.now)

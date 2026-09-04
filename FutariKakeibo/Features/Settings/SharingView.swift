@@ -43,18 +43,39 @@ struct SharingView: View {
 
     private var stateCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label(store.syncState.label, systemImage: isShared ? "checkmark.icloud.fill" : "iphone")
+            // 印と色は**同期の状態**に合わせる。共有しているかどうかで決めていたため、
+            // 「同期できませんでした」の横に緑のチェックが出ていた。
+            Label(store.syncState.label, systemImage: stateIcon)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(isShared ? AppTheme.positive : AppTheme.secondaryText)
+                .foregroundStyle(stateColor)
 
+            // iCloudに置いてあることと、相手が参加済みであることは別。
+            // 誰も招いていないうちから「2人で共有しています」と言わない。
             Text(isShared
-                 ? "この家計簿は2人で共有しています。どちらが記録しても、もう一方の端末に届きます。"
+                 ? "この家計簿はiCloudに保存されています。合言葉を伝えた相手が参加すると、どちらが記録してももう一方の端末に届きます。"
                  : "いまはこのiPhoneの中だけに保存しています。合言葉を発行すると、相手と同じ家計簿を使えます。")
                 .font(.footnote)
                 .foregroundStyle(AppTheme.secondaryText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .appCard()
+    }
+
+    private var stateIcon: String {
+        switch store.syncState {
+        case .localOnly: "iphone"
+        case .syncing: "arrow.triangle.2.circlepath.icloud"
+        case .synced: "checkmark.icloud.fill"
+        case .failed: "exclamationmark.icloud.fill"
+        }
+    }
+
+    private var stateColor: Color {
+        switch store.syncState {
+        case .localOnly, .syncing: AppTheme.secondaryText
+        case .synced: AppTheme.positive
+        case .failed: AppTheme.danger
+        }
     }
 
     private var inviteCard: some View {

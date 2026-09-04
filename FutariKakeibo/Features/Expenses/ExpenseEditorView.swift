@@ -423,7 +423,7 @@ struct ExpenseEditorView: View {
             }
 
             field("内容") {
-                TextField("例：ガソリン（空欄なら店名を使います）", text: $title)
+                TextField("例：ガソリン", text: $title)
                     .textInputAutocapitalization(.never)
                     .focused($focusedField, equals: .title)
             }
