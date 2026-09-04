@@ -1,8 +1,9 @@
 import Foundation
 
 struct AppSnapshot: Codable, Sendable {
-    // v2でカテゴリ別予算と定期支出、v3で収入を追加した。古いファイルはそのまま読み込める。
-    static let currentSchemaVersion = 3
+    // v2でカテゴリ別予算と定期支出、v3で収入、v4でレシート画像の送信待ちを追加した。
+    // 古いファイルはそのまま読み込める。
+    static let currentSchemaVersion = 4
 
     var schemaVersion: Int
     var household: Household?
@@ -11,6 +12,11 @@ struct AppSnapshot: Codable, Sendable {
     var incomes: [Income]
     var deletedExpenseIDs: [UUID: Date]
     var deletedIncomeIDs: [UUID: Date]
+    /// まだiCloudへ送れていないレシート画像のID。
+    ///
+    /// 端末内が唯一の原本なので、容量の整理で消してはいけない目印にもなる。
+    /// 送れたら消す。共有していないときは、ここに入ったまま残る。
+    var pendingReceiptImageIDs: [UUID]
 
     init(
         schemaVersion: Int = Self.currentSchemaVersion,
@@ -19,7 +25,8 @@ struct AppSnapshot: Codable, Sendable {
         expenses: [Expense] = [],
         incomes: [Income] = [],
         deletedExpenseIDs: [UUID: Date] = [:],
-        deletedIncomeIDs: [UUID: Date] = [:]
+        deletedIncomeIDs: [UUID: Date] = [:],
+        pendingReceiptImageIDs: [UUID] = []
     ) {
         self.schemaVersion = schemaVersion
         self.household = household
@@ -28,6 +35,7 @@ struct AppSnapshot: Codable, Sendable {
         self.incomes = incomes
         self.deletedExpenseIDs = deletedExpenseIDs
         self.deletedIncomeIDs = deletedIncomeIDs
+        self.pendingReceiptImageIDs = pendingReceiptImageIDs
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -38,6 +46,7 @@ struct AppSnapshot: Codable, Sendable {
         case incomes
         case deletedExpenseIDs
         case deletedIncomeIDs
+        case pendingReceiptImageIDs
     }
 
     init(from decoder: Decoder) throws {
@@ -49,5 +58,6 @@ struct AppSnapshot: Codable, Sendable {
         incomes = try container.decodeIfPresent([Income].self, forKey: .incomes) ?? []
         deletedExpenseIDs = try container.decodeIfPresent([UUID: Date].self, forKey: .deletedExpenseIDs) ?? [:]
         deletedIncomeIDs = try container.decodeIfPresent([UUID: Date].self, forKey: .deletedIncomeIDs) ?? [:]
+        pendingReceiptImageIDs = try container.decodeIfPresent([UUID].self, forKey: .pendingReceiptImageIDs) ?? []
     }
 }

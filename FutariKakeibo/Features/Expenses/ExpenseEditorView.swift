@@ -25,6 +25,12 @@ struct ExpenseEditorView: View {
     @State private var detectedItems: [ReceiptItem] = []
     /// レシートから読み取ったときの店の鍵。保存できたらこの店を覚える。
     @State private var shopKey: String?
+    /// 読み取りのあとに残す、保存用の小さな画像。原寸はここには入らない。
+    @State private var capturedReceipt: ReceiptImageData?
+    /// レシート画像を保存するかどうか。基本はON。人が外せる。
+    @State private var shouldSaveReceipt = true
+    @State private var isShowingReceipt = false
+    @State private var isDeletingReceipt = false
     @State private var validationMessage: String?
     @FocusState private var focusedField: Field?
 
@@ -52,6 +58,7 @@ struct ExpenseEditorView: View {
         ScrollView {
             VStack(spacing: AppTheme.cardSpacing) {
                 receiptCard
+                savedReceiptCard
                 detectedItemsCard
                 expenseFields
 
@@ -135,6 +142,20 @@ struct ExpenseEditorView: View {
             Button("閉じる", role: .cancel) { validationMessage = nil }
         } message: {
             Text(validationMessage ?? "")
+        }
+        .sheet(isPresented: $isShowingReceipt) {
+            if let expense = storedExpense {
+                ReceiptImageViewer(expense: expense)
+            }
+        }
+        .alert("レシート画像を削除しますか？", isPresented: $isDeletingReceipt) {
+            Button("キャンセル", role: .cancel) { isDeletingReceipt = false }
+            Button("削除", role: .destructive) {
+                guard let expense = storedExpense else { return }
+                Task { await store.removeReceiptImage(from: expense.id) }
+            }
+        } message: {
+            Text("支出の記録は残ります。共有中の場合は、相手の端末からも見られなくなります。")
         }
     }
 
@@ -222,8 +243,9 @@ struct ExpenseEditorView: View {
                     Text(isRecognizing ? "レシートを読み取り中…" : "レシートから入力")
                         .font(.headline)
                         .foregroundStyle(AppTheme.ink)
-                    // 実装の実態に合わせた文言。端末の外へは出さない。
-                    Text("画像は保存・送信せず、このiPhone内で処理します")
+                    // 実装の実態に合わせた文言。文字の読み取りは端末の中で終わる。
+                    // 画像を残すかどうかは、読み取ったあとに下のスイッチで選ぶ。
+                    Text("読み取りはこのiPhone内だけで行います")
                         .font(.caption)
                         .foregroundStyle(AppTheme.secondaryText)
                 }
@@ -253,8 +275,99 @@ struct ExpenseEditorView: View {
                 .disabled(isRecognizing)
                 .accessibilityHint("保存済みの写真からレシートを選びます")
             }
+
+            if capturedReceipt != nil {
+                Divider().overlay(AppTheme.line)
+                receiptSaveToggle
+            }
         }
         .appCard()
+    }
+
+    /// 読み取ったレシートの画像を残すかどうか。基本はON。
+    ///
+    /// ここに来る画像はすでに縮小・圧縮済みで、原寸ではない。
+    @ViewBuilder
+    private var receiptSaveToggle: some View {
+        if let capturedReceipt {
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle(isOn: $shouldSaveReceipt) {
+                    Text("レシート画像を保存")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AppTheme.ink)
+                }
+                .tint(AppTheme.accent)
+
+                Text(receiptSaveCaption(for: capturedReceipt))
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func receiptSaveCaption(for image: ReceiptImageData) -> String {
+        guard shouldSaveReceipt else {
+            return "保存しません。読み取った内容だけが記録されます。"
+        }
+        let size = Int64(image.byteCount).formatted(.byteCount(style: .file))
+        return "あとで見返せるよう、縮小した1枚（およそ\(size)）を保存します。"
+            + "共有中は相手も同じレシートを見られます。"
+    }
+
+    /// 保存済みのレシート。この画面は支出の詳細も兼ねているので、ここから見られるようにする。
+    @ViewBuilder
+    private var savedReceiptCard: some View {
+        if let expense = storedExpense, expense.hasReceiptImage {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("レシート", systemImage: "doc.text.image")
+                    .font(.headline)
+                    .foregroundStyle(AppTheme.ink)
+
+                Text("この支出にはレシート画像が付いています。")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+
+                HStack(spacing: 10) {
+                    Button {
+                        isShowingReceipt = true
+                    } label: {
+                        Label("レシートを見る", systemImage: "eye")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .foregroundStyle(.white)
+                            .background(AppTheme.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        isDeletingReceipt = true
+                    } label: {
+                        Label("削除", systemImage: "trash")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .foregroundStyle(AppTheme.danger)
+                            .background(AppTheme.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(AppTheme.line, lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .appCard()
+        }
+    }
+
+    /// いま編集している支出の、保存されている姿。レシートを消した直後もここに反映される。
+    private var storedExpense: Expense? {
+        guard let originalExpense else { return nil }
+        return store.expenses.first { $0.id == originalExpense.id } ?? originalExpense
     }
 
     private func sourceLabel(title: String, caption: String, systemImage: String) -> some View {
@@ -411,6 +524,12 @@ struct ExpenseEditorView: View {
             defer { isRecognizing = false }
             do {
                 let lines = try await ReceiptRecognizer.recognize(images: images)
+                // 読み取りは済んだ。保存するのはここで作る縮小した1枚だけで、
+                // 原寸の画像はこの処理を抜けたら誰も持たない。
+                if let original = images.first {
+                    capturedReceipt = await ReceiptImageProcessor.process(image: original)
+                    shouldSaveReceipt = true
+                }
                 // 端末の中のAIが使えるならAIに、使えなければルールに読ませる。
                 // どちらの場合も、文字は端末の外へ出ない。
                 let draft = await ReceiptInterpreter.interpret(lines: lines)
@@ -483,6 +602,11 @@ struct ExpenseEditorView: View {
                 )
             }
 
+            // レシート画像は支出とは別に保存する。支出データに入るのは参照だけ。
+            if shouldSaveReceipt, let capturedReceipt {
+                await store.attachReceiptImage(capturedReceipt, to: expense.id)
+            }
+
             if let onSaved {
                 resetForm()
                 onSaved()
@@ -503,5 +627,7 @@ struct ExpenseEditorView: View {
         recognizedText = ""
         detectedItems = []
         shopKey = nil
+        capturedReceipt = nil
+        shouldSaveReceipt = true
     }
 }

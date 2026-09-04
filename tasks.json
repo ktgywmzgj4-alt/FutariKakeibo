@@ -119,6 +119,38 @@
       "evidence": "2026-09-03 人間がB案（端末内のAI）を選択。外部への送信をしないため、プライバシーポリシーの改訂は不要。実装はPR #17。クラウドAI（案C）は当面見送り",
       "dependencies": [],
       "notes": "レシートの文字を外部へ送るなら、利用者への約束（画像も文字も端末の外へ出さない）が変わる。コードより先に、この判断が要る"
+    },
+    {
+      "id": "T-010",
+      "task": "レシート画像を保管できるようにする",
+      "status": "review",
+      "owner": "実行役",
+      "passes": "支出に receiptImageID だけを持たせ、画像は別ファイルとCloudKitの ReceiptImage（CKAsset）に置く。一覧はiCloudへ取りに行かない。支出を消すと画像も消える。bash scripts/check_all.sh とCIのテストが全件通る",
+      "evidence": "CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/33836587968 → test ジョブ success (8分41秒)、Executed 102 tests, with 0 failures（新規10件を含む。mainは92件だった）。手元: bash scripts/check_all.sh 全5項目OK。PR #23。実機での動作は未確認（T-012）",
+      "dependencies": [],
+      "notes": "原寸は読み取り後に破棄し、長辺1600px・JPEG 0.7の1枚（数百KB）と長辺240pxの縮小画像だけを残す。まだ送れていない画像は pendingReceiptImageIDs に残し、容量整理でも消さない（端末内が唯一の原本のため）"
+    },
+    {
+      "id": "T-011",
+      "task": "レシート画像の保管に合わせて、利用者への約束を書き直す",
+      "status": "blocked",
+      "owner": "人間",
+      "blocked_by": "AIは Docs/safety.md と Docs/requirements.md を書き換えられない（両ファイルにその決まりが書いてある）",
+      "passes": "Docs/safety.md の「利用者への約束」1番と Docs/requirements.md の N1 が、いまのコードの動き（画像を縮小して保存し、共有中は相手も見られる）と一致している",
+      "evidence": "",
+      "dependencies": ["T-010"],
+      "notes": "アプリ内の説明文（レシートカード・データとプライバシー画面）とREADMEはT-010で先に直してある。公開用プライバシーポリシーにも保存期間と削除方法の記載が要る（Docs/PRIVACY_POLICY_REQUIREMENTS.md）"
+    },
+    {
+      "id": "T-012",
+      "task": "レシート画像の保管を実機で確かめる",
+      "status": "blocked",
+      "owner": "人間 + 検品役",
+      "blocked_by": "TestFlightへの配信が必要。配信は人間の承認が要る（Docs/safety.md）",
+      "passes": "レシートを撮って保存 → 一覧にレシートの印が出る → 詳細で「レシートを見る」から拡大表示できる → 支出を削除すると画像も消える、のスクリーンショット。2台での共有確認はT-002の後",
+      "evidence": "",
+      "dependencies": ["T-010"],
+      "notes": "機内モードでの表示（読み込み中と読み込めなかったの出方）と、支出が多いときの一覧のなめらかさも見ること"
     }
   ]
 }

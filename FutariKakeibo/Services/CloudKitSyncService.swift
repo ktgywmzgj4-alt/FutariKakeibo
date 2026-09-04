@@ -25,6 +25,7 @@ actor CloudKitSyncService {
         case inviteUnavailable
         case inviteNotFound
         case inviteExpired
+        case receiptImageMissing
 
         var errorDescription: String? {
             switch self {
@@ -42,6 +43,8 @@ actor CloudKitSyncService {
                 "その合言葉は見つかりませんでした。入力を確かめるか、相手にもう一度発行してもらってください。"
             case .inviteExpired:
                 "この合言葉は期限が切れています。相手にもう一度発行してもらってください。"
+            case .receiptImageMissing:
+                "レシート画像をiCloudから取得できませんでした。通信の状態を確かめて、もう一度お試しください。"
             }
         }
     }
@@ -349,6 +352,92 @@ actor CloudKitSyncService {
         _ = try await saveRecord(record, to: database)
     }
 
+    // MARK: - レシート画像
+
+    /// レシート画像を1枚、家計と同じゾーンへ置く。
+    ///
+    /// 画像は `CKAsset`（別置きのファイル）として持つ。支出のレコードには入れない。
+    /// こうすると支出の読み書きは軽いままで、画像は見るときだけ落ちてくる。
+    /// 親を家計のレコードにしてあるので、共有に参加した相手も同じ画像を見られる。
+    func saveReceiptImage(
+        id: UUID,
+        expenseID: UUID,
+        displayFileURL: URL,
+        thumbnailFileURL: URL?,
+        household: Household
+    ) async throws {
+        guard let location = household.cloudLocation else { return }
+        let database = database(for: location)
+        let rootID = CKRecord.ID(recordName: location.rootRecordName, zoneID: zoneID(for: location))
+        let recordID = receiptRecordID(for: id, at: location)
+        let record = try await fetchRecord(recordID, from: database)
+            ?? CKRecord(recordType: RecordType.receiptImage, recordID: recordID)
+
+        // レシート画像は撮ったあと変わらない。すでに載っているなら送り直さない。
+        if record["asset"] as? CKAsset != nil { return }
+
+        record.parent = CKRecord.Reference(recordID: rootID, action: .deleteSelf)
+        record["id"] = id.uuidString as CKRecordValue
+        record["expenseID"] = expenseID.uuidString as CKRecordValue
+        record["asset"] = CKAsset(fileURL: displayFileURL)
+        if let thumbnailFileURL {
+            record["thumbnail"] = CKAsset(fileURL: thumbnailFileURL)
+        }
+        record["createdAt"] = Date.now as CKRecordValue
+        _ = try await saveRecord(record, to: database)
+    }
+
+    /// 相手が撮ったレシートを取ってくる。詳細画面を開いたときだけ呼ばれる。
+    func fetchReceiptImage(
+        id: UUID,
+        expenseID: UUID,
+        household: Household
+    ) async throws -> (display: Data, thumbnail: Data?) {
+        guard let location = household.cloudLocation else {
+            throw SyncError.receiptImageMissing
+        }
+        let database = database(for: location)
+        guard let record = try await fetchRecord(receiptRecordID(for: id, at: location), from: database) else {
+            throw SyncError.receiptImageMissing
+        }
+        // 別の支出の画像を取り違えない。
+        if let owner = record["expenseID"] as? String, owner != expenseID.uuidString {
+            throw SyncError.receiptImageMissing
+        }
+        guard
+            let asset = record["asset"] as? CKAsset,
+            let fileURL = asset.fileURL,
+            let display = try? Data(contentsOf: fileURL)
+        else {
+            throw SyncError.receiptImageMissing
+        }
+        let thumbnail = (record["thumbnail"] as? CKAsset)?.fileURL
+            .flatMap { try? Data(contentsOf: $0) }
+        return (display, thumbnail)
+    }
+
+    /// 支出を消したときに、その支出の画像も消す。
+    ///
+    /// 画像のIDは撮るたびに新しく作られ、**支出1件からしか参照されない**。
+    /// レコード名にそのIDが入っているので、ここで消して相手の別の画像に当たることはない。
+    func deleteReceiptImage(id: UUID, expenseID: UUID, household: Household) async throws {
+        guard let location = household.cloudLocation else { return }
+        let database = database(for: location)
+        do {
+            try await deleteRecord(receiptRecordID(for: id, at: location), from: database)
+        } catch let error as CKError where error.code == .unknownItem {
+            // もう無いなら、それでよい。
+            return
+        }
+    }
+
+    private func receiptRecordID(for id: UUID, at location: CloudLocation) -> CKRecord.ID {
+        CKRecord.ID(
+            recordName: "receipt-\(id.uuidString.lowercased())",
+            zoneID: zoneID(for: location)
+        )
+    }
+
     // MARK: - Record mapping
 
     private enum RecordType {
@@ -356,6 +445,7 @@ actor CloudKitSyncService {
         static let expense = "Expense"
         static let income = "Income"
         static let shareInvite = "ShareInvite"
+        static let receiptImage = "ReceiptImage"
     }
 
     private func upsertHousehold(
@@ -416,6 +506,8 @@ actor CloudKitSyncService {
         record["splitMethod"] = expense.splitMethod.rawValue as CKRecordValue
         record["note"] = expense.note as CKRecordValue
         record["merchant"] = (expense.merchant ?? "") as CKRecordValue
+        // レシート画像そのものは別のレコード（ReceiptImage）にある。ここに持つのは参照だけ。
+        record["receiptImageID"] = (expense.receiptImageID?.uuidString ?? "") as CKRecordValue
         // 定期支出から作られた回かどうかは後から変わらないため、ある場合だけ書き込む。
         if let recurringID = expense.recurringID {
             record["recurringID"] = recurringID.uuidString as CKRecordValue
@@ -491,6 +583,7 @@ actor CloudKitSyncService {
             note: record["note"] as? String ?? "",
             merchant: record["merchant"] as? String,
             recurringID: (record["recurringID"] as? String).flatMap(UUID.init(uuidString:)),
+            receiptImageID: (record["receiptImageID"] as? String).flatMap(UUID.init(uuidString:)),
             createdAt: createdAt,
             updatedAt: updatedAt
         )

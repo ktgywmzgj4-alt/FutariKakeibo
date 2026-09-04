@@ -40,14 +40,18 @@ final class AppStore: ObservableObject {
 
     private let localStore: LocalSnapshotStore
     private let cloudService: CloudKitSyncService
+    /// レシート画像の出し入れ。画像は家計簿データとは別に持つ。
+    let receiptImages: ReceiptImageLibrary
     private var didLoad = false
 
     init(
         localStore: LocalSnapshotStore = LocalSnapshotStore(),
-        cloudService: CloudKitSyncService = CloudKitSyncService()
+        cloudService: CloudKitSyncService = CloudKitSyncService(),
+        receiptImages: ReceiptImageLibrary? = nil
     ) {
         self.localStore = localStore
         self.cloudService = cloudService
+        self.receiptImages = receiptImages ?? ReceiptImageLibrary(cloudService: cloudService)
     }
 
     var household: Household? { snapshot.household }
@@ -129,6 +133,7 @@ final class AppStore: ObservableObject {
             return
         }
         await applyRecurringExpenses()
+        tidyReceiptImages()
     }
 
     func createHousehold(selfName: String, partnerName: String, monthlyBudget: Int) async {
@@ -177,7 +182,20 @@ final class AppStore: ObservableObject {
         if snapshot.household?.cloudLocation != nil || expense.isRecurring {
             snapshot.deletedExpenseIDs[expense.id] = deletedAt
         }
+        if let imageID = expense.receiptImageID {
+            snapshot.pendingReceiptImageIDs.removeAll { $0 == imageID }
+        }
         await persistLocally()
+
+        // 支出と一緒に、その支出のレシート画像も消す。孤立した画像を残さない。
+        // 画像のIDは撮るたびに新しく作るので、この1枚が他の支出から使われることはない。
+        if let imageID = expense.receiptImageID {
+            await receiptImages.remove(
+                id: imageID,
+                expenseID: expense.id,
+                household: snapshot.household
+            )
+        }
 
         guard let household = snapshot.household, household.cloudLocation != nil else { return }
         do {
@@ -189,6 +207,125 @@ final class AppStore: ObservableObject {
             syncState = .synced(.now)
         } catch {
             syncState = .failed(error.localizedDescription)
+        }
+    }
+
+    // MARK: - レシート画像
+
+    /// 圧縮済みのレシート画像を支出に結びつける。
+    ///
+    /// 家計簿データに画像そのものは入れない。画像はファイルとして置き、
+    /// 支出にはIDだけを持たせる。共有していれば続けてiCloudへ送る。
+    /// 送れなくても記録は残り、`pendingReceiptImageIDs` に残して次の同期でやり直す。
+    func attachReceiptImage(_ image: ReceiptImageData, to expenseID: UUID) async {
+        guard snapshot.expenses.contains(where: { $0.id == expenseID }) else { return }
+
+        let imageID = UUID()
+        do {
+            try await receiptImages.attach(image, id: imageID)
+        } catch {
+            errorMessage = "レシート画像を保存できませんでした。支出のほうは保存されています。\n\(error.localizedDescription)"
+            return
+        }
+
+        // 端末へ書いているあいだに一覧が並び替わることがあるので、位置は取り直す。
+        guard let index = snapshot.expenses.firstIndex(where: { $0.id == expenseID }) else {
+            // その支出がもう無いなら、画像だけを残さない。
+            await receiptImages.remove(
+                id: imageID,
+                expenseID: expenseID,
+                household: snapshot.household
+            )
+            return
+        }
+        let previousImageID = snapshot.expenses[index].receiptImageID
+        snapshot.expenses[index].receiptImageID = imageID
+        snapshot.expenses[index].updatedAt = .now
+        snapshot.pendingReceiptImageIDs.append(imageID)
+        if let previousImageID {
+            snapshot.pendingReceiptImageIDs.removeAll { $0 == previousImageID }
+        }
+        let expense = snapshot.expenses[index]
+        await persistLocally()
+
+        // 撮り直した場合は、前の画像を残さない。
+        if let previousImageID {
+            await receiptImages.remove(
+                id: previousImageID,
+                expenseID: expenseID,
+                household: snapshot.household
+            )
+        }
+        await upload(expense)
+        await uploadReceiptImage(imageID, expenseID: expenseID)
+    }
+
+    /// 支出からレシート画像を外して消す。
+    func removeReceiptImage(from expenseID: UUID) async {
+        guard
+            let index = snapshot.expenses.firstIndex(where: { $0.id == expenseID }),
+            let imageID = snapshot.expenses[index].receiptImageID
+        else { return }
+
+        snapshot.expenses[index].receiptImageID = nil
+        snapshot.expenses[index].updatedAt = .now
+        snapshot.pendingReceiptImageIDs.removeAll { $0 == imageID }
+        let expense = snapshot.expenses[index]
+        await persistLocally()
+
+        await receiptImages.remove(
+            id: imageID,
+            expenseID: expenseID,
+            household: snapshot.household
+        )
+        await upload(expense)
+    }
+
+    /// 一覧で使う小さな画像。**端末内にあるものだけ**を返す。通信はしない。
+    func receiptThumbnail(for imageID: UUID) async -> Data? {
+        await receiptImages.thumbnail(for: imageID)
+    }
+
+    /// 詳細画面で見る画像。端末に無ければiCloudから取ってくる。
+    func receiptImage(for expense: Expense) async throws -> Data {
+        guard let imageID = expense.receiptImageID else {
+            throw ReceiptImageLibrary.LoadError.notStored
+        }
+        return try await receiptImages.display(
+            for: imageID,
+            expenseID: expense.id,
+            household: snapshot.household
+        )
+    }
+
+    /// 端末に置いてあるレシート画像の合計の大きさ。設定画面に出すときに使う。
+    func receiptImageBytes() async -> Int {
+        await receiptImages.totalBytes()
+    }
+
+    private func uploadReceiptImage(_ imageID: UUID, expenseID: UUID) async {
+        guard let household = snapshot.household, household.cloudLocation != nil else { return }
+        do {
+            syncState = .syncing
+            try await receiptImages.upload(id: imageID, expenseID: expenseID, household: household)
+            snapshot.pendingReceiptImageIDs.removeAll { $0 == imageID }
+            await persistLocally()
+            syncState = .synced(.now)
+        } catch {
+            // 画像を送れなくても支出は残る。次の同期でもう一度試す。
+            syncState = .failed(error.localizedDescription)
+        }
+    }
+
+    /// どの支出からも使われていない画像と、増えすぎた分を片付ける。
+    ///
+    /// 起動を待たせたくないので待ち合わせない。まだ送れていない画像は
+    /// この端末にしか無いので、容量の整理では消さない。
+    private func tidyReceiptImages() {
+        let keep = Set(snapshot.expenses.compactMap(\.receiptImageID))
+        let pending = Set(snapshot.pendingReceiptImageIDs)
+        Task { [receiptImages] in
+            await receiptImages.tidy(keeping: keep, protecting: pending)
         }
     }
 
@@ -536,6 +673,25 @@ final class AppStore: ObservableObject {
                 )
             }
 
+            // まだ送れていないレシート画像を送り直す。
+            for imageID in snapshot.pendingReceiptImageIDs {
+                guard let expense = snapshot.expenses.first(where: { $0.receiptImageID == imageID }) else {
+                    snapshot.pendingReceiptImageIDs.removeAll { $0 == imageID }
+                    continue
+                }
+                do {
+                    try await receiptImages.upload(
+                        id: imageID,
+                        expenseID: expense.id,
+                        household: household
+                    )
+                    snapshot.pendingReceiptImageIDs.removeAll { $0 == imageID }
+                } catch {
+                    // 1枚送れなくても、家計のデータの同期は止めない。次の同期でまた試す。
+                    continue
+                }
+            }
+
             let cloud = try await cloudService.fetchSnapshot(at: location)
             let deletions = snapshot.deletedExpenseIDs.merging(cloud.deletedExpenseIDs) {
                 max($0, $1)
@@ -580,6 +736,10 @@ final class AppStore: ObservableObject {
             if snapshot.selectedMemberID.flatMap({ mergedHousehold.member(id: $0) }) == nil {
                 snapshot.selectedMemberID = mergedHousehold.members.first?.id
             }
+
+            // 消えた支出のぶんは、もう送る必要がない。
+            let liveImageIDs = Set(snapshot.expenses.compactMap(\.receiptImageID))
+            snapshot.pendingReceiptImageIDs.removeAll { !liveImageIDs.contains($0) }
             await persistLocally()
             syncState = .synced(.now)
         } catch {
@@ -588,6 +748,7 @@ final class AppStore: ObservableObject {
 
         // 相手が追加したひな形の分も、この端末で計上しておく。
         await applyRecurringExpenses()
+        tidyReceiptImages()
     }
 
     func exportCSV() throws -> URL {
@@ -604,6 +765,7 @@ final class AppStore: ObservableObject {
     func eraseLocalData() async {
         do {
             try await localStore.deleteAll()
+            await receiptImages.removeAll()
             snapshot = AppSnapshot()
             syncState = .localOnly
         } catch {
