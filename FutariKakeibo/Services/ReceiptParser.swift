@@ -30,7 +30,10 @@ enum ReceiptParser {
     private static let notMerchantKeywords = [
         "領収", "レシート", "receipt", "合計", "小計", "電話", "tel",
         "登録番号", "責任者", "担当", "レジ", "no.", "様", "店舗", "住所", "取扱",
-        "www.", ".com", ".co.jp"
+        "www.", ".com", ".co.jp",
+        // 店の案内書き。店名の近くに刷られるので、外さないと店名として拾われる
+        // （マクドナルドのレシートで「営業時間 24時間営業」が店名になっていた）。
+        "営業時間", "時間営業", "定休", "駐車場のご案内", "ご来店"
     ]
     /// 店名の前に付いて一緒に読まれるラベル。店名ではないので落とす。
     /// 長いものから先に並べる（「登録名称」を「名称」より先に外す）。
@@ -149,7 +152,7 @@ enum ReceiptParser {
             amount: totalAmount(from: rows, itemsTotal: itemsTotal),
             date: receiptDate(from: rows, now: now, calendar: calendar),
             items: found,
-            suggestedCategory: category(from: recognizedText, merchant: shopName),
+            suggestedCategory: category(from: recognizedText, merchant: shopName, items: found),
             recognizedText: recognizedText,
             shopKey: MerchantKey.make(fromReceiptText: recognizedText, merchant: shopName)
         )
@@ -185,8 +188,11 @@ enum ReceiptParser {
         }
 
         // なければ、上部で一番大きな文字の行。
-        let tallest = candidates.max { lhs, rhs in
-            lhs.height < rhs.height
+        // 同じ大きさが並んだときは、**レシートの上にあるほう**を選ぶ。
+        // 店名はいちばん上に刷られ、その下に案内書きが続くため。
+        var tallest: Row?
+        for candidate in candidates where candidate.height > (tallest?.height ?? -1) {
+            tallest = candidate
         }
         return cleanedMerchant(tallest?.text ?? candidates[0].text)
     }
@@ -515,16 +521,43 @@ enum ReceiptParser {
         (.health, ["病院", "医院", "薬局", "クリニック", "歯科", "ドラッグ"]),
         (.beauty, ["美容", "衣料", "服", "ユニクロ", "gu "]),
         (.travel, ["ホテル", "旅館", "宿泊", "レンタカー", "航空"]),
-        (.dining, ["レストラン", "居酒屋", "カフェ", "ラーメン", "食堂", "coffee"]),
+        // 外食。ここに並べるのは**店の名前として出てくる語**だけにする。
+        // 「コーヒー」「バーガー」のような商品名を入れると、スーパーで
+        // それを買っただけの買い物まで外食になってしまう。
+        (.dining, [
+            "レストラン", "居酒屋", "カフェ", "ラーメン", "食堂", "coffee",
+            "マクドナルド", "ケンタッキー", "モスバーガー", "バーガーキング", "ロッテリア",
+            "スターバックス", "ドトール", "コメダ", "タリーズ", "サイゼリヤ", "ガスト",
+            "すき家", "吉野家", "松屋", "丸亀", "はなまる", "cocoいちばん", "ココイチ",
+            "びっくりドンキー", "サイゼ", "焼肉", "寿司", "そば処", "うどん", "牛丼",
+            "定食", "珈琲", "喫茶", "ピザ", "restaurant"
+        ]),
         (.household, ["ホームセンター", "日用品", "ダイソー", "ニトリ"]),
-        (.groceries, ["スーパー", "食品", "コンビニ", "market", "mart", "ローソン", "セブン", "ファミリーマート"]),
+        // スーパーの名前は外食より後に見るので、「マックスバリュ」のように
+        // 外食の語を含みうる名前は、ここに明示して取り戻す。
+        (.groceries, [
+            "スーパー", "食品", "コンビニ", "market", "mart", "ローソン", "セブン",
+            "ファミリーマート", "マックスバリュ", "イオン", "業務スーパー", "青果", "精肉", "鮮魚"
+        ]),
         (.entertainment, ["映画", "シネマ", "カラオケ", "チケット"])
     ]
 
-    static func category(from text: String, merchant: String = "") -> ExpenseCategory {
-        // 店名はレシート全体の性格を最もよく表すため、まず店名だけで判定する。
-        // 明細に「日用品」が1行あるだけでスーパーの買い物が日用品にならないようにする。
+    /// 買い物の種類を決める。手がかりは **店名 → 買ったもの → レシート全文** の順。
+    ///
+    /// 店名はレシート全体の性格を最もよく表すので、まず店名だけで判定する。
+    /// 次が買ったものの名前。全文はいちばん最後にする。全文には案内書きや
+    /// 但し書きが混ざっていて、「日用品」が1行あるだけでスーパーの買い物が
+    /// 日用品になってしまうため。
+    static func category(
+        from text: String,
+        merchant: String = "",
+        items: [ReceiptItem] = []
+    ) -> ExpenseCategory {
         if let matched = bestMatch(in: merchant) {
+            return matched
+        }
+        let itemNames = items.map(\.name).joined(separator: " ")
+        if let matched = bestMatch(in: itemNames) {
             return matched
         }
         return bestMatch(in: text) ?? .other
@@ -637,7 +670,23 @@ enum ReceiptParser {
             || value.range(of: #"(?<!\d)\d{10,11}(?!\d)"#, options: .regularExpression) != nil
     }
 
+    /// 住所の行かどうか。
+    ///
+    /// **1文字あるだけで住所と決めつけない。** 以前は 都道府県市区町村 のどれかが
+    /// 入っていれば住所としていたので、「マクドナルド城町店」の **町** に当たって
+    /// 店名候補から消えていた。日本の店名には 町・市・区 がふつうに入る。
+    ///
+    /// 住所には必ず番地の数字が続く。店名には続かない。そこで見分ける。
     private static func looksLikeAddress(_ text: String) -> Bool {
-        text.range(of: "[都道府県市区町村]|丁目|番地", options: .regularExpression) != nil
+        if text.contains("丁目") || text.contains("番地") { return true }
+        // 「店」が入る行は店名。住所の行に店の名前が刷られることはまずない。
+        if text.contains("店") { return false }
+        // 都道府県の名前は住所にしか出てこない。「長野県 北安曇郡」のように
+        // 番地が別の行に折り返されていても、ここで住所と分かる。
+        if text.range(of: "東京都|北海道|大阪府|京都府|[一-龠]{2,3}県", options: .regularExpression) != nil {
+            return true
+        }
+        // 市区町村・郡のあとに番地の数字が続く形。店名に番地は付かない。
+        return text.range(of: "[市区町村郡].*[0-9]", options: .regularExpression) != nil
     }
 }

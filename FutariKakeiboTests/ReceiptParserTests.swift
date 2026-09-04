@@ -641,4 +641,109 @@ final class ReceiptParserTests: XCTestCase {
             ReceiptItem(name: "たまご", amount: 298)
         ])
     }
+
+    // MARK: - マクドナルドのレシート（実物）
+
+    /// 名古屋市西区のマクドナルドで撮った1枚。
+    ///
+    /// 店名に **「営業時間 24時間営業」** が入ってしまい、種類も「その他」になった。
+    /// 金額 2,230円 と日付だけが正しく読めていた。
+    private func mcdonaldsReceipt() -> [RecognizedLine] {
+        [
+            line("マクドナルド城町店", y: 0.04, height: 0.030),
+            line("名古屋市西区平中町352", y: 0.055),
+            line("052-501-5031", y: 0.070),
+            line("営業時間 24時間営業", y: 0.085),
+            line("登録番号: T5011101033783", y: 0.100),
+            line("84 レジNO 14", x: 0.08, width: 0.25, y: 0.125),
+            line("2026年9月4日 (金)19:54", x: 0.50, width: 0.42, y: 0.125),
+            line("(ツキミバーガーセット)", y: 0.16), price("800", y: 0.16),
+            line("ツキミバーガー", y: 0.175),
+            line("チキンマックナゲット5ピース", y: 0.190),
+            line("Qoo シロブドウ M", y: 0.205),
+            line("(チーズツキミセット)", y: 0.220), price("830", y: 0.220),
+            line("マックフライポテトM", y: 0.235),
+            line("(ポテナゲ ダイ)", y: 0.250), price("600", y: 0.250),
+            line("マックフライポテトL", y: 0.265),
+            line("小計", y: 0.40), price("¥2,230", y: 0.40),
+            line("(内消費税", y: 0.42), price("¥165)", y: 0.42),
+            line("8%対象", y: 0.44), price("¥2,230", y: 0.44),
+            line("合計", y: 0.47), price("¥2,230", y: 0.47),
+            line("クレジット支払", y: 0.49), price("¥2,230", y: 0.49),
+            line("おつり", y: 0.51), price("¥0", y: 0.51)
+        ]
+    }
+
+    /// 金額・店名・種類の3つがそろうこと。レシート読み取りでいちばん大事な3項目。
+    func testMcDonaldsReceiptReadsTheShopTheAmountAndTheKind() {
+        let draft = ReceiptParser.parse(
+            lines: mcdonaldsReceipt(),
+            now: date(2026, 9, 5),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.merchant, "マクドナルド城町店")
+        XCTAssertEqual(draft.amount, 2_230)
+        XCTAssertEqual(draft.suggestedCategory, .dining)
+        XCTAssertEqual(draft.date, date(2026, 9, 4))
+    }
+
+    /// 「町」が1文字入っているだけで住所とみなしていた。
+    /// 日本の店名には 町・市・区 がふつうに入る（城町店・本町店・北名古屋店）。
+    func testAShopNameContainingATownCharacterIsNotAnAddress() {
+        for name in ["マクドナルド城町店", "スーパー本町店", "コメダ珈琲店 大手町店"] {
+            let lines = [
+                line(name, y: 0.05, height: 0.03),
+                line("2026/09/04", y: 0.10),
+                line("合計", y: 0.30), price("¥1,000", y: 0.30)
+            ]
+            let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+            XCTAssertEqual(draft.merchant, name)
+        }
+    }
+
+    /// 住所の行は今までどおり店名にしない。番地の数字が続く形で見分ける。
+    func testRealAddressesAreStillRejectedAsShopNames() {
+        let lines = [
+            line("名古屋市西区平中町352", y: 0.05, height: 0.03),
+            line("2026/09/04", y: 0.10),
+            line("合計", y: 0.30), price("¥1,000", y: 0.30)
+        ]
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+        XCTAssertNotEqual(draft.merchant, "名古屋市西区平中町352")
+    }
+
+    /// 店の案内書きは店名ではない。
+    func testOpeningHoursAreNeverTheShopName() {
+        let lines = [
+            line("営業時間 24時間営業", y: 0.05, height: 0.03),
+            line("2026/09/04", y: 0.10),
+            line("合計", y: 0.30), price("¥1,000", y: 0.30)
+        ]
+        let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+        XCTAssertNotEqual(draft.merchant, "営業時間 24時間営業")
+    }
+
+    /// 有名なお店は店名だけで種類が決まる。
+    func testWellKnownEateriesAreDining() {
+        for name in ["マクドナルド城町店", "ケンタッキー", "スターバックス", "吉野家", "丸亀製麺"] {
+            XCTAssertEqual(ReceiptParser.category(from: "", merchant: name), .dining, name)
+        }
+    }
+
+    /// 店名で決まらないときは、買ったものの名前で決める。レシート全文より先に見る。
+    func testItemNamesDecideTheKindBeforeTheWholeText() {
+        let kind = ReceiptParser.category(
+            from: "ご来店ありがとうございます 駐車場のご案内",
+            merchant: "アイウエオ商会",
+            items: [ReceiptItem(name: "ラーメン", amount: 900)]
+        )
+        XCTAssertEqual(kind, .dining)
+    }
+
+    /// スーパーは食費のまま。外食の語を足したせいで動かないこと。
+    func testSupermarketsAreStillGroceries() {
+        XCTAssertEqual(ReceiptParser.category(from: "", merchant: "スーパーひだまり"), .groceries)
+        XCTAssertEqual(ReceiptParser.category(from: "", merchant: "マックスバリュ"), .groceries)
+    }
 }
