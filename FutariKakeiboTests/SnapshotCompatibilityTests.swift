@@ -1,8 +1,106 @@
 import XCTest
+import SwiftUI
 @testable import FutariKakeibo
 
 /// v1（カテゴリ別予算・定期支出を持たない）で保存したデータが、そのまま読めることを確かめる。
 final class SnapshotCompatibilityTests: XCTestCase {
+    func testLegacyMemberColorsDefaultByRole() throws {
+        let ownerID = UUID()
+        let partnerID = UUID()
+        let json = """
+        [
+          {"id":"\(ownerID)","displayName":"そら","role":"owner"},
+          {"id":"\(partnerID)","displayName":"つばさ","role":"partner","colorID":null}
+        ]
+        """
+        let members = try JSONDecoder().decode([Member].self, from: Data(json.utf8))
+        XCTAssertEqual(members.map(\.id), [ownerID, partnerID])
+        XCTAssertEqual(members.map(\.color), [.blue, .coral])
+    }
+
+    func testUnknownMemberColorSurvivesRenaming() throws {
+        let json = """
+        {"id":"\(UUID())","displayName":"つばさ","role":"partner","colorID":"future-color"}
+        """
+        var member = try JSONDecoder().decode(Member.self, from: Data(json.utf8))
+        XCTAssertEqual(member.color, .coral)
+        member.displayName = "新しい呼び名"
+        let encoded = try JSONEncoder().encode(member)
+        let fields = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        XCTAssertEqual(fields["colorID"] as? String, "future-color")
+        XCTAssertEqual(fields["displayName"] as? String, "新しい呼び名")
+    }
+
+    func testMemberColorsSurviveMembersDataRoundTrip() throws {
+        // CloudKitの既存membersDataと同じ[Member]のJSON形式を確認する。
+        for color in MemberColor.allCases {
+            let owner = Member(displayName: "そら", role: .owner, color: color)
+            let partner = Member(displayName: "つばさ", role: .partner, color: .teal)
+            let membersData = try JSONEncoder().encode([owner, partner])
+            let decoded = try JSONDecoder().decode([Member].self, from: membersData)
+            XCTAssertEqual(decoded, [owner, partner])
+            XCTAssertEqual(decoded.map(\.color), [color, .teal])
+        }
+    }
+
+    func testMemberColorsFollowIdentityWhenOrderChanges() {
+        let owner = Member(displayName: "そら", role: .owner, color: .pink)
+        let partner = Member(displayName: "つばさ", role: .partner, color: .teal)
+        let household = Household(monthlyBudget: 80_000, members: [partner, owner], ownerMemberID: owner.id)
+        XCTAssertEqual(household.color(of: owner.id), MemberColor.pink.uiColor)
+        XCTAssertEqual(household.color(of: partner.id), MemberColor.teal.uiColor)
+        XCTAssertEqual(household.color(of: nil), AppTheme.accent)
+        XCTAssertEqual(household.color(of: UUID()), AppTheme.accent)
+    }
+
+    func testLegacyMemberDecoderCanReadNewMembersData() throws {
+        // 旧アプリも共有データの色以外は読める。ただし旧アプリから保存すると色は落ちる。
+        struct LegacyMember: Decodable {
+            let id: UUID
+            let displayName: String
+            let role: Member.Role
+        }
+        let member = Member(displayName: "そら", role: .owner, color: .purple)
+        let data = try JSONEncoder().encode([member])
+        let decoded = try JSONDecoder().decode([LegacyMember].self, from: data)
+        XCTAssertEqual(decoded.first?.id, member.id)
+        XCTAssertEqual(decoded.first?.displayName, member.displayName)
+        XCTAssertEqual(decoded.first?.role, member.role)
+    }
+
+    func testVersionFourSnapshotKeepsLedgerOnUpgrade() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let appDirectory = directory.appendingPathComponent("FutariKakeibo", isDirectory: true)
+        try FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true)
+        let owner = Member(displayName: "そら", role: .owner)
+        let partner = Member(displayName: "つばさ", role: .partner)
+        let savedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let household = Household(monthlyBudget: 90_000, members: [owner, partner], ownerMemberID: owner.id,
+                                  createdAt: savedAt, updatedAt: savedAt)
+        let expense = Expense(title: "食材", amount: 3_374, date: savedAt, category: .groceries,
+                              paidByMemberID: owner.id, createdAt: savedAt, updatedAt: savedAt)
+        let oldSnapshot = AppSnapshot(schemaVersion: 4, household: household, selectedMemberID: partner.id,
+                                      expenses: [expense], pendingReceiptImageIDs: [UUID()])
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .millisecondsSince1970
+        let oldData = try encoder.encode(oldSnapshot)
+        XCTAssertFalse(String(decoding: oldData, as: UTF8.self).contains("colorID"))
+        try oldData.write(to: appDirectory.appendingPathComponent("snapshot.json"))
+        let store = LocalSnapshotStore(directoryURL: directory)
+        let loaded = try await store.load()
+        XCTAssertEqual(loaded.schemaVersion, 4)
+        XCTAssertEqual(loaded.household?.members.map(\.color), [.blue, .coral])
+        try await store.save(loaded)
+        let upgraded = try await store.load()
+        XCTAssertEqual(upgraded.schemaVersion, AppSnapshot.currentSchemaVersion)
+        XCTAssertEqual(upgraded.household, household)
+        XCTAssertEqual(upgraded.expenses.map(\.id), [expense.id])
+        XCTAssertEqual(upgraded.expenses.first?.amount, 3_374)
+        XCTAssertEqual(upgraded.selectedMemberID, partner.id)
+        XCTAssertEqual(upgraded.pendingReceiptImageIDs, oldSnapshot.pendingReceiptImageIDs)
+    }
+
     func testOldHouseholdJSONStillDecodes() throws {
         let ownerID = UUID()
         let json = """

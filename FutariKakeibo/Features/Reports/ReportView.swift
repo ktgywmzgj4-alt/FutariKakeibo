@@ -199,7 +199,7 @@ struct ReportView: View {
                                 .foregroundStyle(AppTheme.ink)
                         }
                         ProgressView(value: min(max(item.share, 0), 1))
-                            .tint(item.member.role == .owner ? AppTheme.accent : AppTheme.positive)
+                            .tint(item.member.color.uiColor)
                             .accessibilityLabel("\(item.member.displayName)が支払った割合")
                             .accessibilityValue(percentText(item.share))
                     }

@@ -2,8 +2,8 @@ import Foundation
 
 struct AppSnapshot: Codable, Sendable {
     // v2でカテゴリ別予算と定期支出、v3で収入、v4でレシート画像の送信待ちを追加した。
-    // 古いファイルはそのまま読み込める。
-    static let currentSchemaVersion = 4
+    // v5でメンバーの色IDを追加。古いファイルはそのまま読み込める。
+    static let currentSchemaVersion = 5
 
     var schemaVersion: Int
     var household: Household?

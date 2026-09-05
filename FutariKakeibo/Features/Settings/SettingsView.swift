@@ -9,7 +9,8 @@ struct SettingsView: View {
     @State private var exportURLPendingCleanup: URL?
     @State private var showPrivacy = false
     @State private var showDeleteConfirmation = false
-    @State private var initialized = false
+    @State private var loadedHousehold: Household?
+    @State private var isSaving = false
 
     var body: some View {
         ScrollView {
@@ -28,6 +29,7 @@ struct SettingsView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: loadFields)
+        .onChange(of: store.household) { _, _ in loadFields() }
         .sheet(item: $exportFile, onDismiss: cleanupExportFile) { file in
             ActivityView(items: [file.url])
         }
@@ -51,7 +53,23 @@ struct SettingsView: View {
             labeledField("家計の名前", text: $householdName)
 
             ForEach($members) { $member in
-                labeledField(member.role == .owner ? "あなたの呼び名" : "パートナーの呼び名", text: $member.displayName)
+                VStack(alignment: .leading, spacing: 12) {
+                    labeledField(
+                        member.id == store.selectedMemberID ? "あなたの呼び名" : "パートナーの呼び名",
+                        text: $member.displayName
+                    )
+                    MemberColorPicker(member: $member)
+                }
+            }
+
+            Text("目印の色はホームやレポートに使います。共有中は相手の画面にも反映されます。")
+                .font(.footnote)
+                .foregroundStyle(AppTheme.secondaryText)
+
+            if members.count == 2, members[0].color == members[1].color {
+                Text("2人が同じ色です。別の色にすると見分けやすくなります。")
+                    .font(.footnote)
+                    .foregroundStyle(AppTheme.secondaryText)
             }
 
             VStack(alignment: .leading, spacing: 7) {
@@ -69,19 +87,24 @@ struct SettingsView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
 
-            Button("設定を保存") {
+            Button(isSaving ? "保存中…" : "設定を保存") {
+                isSaving = true
                 Task {
+                    defer { isSaving = false }
                     await store.updateHousehold(
                         name: householdName,
                         monthlyBudget: Int(budgetText.filter(\.isNumber)) ?? 0,
                         members: members
                     )
+                    loadedHousehold = nil
+                    loadFields()
                 }
             }
             .buttonStyle(.borderedProminent)
             .tint(AppTheme.accent)
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
+        .disabled(isSaving)
         .appCard()
     }
 
@@ -225,8 +248,15 @@ struct SettingsView: View {
     }
 
     private func loadFields() {
-        guard !initialized, let household = store.household else { return }
-        initialized = true
+        guard let household = store.household else { return }
+        // 同期された色は表示に反映するが、編集中の選択や呼び名は消さない。
+        if let loadedHousehold, loadedHousehold.id == household.id {
+            let hasEdits = householdName != loadedHousehold.name
+                || budgetText != String(loadedHousehold.monthlyBudget)
+                || members != loadedHousehold.members
+            guard !hasEdits else { return }
+        }
+        loadedHousehold = household
         householdName = household.name
         budgetText = String(household.monthlyBudget)
         members = household.members
@@ -265,5 +295,58 @@ struct SettingsView: View {
         }
         .foregroundStyle(color)
         .contentShape(Rectangle())
+    }
+}
+
+private struct MemberColorPicker: View {
+    @Binding var member: Member
+    @ScaledMetric(relativeTo: .caption) private var minimumWidth: CGFloat = 112
+
+    private var memberName: String {
+        let name = member.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? (member.role == .owner ? "そら" : "つばさ") : name
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            MemberTag(name: memberName, color: member.color.uiColor)
+
+            Text("目印の色")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppTheme.secondaryText)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: minimumWidth), spacing: 8)], spacing: 8) {
+                ForEach(MemberColor.allCases, id: \.self) { option in
+                    Button {
+                        member.color = option
+                    } label: {
+                        HStack(spacing: 6) {
+                            Circle().fill(option.uiColor).frame(width: 20, height: 20)
+                            Text(option.displayName)
+                                .font(.caption)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                            Image(systemName: "checkmark")
+                                .font(.caption.weight(.bold))
+                                .opacity(member.color == option ? 1 : 0)
+                        }
+                        .foregroundStyle(AppTheme.ink)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(AppTheme.card)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(member.color == option ? AppTheme.ink : AppTheme.line,
+                                        lineWidth: member.color == option ? 1.5 : 1)
+                        }
+                        .contentShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(memberName)の色、\(option.displayName)")
+                    .accessibilityAddTraits(member.color == option ? [.isSelected, .isButton] : .isButton)
+                }
+            }
+        }
     }
 }

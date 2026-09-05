@@ -37,11 +37,18 @@ enum AppTheme {
     /// カードとカードの間。
     static let cardSpacing: CGFloat = 16
     static let cornerRadius: CGFloat = 18
+}
 
-    /// メンバーの識別色。**性別ではなく、家計に登録された順**で決まる。
-    /// 同じ人が全画面で同じ色になるよう、色は必ずここから取る。
-    static func memberColor(at index: Int) -> Color {
-        index == 0 ? accent : coral
+extension MemberColor {
+    var uiColor: Color {
+        switch self {
+        case .blue: AppTheme.accent
+        case .coral: AppTheme.coral
+        case .teal: Color(hex: 0x087F8C)
+        case .purple: Color(hex: 0x7C4DCE)
+        case .orange: Color(hex: 0xC87515)
+        case .pink: Color(hex: 0xC94285)
+        }
     }
 }
 
@@ -56,12 +63,12 @@ extension Color {
 }
 
 extension Household {
-    /// この人の識別色。登録順で決まるので、どの画面でも同じ色になる。
+    /// 並び順や、この端末を使っている人に関係なく、保存した本人の色を返す。
     func color(of memberID: UUID?) -> Color {
-        guard let memberID, let index = members.firstIndex(where: { $0.id == memberID }) else {
+        guard let memberID, let member = member(id: memberID) else {
             return AppTheme.accent
         }
-        return AppTheme.memberColor(at: index)
+        return member.color.uiColor
     }
 }
 

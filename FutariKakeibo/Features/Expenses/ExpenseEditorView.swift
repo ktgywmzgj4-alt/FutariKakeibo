@@ -450,13 +450,13 @@ struct ExpenseEditorView: View {
 
             if let household = store.household {
                 Picker("支払った人", selection: $paidByMemberID) {
-                    ForEach(Array(household.members.enumerated()), id: \.element.id) { index, member in
+                    ForEach(household.members) { member in
                         // 支払った人にも、その人の識別色を使う。
                         Label {
                             Text(member.displayName)
                         } icon: {
                             Image(systemName: "person.crop.circle.fill")
-                                .foregroundStyle(AppTheme.memberColor(at: index))
+                                .foregroundStyle(household.color(of: member.id))
                         }
                         .tag(Optional(member.id))
                     }

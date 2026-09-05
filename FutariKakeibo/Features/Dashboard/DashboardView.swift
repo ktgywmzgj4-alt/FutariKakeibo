@@ -120,10 +120,10 @@ struct DashboardView: View {
     private var memberRow: some View {
         if let household = store.household, !household.members.isEmpty {
             HStack(spacing: 16) {
-                ForEach(Array(household.members.enumerated()), id: \.element.id) { index, member in
+                ForEach(household.members) { member in
                     MemberTag(
                         name: member.displayName,
-                        color: AppTheme.memberColor(at: index),
+                        color: household.color(of: member.id),
                         avatarSize: 30
                     )
                 }
