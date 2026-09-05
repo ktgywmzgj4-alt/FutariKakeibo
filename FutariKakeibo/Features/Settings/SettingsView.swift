@@ -300,7 +300,14 @@ struct SettingsView: View {
 
 private struct MemberColorPicker: View {
     @Binding var member: Member
-    @ScaledMetric(relativeTo: .caption) private var minimumWidth: CGFloat = 112
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var columns: [GridItem] {
+        // 最小幅を文字と一緒に拡大すると、小さいiPhoneの幅を超えてしまう。
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible(minimum: 0))]
+            : [GridItem(.adaptive(minimum: 112), spacing: 8)]
+    }
 
     private var memberName: String {
         let name = member.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -315,7 +322,7 @@ private struct MemberColorPicker: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(AppTheme.secondaryText)
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: minimumWidth), spacing: 8)], spacing: 8) {
+            LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(MemberColor.allCases, id: \.self) { option in
                     Button {
                         member.color = option

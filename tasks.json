@@ -191,10 +191,10 @@
     {
       "id": "T-018",
       "task": "設定から2人の目印の色を変更できるようにする",
-      "status": "doing",
+      "status": "review",
       "owner": "実行役",
       "passes": "6色からメンバーごとの色を選んで保存でき、既存の表示箇所が同じ保存色を参照する。旧JSONの既定色・未知の色ID・membersDataの往復・保存と再読込をテストし、既存テストを減らさずCIのtestジョブが全件成功する",
-      "evidence": "",
+      "evidence": "CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/33935106881 → test成功、Executed 130 tests, with 0 failures（85d3bd8）。mainの既存123件を削除せず7件追加。手元: bash scripts/check_all.sh 全5項目とgit diff --check通過。この後の大きな文字での1列表示調整を含む最終CIはPR #28のChecksと説明欄で確認する。実機はT-019で人間の確認待ち。",
       "dependencies": [],
       "notes": "2026-09-05 人間の引き継ぎ依頼に基づく。PR #27は実機確認待ちなのでmainから別ブランチで進める。membersData内のJSONだけに色IDを追加しCloudKitの項目は増やさない。実機の見た目と2台同期はT-019で確認する"
     },
