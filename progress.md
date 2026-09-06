@@ -1,5 +1,11 @@
 # 作業記録
 
+## 2026-09-06 配信先の相違とProduction型を確認
+- 人間がProductionのShareInvite.expiresAtを確認し、DATE/TIMEと報告。型不一致の仮説は除外する。
+- 実行 https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/34025659547 は123/123成功、UPLOAD SUCCEEDED。ビルド2026.0906.0951。
+- ただしcheckoutはmain/dabb762であり、PR #29の診断機能は含まれない。codex/release-sharing-ocr-diagnostics を選んで新規Run workflowする必要がある（Re-run jobsではmainのまま）。
+- 診断版の配信承認は取得済み。実機診断はまだ未取得。データ削除や共有の作り直しはしない。
+
 ## 2026-09-06 合言葉・OCRのRelease診断を追加（実機の原因は未確定）
 - PR #27の先頭0ab2f08から codex/release-sharing-ocr-diagnostics を作成。金額の得点式・コノミヤ既存テスト・共有の保存方式は維持。
 - 共有: 失敗した処理名、ドメイン/コード、partialFailureとレコード別失敗を表示。設定「最後の共有エラーをコピー」に端末内保存（URL・合言葉・レコード内容は含めない）。
