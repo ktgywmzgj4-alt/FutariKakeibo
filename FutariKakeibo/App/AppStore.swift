@@ -575,6 +575,7 @@ final class AppStore: ObservableObject {
             shareInvite = try await cloudService.publishInvite(shareURL: url)
             syncState = .synced(.now)
         } catch {
+            CloudKitSyncService.rememberSharingError(error, action: "startSharingWithCode")
             syncState = .failed(error.localizedDescription)
             errorMessage = Self.inviteFailureMessage(for: error)
         }
@@ -584,27 +585,32 @@ final class AppStore: ObservableObject {
     ///
     /// 中身の分かっている失敗は、そのまま出す。利用者に直せることがあるから
     /// （iCloudにサインインしていない、合言葉の期限が切れている、など）。
-    /// それ以外はiCloud側の言葉が英語で出てしまうので、短い日本語に置き換える。
+    /// 未知の失敗もコードと処理名は残し、実機の写真から調査できるようにする。
     nonisolated static func inviteFailureMessage(
         for error: Error?,
         fallback: String = "合言葉を発行できませんでした。もう一度お試しください。"
     ) -> String {
         guard let error else { return fallback }
 
-        if let syncError = error as? CloudKitSyncService.SyncError,
-           let description = syncError.errorDescription {
-            return description
+        var source = error
+        while let diagnostic = source as? CloudKitSyncService.DiagnosticError {
+            source = diagnostic.underlying
         }
-        guard let cloudError = error as? CKError else { return fallback }
+        let details = "\n（\(CloudKitSyncService.errorDiagnostic(error))）"
+        if let syncError = source as? CloudKitSyncService.SyncError,
+           let description = syncError.errorDescription {
+            return description + (error is CloudKitSyncService.DiagnosticError ? details : "")
+        }
+        guard let cloudError = source as? CKError else { return fallback + details }
         switch cloudError.code {
         case .notAuthenticated, .managedAccountRestricted:
-            return "iCloudにサインインしてから、もう一度お試しください。"
+            return "iCloudにサインインしてから、もう一度お試しください。" + details
         case .networkUnavailable, .networkFailure, .serviceUnavailable, .requestRateLimited:
-            return "iCloudにつながりませんでした。通信の状態を確かめて、もう一度お試しください。"
+            return "iCloudにつながりませんでした。通信の状態を確かめて、もう一度お試しください。" + details
         case .quotaExceeded:
-            return "iCloudの空き容量が足りません。空けてから、もう一度お試しください。"
+            return "iCloudの空き容量が足りません。空けてから、もう一度お試しください。" + details
         default:
-            return fallback
+            return fallback + details
         }
     }
 
@@ -638,6 +644,7 @@ final class AppStore: ObservableObject {
             syncState = .synced(.now)
             return true
         } catch {
+            CloudKitSyncService.rememberSharingError(error, action: "joinSharing")
             syncState = .failed(error.localizedDescription)
             errorMessage = Self.inviteFailureMessage(
                 for: error,

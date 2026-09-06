@@ -21,6 +21,8 @@ struct ExpenseEditorView: View {
     @State private var isShowingScanner = false
     @State private var isRecognizing = false
     @State private var recognizedText = ""
+    @State private var receiptDiagnostic: String?
+    @State private var isShowingDiagnostic = false
     @State private var photoItem: PhotosPickerItem?
     @State private var detectedItems: [ReceiptItem] = []
     /// レシートから読み取ったときの店の鍵。保存できたらこの店を覚える。
@@ -86,6 +88,13 @@ struct ExpenseEditorView: View {
                     .foregroundStyle(AppTheme.ink)
                     .appCard()
                 }
+                if receiptDiagnostic != nil {
+                    Button("読み取り診断を共有") { isShowingDiagnostic = true }
+                        .disabled(isRecognizing)
+                    Text("読み取った文字を含みます。送る相手を選んでください。")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
             }
             .padding(AppTheme.screenPadding)
         }
@@ -146,6 +155,11 @@ struct ExpenseEditorView: View {
         .sheet(isPresented: $isShowingReceipt) {
             if let expense = storedExpense {
                 ReceiptImageViewer(expense: expense)
+            }
+        }
+        .sheet(isPresented: $isShowingDiagnostic) {
+            if let receiptDiagnostic {
+                ActivityView(items: [receiptDiagnostic])
             }
         }
         .alert("レシート画像を削除しますか？", isPresented: $isDeletingReceipt) {
@@ -519,11 +533,13 @@ struct ExpenseEditorView: View {
             return
         }
         isRecognizing = true
+        receiptDiagnostic = nil
         // OCRはバックグラウンドで実行されるため、結果の反映は明示的にメインアクターへ戻して行う。
         Task { @MainActor in
             defer { isRecognizing = false }
             do {
-                let lines = try await ReceiptRecognizer.recognize(images: images)
+                var report = try await ReceiptRecognizer.capture(images: images)
+                let lines = report.lines
                 // 読み取りは済んだ。保存するのはここで作る縮小した1枚だけで、
                 // 原寸の画像はこの処理を抜けたら誰も持たない。
                 if let original = images.first {
@@ -532,7 +548,12 @@ struct ExpenseEditorView: View {
                 }
                 // 端末の中のAIが使えるならAIに、使えなければルールに読ませる。
                 // どちらの場合も、文字は端末の外へ出ない。
-                let draft = await ReceiptInterpreter.interpret(lines: lines)
+                let now = Date.now
+                let calendar = Calendar.current
+                let draft = await ReceiptInterpreter.interpret(lines: lines, now: now, calendar: calendar) {
+                    base, answer, final in
+                    report.recordAnalysis(base: base, answer: answer, final: final, now: now, calendar: calendar)
+                }
                 // 覚えている店なら、読み取りの推測より人が直した結果を優先する。
                 let remembered = MerchantMemory.applying(
                     store.household?.merchantMemos ?? [], to: draft
@@ -544,6 +565,9 @@ struct ExpenseEditorView: View {
                 if let amount = remembered.amount { amountText = String(amount) }
                 if let receiptDate = remembered.date { date = receiptDate }
                 category = remembered.suggestedCategory
+                report.analysis?.displayedAmount = amountText
+                report.analysis?.displayedDate = date
+                receiptDiagnostic = try report.exportText()
                 validationMessage = readBackMessage(for: remembered)
             } catch {
                 validationMessage = error.localizedDescription
@@ -625,6 +649,7 @@ struct ExpenseEditorView: View {
         splitMethod = .equally
         note = ""
         recognizedText = ""
+        receiptDiagnostic = nil
         detectedItems = []
         shopKey = nil
         capturedReceipt = nil

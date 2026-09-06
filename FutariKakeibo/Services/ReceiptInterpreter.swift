@@ -14,13 +14,17 @@ enum ReceiptInterpreter {
     static func interpret(
         lines: [RecognizedLine],
         now: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        diagnostics: ((ReceiptDraft, ReceiptAnswer?, ReceiptDraft) -> Void)? = nil
     ) async -> ReceiptDraft {
         let base = ReceiptParser.parse(lines: lines, now: now, calendar: calendar)
         guard let answer = await OnDeviceReceiptReader.read(text: base.recognizedText) else {
+            diagnostics?(base, nil, base)
             return base
         }
-        return merged(base: base, answer: answer, now: now, calendar: calendar)
+        let final = merged(base: base, answer: answer, now: now, calendar: calendar)
+        diagnostics?(base, answer, final)
+        return final
     }
 
     /// AIの答えでルールの結果を上書きする。

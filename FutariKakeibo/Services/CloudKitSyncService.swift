@@ -17,6 +17,45 @@ private final class LockedState<Value>: @unchecked Sendable {
 }
 
 actor CloudKitSyncService {
+    /// 診断には処理名とコードだけを含め、URL・合言葉・レコードの中身は含めない。
+    struct DiagnosticError: LocalizedError {
+        let stage: String
+        let underlying: Error
+        var itemErrors: [Error] = []
+
+        var errorDescription: String? { CloudKitSyncService.errorDiagnostic(self) }
+    }
+
+    static let lastSharingErrorKey = "diagnostics.lastSharingError.v1"
+
+    nonisolated static func errorDiagnostic(_ error: Error, depth: Int = 0) -> String {
+        guard depth < 8 else { return "nested error depth limit" }
+        if let diagnostic = error as? DiagnosticError {
+            let details = ([diagnostic.underlying] + diagnostic.itemErrors)
+                .map { errorDiagnostic($0, depth: depth + 1) }
+            return "\(diagnostic.stage): " + Array(Set(details)).sorted().joined(separator: " | ")
+        }
+        let nsError = error as NSError
+        var result = "\(nsError.domain) code=\(nsError.code)"
+        if let cloudError = error as? CKError {
+            result += " (CKError \(cloudError.code.rawValue))"
+            if let partial = cloudError.partialErrorsByItemID, !partial.isEmpty {
+                let details = partial.values.map { errorDiagnostic($0, depth: depth + 1) }
+                result += " [" + Array(Set(details)).sorted().joined(separator: " | ") + "]"
+            }
+        }
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
+            result += " -> " + errorDiagnostic(underlying, depth: depth + 1)
+        }
+        return result
+    }
+
+    nonisolated static func rememberSharingError(_ error: Error, action: String) {
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
+        let report = "\(ISO8601DateFormatter().string(from: .now)) build=\(build)\n\(action)\n\(errorDiagnostic(error))"
+        UserDefaults.standard.set(report, forKey: lastSharingErrorKey)
+    }
+
     enum SyncError: LocalizedError {
         case iCloudUnavailable
         case missingRootRecord
@@ -89,65 +128,78 @@ actor CloudKitSyncService {
         expenses: [Expense],
         incomes: [Income] = []
     ) async throws -> (CloudLocation, CKShare) {
-        let status = try await accountStatus()
-        log("iCloudアカウントの状態: \(status.rawValue)")
-        guard status == .available else {
-            throw SyncError.iCloudUnavailable
-        }
-
-        let location = CloudLocation(
-            scope: .privateDatabase,
-            zoneName: "household-\(household.id.uuidString.lowercased())",
-            ownerName: CKCurrentUserDefaultName,
-            rootRecordName: "household-\(household.id.uuidString.lowercased())"
-        )
-        let database = container.privateCloudDatabase
-        let zoneID = zoneID(for: location)
-        try await saveZoneIfNeeded(CKRecordZone(zoneID: zoneID), in: database)
-
-        let rootRecord = try await upsertHousehold(household, at: location, in: database)
-        for expense in expenses {
-            try await upsertExpense(expense, householdRecordID: rootRecord.recordID, at: location, in: database)
-        }
-        for income in incomes {
-            try await upsertIncome(income, householdRecordID: rootRecord.recordID, at: location, in: database)
-        }
-
-        if let shareReference = rootRecord.share {
-            let existingRecord = try await fetchRecord(shareReference.recordID, from: database)
-            guard let existingShare = existingRecord as? CKShare else {
-                // すでに共有されている印はあるのに、その共有が読めなかった。
-                // ここで新しい CKShare を作ると同じレコードを二重に共有することになり、
-                // CloudKit が例外を投げてアプリごと落ちる。作らずに引き返す。
-                throw SyncError.inviteUnavailable("いまある共有を読み直せませんでした")
-            }
-            return (location, try await withShareURL(existingShare, in: database))
-        }
-
-        let share = CKShare(rootRecord: rootRecord)
-        share[CKShare.SystemFieldKey.title] = "ふたり家計簿" as CKRecordValue
-        // 合言葉を知っている相手が参加できるようにする。合言葉は期限つきの使い切り。
-        share.publicPermission = .readWrite
-
-        // **保存したときにサーバーが返す CKShare を使う。**
-        // 共有のURLはサーバー側で割り当てられ、こちらで作った `share` には入らない。
-        // 以前はここで保存の戻り値を捨てて取り直していたが、取り直しが空を返すと
-        // URLの無い手元の `share` をそのまま返してしまい、合言葉が発行できなかった。
-        let saved: [CKRecord]
+        var stage = "prepareShare.accountStatus"
         do {
-            saved = try await modifyRecords(
-                saving: [rootRecord, share],
-                deleting: [],
-                in: database,
-                atomically: true
+            let status = try await accountStatus()
+            log("iCloudアカウントの状態: \(status.rawValue)")
+            guard status == .available else {
+                throw SyncError.iCloudUnavailable
+            }
+
+            let location = CloudLocation(
+                scope: .privateDatabase,
+                zoneName: "household-\(household.id.uuidString.lowercased())",
+                ownerName: CKCurrentUserDefaultName,
+                rootRecordName: "household-\(household.id.uuidString.lowercased())"
             )
+            let database = container.privateCloudDatabase
+            let zoneID = zoneID(for: location)
+            stage = "prepareShare.saveZone"
+            try await saveZoneIfNeeded(CKRecordZone(zoneID: zoneID), in: database)
+
+            stage = "prepareShare.upsertHousehold"
+            let rootRecord = try await upsertHousehold(household, at: location, in: database)
+            stage = "prepareShare.upsertExpenses"
+            for expense in expenses {
+                try await upsertExpense(expense, householdRecordID: rootRecord.recordID, at: location, in: database)
+            }
+            stage = "prepareShare.upsertIncomes"
+            for income in incomes {
+                try await upsertIncome(income, householdRecordID: rootRecord.recordID, at: location, in: database)
+            }
+
+            if let shareReference = rootRecord.share {
+                stage = "prepareShare.fetchExistingShare"
+                let existingRecord = try await fetchRecord(shareReference.recordID, from: database)
+                guard let existingShare = existingRecord as? CKShare else {
+                    // すでに共有されている印はあるのに、その共有が読めなかった。
+                    // ここで新しい CKShare を作ると同じレコードを二重に共有することになり、
+                    // CloudKit が例外を投げてアプリごと落ちる。作らずに引き返す。
+                    throw SyncError.inviteUnavailable("いまある共有を読み直せませんでした")
+                }
+                stage = "prepareShare.existingShareURL"
+                return (location, try await withShareURL(existingShare, in: database))
+            }
+
+            let share = CKShare(rootRecord: rootRecord)
+            share[CKShare.SystemFieldKey.title] = "ふたり家計簿" as CKRecordValue
+            // 合言葉を知っている相手が参加できるようにする。合言葉は期限つきの使い切り。
+            share.publicPermission = .readWrite
+
+            // **保存したときにサーバーが返す CKShare を使う。**
+            // 共有のURLはサーバー側で割り当てられ、こちらで作った `share` には入らない。
+            // 以前はここで保存の戻り値を捨てて取り直していたが、取り直しが空を返すと
+            // URLの無い手元の `share` をそのまま返してしまい、合言葉が発行できなかった。
+            let saved: [CKRecord]
+            stage = "prepareShare.createShare"
+            do {
+                saved = try await modifyRecords(
+                    saving: [rootRecord, share],
+                    deleting: [],
+                    in: database,
+                    atomically: true
+                )
+            } catch {
+                log("共有の作成", error: error)
+                throw error
+            }
+            log("共有を作った。返ってきたレコード \(saved.count)件")
+            let savedShare = saved.compactMap { $0 as? CKShare }.first ?? share
+            stage = "prepareShare.newShareURL"
+            return (location, try await withShareURL(savedShare, in: database))
         } catch {
-            log("共有の作成", error: error)
-            throw error
+            throw DiagnosticError(stage: stage, underlying: error)
         }
-        log("共有を作った。返ってきたレコード \(saved.count)件")
-        let savedShare = saved.compactMap { $0 as? CKShare }.first ?? share
-        return (location, try await withShareURL(savedShare, in: database))
     }
 
     /// 共有のURLが入った `CKShare` を返す。
@@ -228,21 +280,28 @@ actor CloudKitSyncService {
     /// 合言葉を公開データベースへ1件だけ置く。中身は共有の場所と失効時刻だけで、
     /// 家計のデータは一切入らない。
     func publishInvite(shareURL: URL) async throws -> ShareInvite {
-        let database = container.publicCloudDatabase
-        // まず当たらないが、万一同じ合言葉が残っていたら引き直す。
-        for _ in 0..<5 {
-            let code = ShareInvite.makeCode()
-            let recordID = inviteRecordID(for: code)
-            if try await fetchRecord(recordID, from: database) != nil { continue }
+        var stage = "publishInvite.public.lookup"
+        do {
+            let database = container.publicCloudDatabase
+            // まず当たらないが、万一同じ合言葉が残っていたら引き直す。
+            for _ in 0..<5 {
+                let code = ShareInvite.makeCode()
+                let recordID = inviteRecordID(for: code)
+                stage = "publishInvite.public.lookup"
+                if try await fetchRecord(recordID, from: database) != nil { continue }
 
-            let expiresAt = Date.now.addingTimeInterval(ShareInvite.lifetime)
-            let record = CKRecord(recordType: RecordType.shareInvite, recordID: recordID)
-            record["shareURL"] = shareURL.absoluteString as CKRecordValue
-            record["expiresAt"] = expiresAt as CKRecordValue
-            _ = try await saveRecord(record, to: database)
-            return ShareInvite(code: code, shareURL: shareURL, expiresAt: expiresAt)
+                let expiresAt = Date.now.addingTimeInterval(ShareInvite.lifetime)
+                let record = CKRecord(recordType: RecordType.shareInvite, recordID: recordID)
+                record["shareURL"] = shareURL.absoluteString as CKRecordValue
+                record["expiresAt"] = expiresAt as CKRecordValue
+                stage = "publishInvite.public.save.ShareInvite"
+                _ = try await saveRecord(record, to: database)
+                return ShareInvite(code: code, shareURL: shareURL, expiresAt: expiresAt)
+            }
+            throw SyncError.inviteUnavailable("合言葉が作れませんでした")
+        } catch {
+            throw DiagnosticError(stage: stage, underlying: error)
         }
-        throw SyncError.inviteUnavailable("合言葉が作れませんでした")
     }
 
     func resolveInvite(code: String) async throws -> ShareInvite {
@@ -837,17 +896,30 @@ actor CloudKitSyncService {
             operation.isAtomic = atomically
 
             let saved = LockedState<[CKRecord]>([])
+            let failures = LockedState<[Error]>([])
             operation.perRecordSaveBlock = { _, result in
-                if case let .success(record) = result {
+                switch result {
+                case let .success(record):
                     saved.withLock { $0.append(record) }
+                case let .failure(error):
+                    failures.withLock { $0.append(error) }
                 }
             }
             operation.modifyRecordsResultBlock = { result in
+                let itemErrors = failures.withLock { $0 }
                 switch result {
                 case .success:
-                    continuation.resume(returning: saved.withLock { $0 })
+                    if let first = itemErrors.first {
+                        continuation.resume(throwing: DiagnosticError(
+                            stage: "modifyRecords", underlying: first, itemErrors: itemErrors
+                        ))
+                    } else {
+                        continuation.resume(returning: saved.withLock { $0 })
+                    }
                 case let .failure(error):
-                    continuation.resume(throwing: error)
+                    continuation.resume(throwing: DiagnosticError(
+                        stage: "modifyRecords", underlying: error, itemErrors: itemErrors
+                    ))
                 }
             }
             database.add(operation)
