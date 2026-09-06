@@ -7,6 +7,16 @@
 
 ---
 
+## 2026-09-06 PR #27をTestFlightへ配信した（ビルド 2026.0906.0135）
+
+**mainにマージせずに配信できる。** `gh workflow run "iOS build and tests" --ref <ブランチ名>` で
+testflightジョブが動く（`ios.yml:89` の条件は `workflow_dispatch` だけ、ブランチは問わない）。
+実機確認が先・マージが後、という順番で回せる。
+配信したのは `claude/receipt-image-storage-rbs1m6` の `42053fa`。CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/34004042251
+→ 134件全成功、UPLOAD SUCCEEDED。**PR #28（色）は別ブランチなのでこのビルドに入っていない。**
+確かめること: T-014 斜め撮影 / T-015 マクドナルド / T-016 合言葉と2台目の参加 / T-017 コノミヤ
+
+
 ## 2026-09-04 コノミヤのレシートで金額が25円になった（実機未確認）
 
 **桁区切りのカンマがピリオドとして読まれていた。** `¥3,374` が `¥3. 374` になり、
