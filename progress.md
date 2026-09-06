@@ -4,7 +4,8 @@
 - PR #27の先頭0ab2f08から codex/release-sharing-ocr-diagnostics を作成。金額の得点式・コノミヤ既存テスト・共有の保存方式は維持。
 - 共有: 失敗した処理名、ドメイン/コード、partialFailureとレコード別失敗を表示。設定「最後の共有エラーをコピー」に端末内保存（URL・合言葉・レコード内容は含めない）。
 - OCR: 読み取り後「読み取り診断を共有」でJSONをコピー。Vision文字/座標4値/信頼度/実入力/ページ順と、候補得点・AI前後・画面の金額/日付を収録。画面を閉じる前、支出保存前に取得する。
-- 実機のOCRは未取得。既存の手起こしデータは置換していない。次はCI→人間の配信承認→実機で失敗診断を取得。ProductionのShareInvite.expiresAtがDATE/TIMEかは人間が現物確認する。
+- PR #29（https://github.com/ktgywmzgj4-alt/FutariKakeibo/pull/29）。初回CI ab66eeb: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/34024806316 で141/141成功（コノミヤを含む）。診断渡しの並行処理警告を受け、変更可能なクロージャからSendableな戻り値に修正。最終CIのURL/件数はPR本文に記録する。
+- ユーザーは2026-09-06この会話でTestFlight配信を承認済み（再承認不要）。現在のGitHub接続にはworkflow_dispatch起動機能がなく、releaseスキルも起動を人間に渡す手順。CI成功後、Actionsで codex/release-sharing-ocr-diagnostics を選んでRun workflowする。mainマージ/配信/スキーマ変更は未実施。実機OCR未取得・既存フィクスチャ未置換。ProductionのShareInvite.expiresAtのDATE/TIME確認は人間へ依頼。
 
 **新しい会話を始めたら、まずこのファイルの一番上を読んでください。**
 

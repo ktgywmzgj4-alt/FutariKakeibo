@@ -550,10 +550,12 @@ struct ExpenseEditorView: View {
                 // どちらの場合も、文字は端末の外へ出ない。
                 let now = Date.now
                 let calendar = Calendar.current
-                let draft = await ReceiptInterpreter.interpret(lines: lines, now: now, calendar: calendar) {
-                    base, answer, final in
-                    report.recordAnalysis(base: base, answer: answer, final: final, now: now, calendar: calendar)
-                }
+                let interpretation = await ReceiptInterpreter.interpretWithDiagnostics(
+                    lines: lines, now: now, calendar: calendar
+                )
+                let draft = interpretation.draft
+                report.recordAnalysis(base: interpretation.base, answer: interpretation.answer,
+                                      final: draft, now: now, calendar: calendar)
                 // 覚えている店なら、読み取りの推測より人が直した結果を優先する。
                 let remembered = MerchantMemory.applying(
                     store.household?.merchantMemos ?? [], to: draft
