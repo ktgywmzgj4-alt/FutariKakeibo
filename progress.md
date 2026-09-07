@@ -1,5 +1,11 @@
 # 作業記録
 
+## 2026-09-07 実機ログで共有作成時の失敗を確認
+- 実機build 2026.0906.1025、2026-09-06T11:07:02Z: startSharingWithCode → prepareShare.createShare → modifyRecords、CKError 12/CKInternalError 2006 と CKError 22/CKInternalError 2024。
+- 公開DBのpublishInviteへ到達する前、rootRecordとCKShareのまとめ保存で失敗。expiresAtのDATE/TIMEは人間確認済み。22は同じバッチ内の連鎖失敗、12の具体的な拒否理由は現ログにはない。
+- Apple DTSに同じ12/2006がProductionのcloudkit.share未登録で発生した事例: https://developer.apple.com/forums/thread/841618 。今回も同じかは未確定。次は人間にProduction/DevelopmentのRecord Typesでcloudkit.shareの有無を確認してもらう（ShareInviteとは別）。
+- Swift/解析ルールは変更しない。Reset Environments、手動の型作成、データ削除、未承認のProductionデプロイは行わない。OCR生データは未取得。
+
 ## 2026-09-06 配信先の相違とProduction型を確認
 - 人間がProductionのShareInvite.expiresAtを確認し、DATE/TIMEと報告。型不一致の仮説は除外する。
 - 実行 https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/34025659547 は123/123成功、UPLOAD SUCCEEDED。ビルド2026.0906.0951。
