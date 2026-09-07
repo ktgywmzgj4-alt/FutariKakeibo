@@ -1,5 +1,30 @@
 # 作業記録
 
+## 2026-09-07 Dev/Prod両一覧に共有用の型が見当たらない
+- ユーザー提供のIMG_7645.png（Prod）とIMG_7646.png（Dev）ではExpense/Household/Income/ReceiptImage/ShareInvite/Usersのみ表示、cloudkit.shareは見当たらない。12/2006の原因候補として共有型未登録が有力だが、サーバーの理由文章は未取得。
+- Apple DTSの手順はDevelopmentで実際のCKShareを作成してcloudkit.shareを自動生成→Productionへスキーマ反映。https://developer.apple.com/forums/thread/841618 。手動の型作成・Reset・本番デプロイはまだ行わない。
+- TestFlightはDevelopment接続不可。Ad HocのCustom/Release TestingではDevelopmentを選べる（Apple DTS: https://developer.apple.com/forums/thread/842909 ）。GitHub Actionsで別の開発環境用テスト版を用意する案には端末登録/プロビジョニング追加・導入経路の確認が必要。
+- 現在のWindows/TestFlight環境だけで初期化できるとは未検証。追加の配布設定準備についてユーザーの方針確認が必要。Swiftコード/既存家計データ/Production設定は変更していない。
+
+## 2026-09-07 実機ログで共有作成時の失敗を確認
+- 実機build 2026.0906.1025、2026-09-06T11:07:02Z: startSharingWithCode → prepareShare.createShare → modifyRecords、CKError 12/CKInternalError 2006 と CKError 22/CKInternalError 2024。
+- 公開DBのpublishInviteへ到達する前、rootRecordとCKShareのまとめ保存で失敗。expiresAtのDATE/TIMEは人間確認済み。22は同じバッチ内の連鎖失敗、12の具体的な拒否理由は現ログにはない。
+- Apple DTSに同じ12/2006がProductionのcloudkit.share未登録で発生した事例: https://developer.apple.com/forums/thread/841618 。今回も同じかは未確定。次は人間にProduction/DevelopmentのRecord Typesでcloudkit.shareの有無を確認してもらう（ShareInviteとは別）。
+- Swift/解析ルールは変更しない。Reset Environments、手動の型作成、データ削除、未承認のProductionデプロイは行わない。OCR生データは未取得。
+
+## 2026-09-06 配信先の相違とProduction型を確認
+- 人間がProductionのShareInvite.expiresAtを確認し、DATE/TIMEと報告。型不一致の仮説は除外する。
+- 実行 https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/34025659547 は123/123成功、UPLOAD SUCCEEDED。ビルド2026.0906.0951。
+- ただしcheckoutはmain/dabb762であり、PR #29の診断機能は含まれない。codex/release-sharing-ocr-diagnostics を選んで新規Run workflowする必要がある（Re-run jobsではmainのまま）。
+- 診断版の配信承認は取得済み。実機診断はまだ未取得。データ削除や共有の作り直しはしない。
+
+## 2026-09-06 合言葉・OCRのRelease診断を追加（実機の原因は未確定）
+- PR #27の先頭0ab2f08から codex/release-sharing-ocr-diagnostics を作成。金額の得点式・コノミヤ既存テスト・共有の保存方式は維持。
+- 共有: 失敗した処理名、ドメイン/コード、partialFailureとレコード別失敗を表示。設定「最後の共有エラーをコピー」に端末内保存（URL・合言葉・レコード内容は含めない）。
+- OCR: 読み取り後「読み取り診断を共有」でJSONをコピー。Vision文字/座標4値/信頼度/実入力/ページ順と、候補得点・AI前後・画面の金額/日付を収録。画面を閉じる前、支出保存前に取得する。
+- PR #29（https://github.com/ktgywmzgj4-alt/FutariKakeibo/pull/29）。初回CI ab66eeb: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/34024806316 で141/141成功（コノミヤを含む）。診断渡しの並行処理警告を受け、変更可能なクロージャからSendableな戻り値に修正。最終CIのURL/件数はPR本文に記録する。
+- ユーザーは2026-09-06この会話でTestFlight配信を承認済み（再承認不要）。現在のGitHub接続にはworkflow_dispatch起動機能がなく、releaseスキルも起動を人間に渡す手順。CI成功後、Actionsで codex/release-sharing-ocr-diagnostics を選んでRun workflowする。mainマージ/配信/スキーマ変更は未実施。実機OCR未取得・既存フィクスチャ未置換。ProductionのShareInvite.expiresAtのDATE/TIME確認は人間へ依頼。
+
 **新しい会話を始めたら、まずこのファイルの一番上を読んでください。**
 
 書き方: 新しいものを**一番上**に足します。1回につき3〜5行。

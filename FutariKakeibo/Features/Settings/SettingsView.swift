@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
@@ -10,6 +11,8 @@ struct SettingsView: View {
     @State private var showPrivacy = false
     @State private var showDeleteConfirmation = false
     @State private var initialized = false
+    @AppStorage(CloudKitSyncService.lastSharingErrorKey) private var lastSharingError = ""
+    @State private var copiedSharingError = false
 
     var body: some View {
         ScrollView {
@@ -144,6 +147,17 @@ struct SettingsView: View {
                 )
             }
             .buttonStyle(.plain)
+
+            if !lastSharingError.isEmpty {
+                Button {
+                    UIPasteboard.general.string = lastSharingError
+                    copiedSharingError = true
+                } label: {
+                    settingsRow(copiedSharingError ? "コピーしました" : "最後の共有エラーをコピー", icon: "doc.on.doc")
+                }
+                .buttonStyle(.plain)
+                .onChange(of: lastSharingError) { _, _ in copiedSharingError = false }
+            }
 
             if store.household?.cloudLocation != nil {
                 Divider()

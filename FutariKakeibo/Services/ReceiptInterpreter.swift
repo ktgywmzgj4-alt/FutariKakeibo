@@ -16,11 +16,21 @@ enum ReceiptInterpreter {
         now: Date = .now,
         calendar: Calendar = .current
     ) async -> ReceiptDraft {
+        await interpretWithDiagnostics(lines: lines, now: now, calendar: calendar).draft
+    }
+
+    /// 画面の変数を別の実行領域から変更せず、Sendableな値として診断結果を返す。
+    static func interpretWithDiagnostics(
+        lines: [RecognizedLine],
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) async -> (draft: ReceiptDraft, base: ReceiptDraft, answer: ReceiptAnswer?) {
         let base = ReceiptParser.parse(lines: lines, now: now, calendar: calendar)
         guard let answer = await OnDeviceReceiptReader.read(text: base.recognizedText) else {
-            return base
+            return (base, base, nil)
         }
-        return merged(base: base, answer: answer, now: now, calendar: calendar)
+        let final = merged(base: base, answer: answer, now: now, calendar: calendar)
+        return (final, base, answer)
     }
 
     /// AIの答えでルールの結果を上書きする。
