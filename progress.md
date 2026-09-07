@@ -1,5 +1,11 @@
 # 作業記録
 
+## 2026-09-07 Dev/Prod両一覧に共有用の型が見当たらない
+- ユーザー提供のIMG_7645.png（Prod）とIMG_7646.png（Dev）ではExpense/Household/Income/ReceiptImage/ShareInvite/Usersのみ表示、cloudkit.shareは見当たらない。12/2006の原因候補として共有型未登録が有力だが、サーバーの理由文章は未取得。
+- Apple DTSの手順はDevelopmentで実際のCKShareを作成してcloudkit.shareを自動生成→Productionへスキーマ反映。https://developer.apple.com/forums/thread/841618 。手動の型作成・Reset・本番デプロイはまだ行わない。
+- TestFlightはDevelopment接続不可。Ad HocのCustom/Release TestingではDevelopmentを選べる（Apple DTS: https://developer.apple.com/forums/thread/842909 ）。GitHub Actionsで別の開発環境用テスト版を用意する案には端末登録/プロビジョニング追加・導入経路の確認が必要。
+- 現在のWindows/TestFlight環境だけで初期化できるとは未検証。追加の配布設定準備についてユーザーの方針確認が必要。Swiftコード/既存家計データ/Production設定は変更していない。
+
 ## 2026-09-07 実機ログで共有作成時の失敗を確認
 - 実機build 2026.0906.1025、2026-09-06T11:07:02Z: startSharingWithCode → prepareShare.createShare → modifyRecords、CKError 12/CKInternalError 2006 と CKError 22/CKInternalError 2024。
 - 公開DBのpublishInviteへ到達する前、rootRecordとCKShareのまとめ保存で失敗。expiresAtのDATE/TIMEは人間確認済み。22は同じバッチ内の連鎖失敗、12の具体的な拒否理由は現ログにはない。
