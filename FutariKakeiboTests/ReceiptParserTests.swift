@@ -890,4 +890,207 @@ final class ReceiptParserTests: XCTestCase {
         )
         XCTAssertEqual(kind, .groceries)
     }
+
+    // MARK: - イオンスタイルのレシート（実物）
+
+    /// 名古屋のイオンスタイルで撮った1枚。
+    ///
+    /// 画面に出た金額は **47088**。レシートのどこにも無い額に見えるが、
+    /// クレジット売上票の **「カード会社 VISA JAPAN 47088」** の番号だった。
+    ///
+    /// このレシートには2つの罠がある。
+    /// 1. 合計が **「合　計」** と字の間を空けて刷られていて、`contains("合計")` が外れる
+    /// 2. 明細に通貨の印が無く（`398※`）、下半分が売上票の数字だらけ
+    private func aeonReceipt() -> [RecognizedLine] {
+        [
+            line("AEON STYLE", y: 0.03, height: 0.032),
+            line("イオンスタイルワンダーシティ", y: 0.050),
+            line("TEL052-506-5600 FAX052-506-5601", y: 0.064),
+            line("領収証", y: 0.078),
+            line("イオンリテール株式会社", y: 0.090),
+            line("登録番号 T2040001000456", y: 0.102),
+            line("レジ0058 2026/ 9/21(月) 19:41", y: 0.114),
+            line("取5647 責:05", y: 0.126),
+
+            line("オサシミ", y: 0.16), price("398※", y: 0.16),
+            line("割引 50%", y: 0.175), price("-199", y: 0.175),
+            line("焼魚屋 揚げ物", y: 0.190), price("598※", y: 0.190),
+            line("割引 50%", y: 0.205), price("-299", y: 0.205),
+            line("ミートソースラザニア風", y: 0.220), price("498※", y: 0.220),
+            line("割引 10%", y: 0.235), price("-50", y: 0.235),
+            line("ふわふわ長芋焼", y: 0.250), price("458※", y: 0.250),
+            line("まぐろたたき中巻10巻", y: 0.265), price("568※", y: 0.265),
+            line("割引 10%", y: 0.280), price("-57", y: 0.280),
+            line("中華セット", y: 0.295), price("550※", y: 0.295),
+            line("島根県産 生本まぐろ (", y: 0.310), price("1,380※", y: 0.310),
+            line("割引 50%", y: 0.325), price("-690", y: 0.325),
+            line("ＢＰホロットパインマン", y: 0.340), price("98 A", y: 0.340),
+            line("１９６巨峰R", y: 0.355), price("115 B", y: 0.355),
+            line("氷結無糖シークヮーサL", y: 0.370), price("168 C", y: 0.370),
+
+            line("小　計", y: 0.41), price("¥3,536", y: 0.41),
+            line("外税 8%対象額", y: 0.425), price("¥3,155", y: 0.425),
+            line("外税 8%", y: 0.440), price("¥252", y: 0.440),
+            line("外税10%対象額", y: 0.455), price("¥381", y: 0.455),
+            line("外税10%", y: 0.470), price("¥38", y: 0.470),
+
+            // 「合　計」。イオンは字の間を空けて刷る。
+            line("合　計", y: 0.50), price("¥3,826", y: 0.50),
+            line("クレジット", y: 0.515), price("¥3,826", y: 0.515),
+            line("お釣り", y: 0.530), price("¥0", y: 0.530),
+            line("お買上商品数:10", y: 0.545),
+            line("※印は軽減税率8%対象商品", y: 0.560),
+
+            line("[クレジットカード売上票]", y: 0.60),
+            line("(お客様控え)", y: 0.615),
+            line("本人確認省略", y: 0.635),
+            line("カード会社 VISA JAPAN 47088", y: 0.650),
+            line("会員番号 XXXX-XXXX-XXXX-6941", y: 0.665),
+            line("お取扱日", y: 0.680), price("2026年09月21日", y: 0.680),
+            line("取引内容 お買上 (CL)", y: 0.695),
+            line("伝票番号", y: 0.710), price("058177", y: 0.710),
+            line("取扱区分", y: 0.725), price("1回", y: 0.725),
+            line("金　額", y: 0.740), price("¥3,826", y: 0.740),
+            line("承認番号", y: 0.755), price("0711101", y: 0.755),
+            line("AID", y: 0.770), price("A0000000031010", y: 0.770),
+            line("APL", y: 0.785), price("Visa", y: 0.785)
+        ]
+    }
+
+    /// 実機で 47088 になった1枚。合計 3,826円 が出ること。
+    func testAeonReceiptReadsTheTotalAndNotTheCardCompanyNumber() {
+        let draft = ReceiptParser.parse(
+            lines: aeonReceipt(),
+            now: date(2026, 9, 26),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.amount, 3_826)
+        XCTAssertEqual(draft.date, date(2026, 9, 21))
+        XCTAssertEqual(draft.suggestedCategory, .groceries)
+        XCTAssertTrue(draft.merchant.contains("AEON") || draft.merchant.contains("イオン"),
+                      "店名が「\(draft.merchant)」になった")
+    }
+
+    /// 47088 は候補として残ってもよいが、選ばれてはいけない。
+    /// 「候補から消す」ではなく「点数で負ける」ことを確かめる。
+    func testTheCardCompanyNumberLosesToTheTotal() {
+        let rows = ReceiptParser.rows(from: aeonReceipt())
+        let candidates = ReceiptParser.totalCandidates(in: rows, itemsTotal: 4_831)
+        let cardNumber = candidates.filter { $0.amount == 47_088 }
+        let total = candidates.filter { $0.amount == 3_826 }
+
+        XCTAssertFalse(total.isEmpty, "3,826 が候補に入っていない")
+        for slip in cardNumber {
+            for real in total {
+                XCTAssertLessThan(slip.score, real.score,
+                                  "47088(\(slip.score)) が 3826(\(real.score)) に勝っている")
+            }
+        }
+    }
+
+    /// 字の間が空いていても合計の語として通ること。
+    /// イオンは「合　計」、他店でも「お 買 上」のように空けて刷ることがある。
+    func testATotalKeywordSurvivesSpacesBetweenItsCharacters() {
+        for spelling in ["合計", "合　計", "合 計", "お　買　上", "ご 請 求"] {
+            let lines = [
+                line("スーパーどこか", y: 0.05, height: 0.03),
+                line("2026/09/21", y: 0.10),
+                line("りんご", y: 0.20), price("300", y: 0.20),
+                line(spelling, y: 0.40), price("¥1,234", y: 0.40),
+                line("カード会社 VISA JAPAN 47088", y: 0.70)
+            ]
+            let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
+            XCTAssertEqual(draft.amount, 1_234, "「\(spelling)」で合計を見失った")
+        }
+    }
+
+    /// 明細の和より桁がひとつ大きい候補は落とす。
+    /// 下側（6割を切る）だけ見ていたので、売上票の番号が素通りしていた。
+    func testACandidateFarAboveTheItemsTotalIsRejected() {
+        let rows = ReceiptParser.rows(from: [
+            line("りんご", y: 0.20), price("300", y: 0.20),
+            line("みかん", y: 0.25), price("200", y: 0.25),
+            line("端末 47088", y: 0.60)
+        ])
+        let candidates = ReceiptParser.totalCandidates(in: rows, itemsTotal: 500)
+        let big = candidates.first { $0.amount == 47_088 }
+        XCTAssertNotNil(big)
+        XCTAssertLessThan(big?.score ?? 0, 0, "明細の和の90倍が減点されていない")
+    }
+
+    /// 明細を上限まで拾って打ち切ったときは、上側を見ない。
+    /// 和が「途中まで」の値なので、本当の合計はいくらでも大きくなりうる。
+    func testTheUpperBoundIsIgnoredWhenTheItemListWasCutOff() {
+        let rows = ReceiptParser.rows(from: [
+            line("合計", y: 0.50), price("¥90,000", y: 0.50)
+        ])
+        let capped = ReceiptParser.totalCandidates(in: rows, itemsTotal: 1_000, itemsCapped: true)
+        let notCapped = ReceiptParser.totalCandidates(in: rows, itemsTotal: 1_000, itemsCapped: false)
+        XCTAssertGreaterThan(capped.first?.score ?? 0, notCapped.first?.score ?? 0)
+    }
+
+    // MARK: - EQVo!（エクポスタイル）のレシート（実物）
+
+    /// 同じ日に撮ったもう1枚。こちらは 6,088円 と正しく読めていた。
+    /// イオンの直しで**壊れていないこと**を確かめるために置く。
+    private func eqvoReceipt() -> [RecognizedLine] {
+        [
+            line("領収証", y: 0.03),
+            line("EQVo! エクポスタイル", y: 0.050, height: 0.030),
+            line("ファミリーテーブル", y: 0.068),
+            line("052-503-2116", y: 0.082),
+            line("登録番号 T2180001109424", y: 0.100),
+            line("2026年09月23日(水)19:56 レジ0102", y: 0.114),
+            line("責No00000102会計機102", y: 0.128),
+            line("スNo00000086 酒井田", y: 0.140),
+            line("スキャンレジ0003 スキャンNo1269", y: 0.152),
+
+            line("＊お～いお茶濃い茶ケース", y: 0.19), price("¥948", y: 0.19),
+            line("#!濃いめのレモンサワー", y: 0.205), price("¥105", y: 0.205),
+            line("＊豚小間切れ肉(小パック)", y: 0.220), price("¥264", y: 0.220),
+            line("割引 10%", y: 0.235), price("-27", y: 0.235),
+            line("＊雪国まいたけ 極 Mパッ", y: 0.250), price("¥159", y: 0.250),
+            line("#!氷結 無糖グレープフル", y: 0.265), price("¥168", y: 0.265),
+            line("＊真いかの唐揚げ", y: 0.280), price("¥266", y: 0.280),
+            line("割引 50%", y: 0.295), price("-133", y: 0.295),
+            line("＊明治おいしい牛乳", y: 0.310), price("¥138", y: 0.310),
+            line("＊ご飯がススムキムチ", y: 0.325), price("¥199", y: 0.325),
+            line("＊若鶏モモ肉(1枚入)", y: 0.340), price("¥385", y: 0.340),
+            line("＊愛知コシヒカリ 2kg", y: 0.400), price("¥1,480", y: 0.400),
+            line("＊キャベツ", y: 0.415), price("¥59", y: 0.415),
+
+            line("小計", y: 0.50), price("¥5,633", y: 0.50),
+            line("(外8% タイショウ", y: 0.515), price("¥5,360)", y: 0.515),
+            line("外8%", y: 0.530), price("¥428", y: 0.530),
+            line("外税計", y: 0.560), price("¥455", y: 0.560),
+            line("(税合計", y: 0.575), price("¥455)", y: 0.575),
+            line("合計", y: 0.595), price("¥6,088", y: 0.595),
+            line("クレジット", y: 0.620), price("¥6,088", y: 0.620),
+            line("お釣り", y: 0.635), price("¥0", y: 0.635),
+            line("お買上点数 21点", y: 0.650),
+
+            line("クレジット売上票", y: 0.69),
+            line("お客様控え", y: 0.705),
+            line("カード会社 739", y: 0.730),
+            line("CL VISA", y: 0.745),
+            line("会員番号 CL ****-****-****-6941", y: 0.760),
+            line("有効期限 XXXX年XX月", y: 0.775),
+            line("処理通番 2812 金額", y: 0.820), price("¥6,088", y: 0.820),
+            line("承認番号 0419665 合計", y: 0.840), price("¥6,088", y: 0.840)
+        ]
+    }
+
+    /// すでに正しく読めている1枚。イオンの直しで壊していないこと。
+    func testEqvoReceiptStillReadsSixThousandAndEightyEight() {
+        let draft = ReceiptParser.parse(
+            lines: eqvoReceipt(),
+            now: date(2026, 9, 26),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.amount, 6_088)
+        XCTAssertEqual(draft.date, date(2026, 9, 23))
+        XCTAssertEqual(draft.suggestedCategory, .groceries)
+    }
 }

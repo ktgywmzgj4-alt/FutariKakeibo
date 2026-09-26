@@ -11,6 +11,11 @@ struct ReceiptThumbnail: View {
 
     let imageID: UUID
     var size: CGFloat = 22
+    /// 縦に伸ばしたいときだけ指定する。レシートは縦長なので、正方形に切ると
+    /// 真ん中の明細しか写らず、どの店のものか分からない。
+    var height: CGFloat?
+
+    private var boxHeight: CGFloat { height ?? size }
 
     @State private var image: UIImage?
 
@@ -20,15 +25,17 @@ struct ReceiptThumbnail: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
+                    // 上端を残す。店名はレシートのいちばん上に刷ってある。
+                    .frame(width: size, height: boxHeight, alignment: .top)
             } else {
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
                     .fill(AppTheme.accentSoft)
                 Image(systemName: "doc.text.image")
-                    .font(.system(size: size * 0.6, weight: .semibold))
+                    .font(.system(size: min(size, boxHeight) * 0.6, weight: .semibold))
                     .foregroundStyle(AppTheme.accent)
             }
         }
-        .frame(width: size, height: size)
+        .frame(width: size, height: boxHeight)
         .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         .accessibilityLabel("レシートあり")
         // 行が画面の外へ出れば、この読み込みは打ち切られる。

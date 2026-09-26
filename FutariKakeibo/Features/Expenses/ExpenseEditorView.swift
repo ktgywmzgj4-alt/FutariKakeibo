@@ -32,6 +32,12 @@ struct ExpenseEditorView: View {
     @State private var isShowingReceipt = false
     @State private var isDeletingReceipt = false
     @State private var validationMessage: String?
+    /// 保存できたことを伝えるポップ。続けて撮るかどうかをここで選ぶ。
+    @State private var showSavedNotice = false
+    @State private var showNextSourceChoice = false
+    @State private var isShowingPhotoPicker = false
+    /// いま保存した1件にレシート画像が付いたかどうか。ポップの文言に使う。
+    @State private var savedWithReceipt = false
     @FocusState private var focusedField: Field?
 
     private enum Field {
@@ -134,6 +140,32 @@ struct ExpenseEditorView: View {
                 }
             }
             .ignoresSafeArea()
+        }
+        // アルバムは下の「続けて保存」からも開けるようにする。
+        .photosPicker(isPresented: $isShowingPhotoPicker, selection: $photoItem,
+                      matching: .images, photoLibrary: .shared())
+        .alert("保存しました", isPresented: $showSavedNotice) {
+            if originalExpense == nil {
+                Button("続けて保存") { showNextSourceChoice = true }
+            }
+            Button("戻る", role: .cancel) { finishAfterSave() }
+        } message: {
+            Text(savedNotice)
+        }
+        .confirmationDialog(
+            "次のレシートをどこから取りますか",
+            isPresented: $showNextSourceChoice,
+            titleVisibility: .visible
+        ) {
+            Button("カメラで撮る") {
+                resetForm()
+                isShowingScanner = true
+            }
+            Button("アルバムから選ぶ") {
+                resetForm()
+                isShowingPhotoPicker = true
+            }
+            Button("やめる", role: .cancel) { finishAfterSave() }
         }
         .alert("確認してください", isPresented: Binding(
             get: { validationMessage != nil },
@@ -324,9 +356,28 @@ struct ExpenseEditorView: View {
                     .font(.headline)
                     .foregroundStyle(AppTheme.ink)
 
-                Text("この支出にはレシート画像が付いています。")
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.secondaryText)
+                // 絵が無いと、どの支出のレシートだったか開くまで分からない。
+                // 小さくても上端が見えれば店名で見分けがつく。
+                HStack(alignment: .top, spacing: 12) {
+                    if let imageID = expense.receiptImageID {
+                        Button {
+                            isShowingReceipt = true
+                        } label: {
+                            ReceiptThumbnail(imageID: imageID, size: 76, height: 104)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                        .stroke(AppTheme.line, lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("レシートを開く")
+                    }
+
+                    Text("この支出にはレシート画像が付いています。絵を叩いても開きます。")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
 
                 HStack(spacing: 10) {
                     Button {
@@ -603,16 +654,30 @@ struct ExpenseEditorView: View {
             }
 
             // レシート画像は支出とは別に保存する。支出データに入るのは参照だけ。
+            let attachedReceipt = shouldSaveReceipt && capturedReceipt != nil
             if shouldSaveReceipt, let capturedReceipt {
                 await store.attachReceiptImage(capturedReceipt, to: expense.id)
             }
 
-            if let onSaved {
-                resetForm()
-                onSaved()
-            } else {
-                dismiss()
-            }
+            // ここで画面を閉じず、保存できたことを伝えてから次をどうするか選んでもらう。
+            savedWithReceipt = attachedReceipt
+            showSavedNotice = true
+        }
+    }
+
+    private var savedNotice: String {
+        let what = savedWithReceipt ? "レシートと一緒に記録しました。" : "記録しました。"
+        guard originalExpense == nil else { return what }
+        return what + "続けて保存すると、次のレシートをすぐ読み取れます。"
+    }
+
+    /// ポップを閉じたあとの行き先。これまでの保存後の動きをそのまま残す。
+    private func finishAfterSave() {
+        if let onSaved {
+            resetForm()
+            onSaved()
+        } else {
+            dismiss()
         }
     }
 

@@ -22,6 +22,8 @@ struct ReceiptImageViewer: View {
     @State private var phase: Phase = .loading
     @State private var scale: CGFloat = 1
     @State private var committedScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var committedOffset: CGSize = .zero
 
     var body: some View {
         NavigationStack {
@@ -59,32 +61,63 @@ struct ReceiptImageViewer: View {
 
     private func imageView(_ image: UIImage) -> some View {
         GeometryReader { proxy in
-            ScrollView([.horizontal, .vertical], showsIndicators: false) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(
-                        width: proxy.size.width * scale,
-                        height: proxy.size.height * scale
-                    )
-                    .gesture(
+            // **枠ごと大きくしてスクロールさせると、中身は左上から伸びる。**
+            // 画像は真ん中を軸に拡大し、見たい場所へは指で動かして寄せる。
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .scaleEffect(scale)
+                .offset(offset)
+                .gesture(
+                    SimultaneousGesture(
                         MagnifyGesture()
                             .onChanged { value in
                                 scale = clamped(committedScale * value.magnification)
+                                offset = clampedOffset(offset, in: proxy.size)
                             }
                             .onEnded { _ in
                                 committedScale = scale
+                                committedOffset = offset
+                            },
+                        DragGesture()
+                            .onChanged { value in
+                                let moved = CGSize(
+                                    width: committedOffset.width + value.translation.width,
+                                    height: committedOffset.height + value.translation.height
+                                )
+                                offset = clampedOffset(moved, in: proxy.size)
+                            }
+                            .onEnded { _ in
+                                committedOffset = offset
                             }
                     )
-                    .onTapGesture(count: 2) {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            scale = scale > 1.05 ? 1 : 2.5
-                            committedScale = scale
-                        }
+                )
+                .onTapGesture(count: 2) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        let zoomedIn = scale > 1.05
+                        scale = zoomedIn ? 1 : 2.5
+                        committedScale = scale
+                        // 等倍に戻すときは位置も戻す。端に寄ったまま縮むと見失う。
+                        offset = zoomedIn ? .zero : clampedOffset(offset, in: proxy.size)
+                        committedOffset = offset
                     }
-                    .accessibilityLabel("レシートの画像")
-            }
+                }
+                .accessibilityLabel("レシートの画像")
+                .accessibilityHint("指を広げると拡大、2回叩くと元に戻ります")
         }
+        .clipped()
+    }
+
+    /// 画像を動かせる範囲。拡大してはみ出した分の半分まで。
+    /// これ以上動かせると、画面から画像が消えて戻せなくなる。
+    private func clampedOffset(_ value: CGSize, in size: CGSize) -> CGSize {
+        let overflowX = max(size.width * (scale - 1) / 2, 0)
+        let overflowY = max(size.height * (scale - 1) / 2, 0)
+        return CGSize(
+            width: min(max(value.width, -overflowX), overflowX),
+            height: min(max(value.height, -overflowY), overflowY)
+        )
     }
 
     private func failureView(_ message: String) -> some View {
@@ -116,6 +149,8 @@ struct ReceiptImageViewer: View {
         phase = .loading
         scale = 1
         committedScale = 1
+        offset = .zero
+        committedOffset = .zero
         do {
             let data = try await store.receiptImage(for: expense)
             guard let image = UIImage(data: data) else {

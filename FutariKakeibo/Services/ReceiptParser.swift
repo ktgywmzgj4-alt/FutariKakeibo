@@ -47,7 +47,11 @@ enum ReceiptParser {
     /// 番号を示す語。桁が金額と紛らわしいため、合計を推測するときに外す。
     private static let serialNumberKeywords = [
         "no.", "no ", "＃", "#", "レシート", "会計券", "精算機", "会計機", "伝票",
-        "承認", "登録番号", "レジ", "会員", "スキャン", "処理", "通番", "端末番号"
+        "承認", "登録番号", "レジ", "会員", "スキャン", "処理", "通番", "端末番号",
+        // クレジットの売上票。レシートの下半分は数字だらけだが、どれも金額ではない。
+        // イオンのレシートで「カード会社 VISA JAPAN 47088」の 47088 を合計として拾った。
+        "カード会社", "カード番号", "加盟店", "取扱区分", "商品区分", "取引内容",
+        "本人確認", "aid", "apl", "有効期限", "取扱日"
     ]
 
     // MARK: - 行
@@ -140,15 +144,19 @@ enum ReceiptParser {
         let found = items(from: rows, before: totalIndex)
         // 明細が読めていれば、合計の候補が妥当かどうかの手がかりになる。
         let itemsTotal = found.isEmpty ? nil : found.reduce(0) { $0 + $1.amount }
+        // 上限で打ち切った明細の和は「途中まで」の値。上側の判定には使えない。
+        let itemsCapped = found.count >= maximumItems
+        let best = bestTotalCandidate(from: rows, itemsTotal: itemsTotal, itemsCapped: itemsCapped)
 
         return ReceiptDraft(
             merchant: shopName,
-            amount: totalAmount(from: rows, itemsTotal: itemsTotal),
+            amount: best?.amount,
             date: receiptDate(from: rows, now: now, calendar: calendar),
             items: found,
             suggestedCategory: category(from: recognizedText, merchant: shopName, items: found),
             recognizedText: recognizedText,
-            shopKey: MerchantKey.make(fromReceiptText: recognizedText, merchant: shopName)
+            shopKey: MerchantKey.make(fromReceiptText: recognizedText, merchant: shopName),
+            amountIsWellEvidenced: best.map(isWellEvidenced) ?? false
         )
     }
 
@@ -326,19 +334,27 @@ enum ReceiptParser {
         "値引", "割引", "お預り", "お預かり", "預り", "お釣", "おつり", "釣銭"
     ]
 
-    private static func hasStrongTotalKeyword(_ text: String) -> Bool {
+    /// レシートは語の途中に空きを入れて刷る。イオンの「合　計」がそれで、
+    /// `contains("合計")` が外れて合計の語が1つも見つからない行になっていた。
+    /// 語を探すときは**空白を取り除いた形でも**見る。
+    /// 素の形も残すのは、`"no "` のように空白そのものが手がかりの語があるため。
+    private static func containsKeyword(_ text: String, from keywords: [String]) -> Bool {
         let lower = text.lowercased()
-        return strongTotalKeywords.contains { lower.contains($0) } || lower.contains("total")
+        if keywords.contains(where: { lower.contains($0) }) { return true }
+        let squeezed = lower.filter { !$0.isWhitespace && $0 != "\u{3000}" }
+        return keywords.contains { squeezed.contains($0) }
+    }
+
+    private static func hasStrongTotalKeyword(_ text: String) -> Bool {
+        containsKeyword(text, from: strongTotalKeywords) || text.lowercased().contains("total")
     }
 
     private static func isNeverTotalRow(_ text: String) -> Bool {
-        let lower = text.lowercased()
-        return neverTotalKeywords.contains { lower.contains($0) }
+        containsKeyword(text, from: neverTotalKeywords)
     }
 
     private static func isSideAmountRow(_ text: String) -> Bool {
-        let lower = text.lowercased()
-        return sideAmountKeywords.contains { lower.contains($0) }
+        containsKeyword(text, from: sideAmountKeywords)
     }
 
     /// 合計の候補を集めて点数をつける。
@@ -346,7 +362,11 @@ enum ReceiptParser {
     /// **最大値でも最後の数字でもなく、点数のいちばん高いものを採る。**
     /// レシートには金額と同じ形の数字が山ほどある（時刻・伝票番号・税額・単価）。
     /// どれを外すかを先に決め、残ったものに手がかりの数で点をつける。
-    static func totalCandidates(in rows: [Row], itemsTotal: Int? = nil) -> [TotalCandidate] {
+    static func totalCandidates(
+        in rows: [Row],
+        itemsTotal: Int? = nil,
+        itemsCapped: Bool = false
+    ) -> [TotalCandidate] {
         // 「合計」の語と金額が別の行に分かれて読まれることがある。
         // 語の下で最初に金額が出てくる行にも、少し低い点を渡す。
         var lookahead: Set<Int> = []
@@ -355,7 +375,9 @@ enum ReceiptParser {
             var next = index + 1
             while next < rows.count, next <= index + totalLookaheadRows {
                 let text = rows[next].text
-                if !isSideAmountRow(text), !isNeverTotalRow(text), !amounts(in: text).isEmpty {
+                if !isSideAmountRow(text), !isNeverTotalRow(text),
+                   !looksLikeSerialNumber(text), !looksLikeDate(text),
+                   !amounts(in: text).isEmpty {
                     lookahead.insert(next)
                     break
                 }
@@ -404,10 +426,17 @@ enum ReceiptParser {
                 if entry.amount >= itemsTotal, Double(entry.amount) <= Double(itemsTotal) * 1.3 {
                     score += 80
                     reasons.append("明細の和と合う")
-                } else if Double(entry.amount) < Double(itemsTotal) * 0.6 {
+                } else if Double(entry.amount) < Double(itemsTotal) * lowerConsistencyRatio {
                     // 明細の和より桁がひとつ小さい。読み違いとみなす。
                     score -= 250
                     reasons.append("明細の和より小さすぎる")
+                } else if !itemsCapped,
+                          Double(entry.amount) > Double(itemsTotal) * upperConsistencyRatio {
+                    // 明細の和より桁がひとつ大きい。カード会社の番号や伝票番号を
+                    // 金額として拾ったときにここへ来る。
+                    // 明細を上限まで拾って打ち切った場合は、和が途中までの値なので見ない。
+                    score -= 250
+                    reasons.append("明細の和より大きすぎる")
                 }
             }
             if (seen[entry.amount] ?? 0) >= 2 {
@@ -423,16 +452,39 @@ enum ReceiptParser {
         }
     }
 
-    static func totalAmount(from rows: [Row], itemsTotal: Int? = nil) -> Int? {
-        let candidates = totalCandidates(in: rows, itemsTotal: itemsTotal)
+    /// いちばん点数の高い候補。採った理由ごと返すので、呼び出し側が
+    /// 「どれくらい確かな根拠で選んだか」を見て次の判断ができる。
+    static func bestTotalCandidate(
+        from rows: [Row],
+        itemsTotal: Int? = nil,
+        itemsCapped: Bool = false
+    ) -> TotalCandidate? {
+        let candidates = totalCandidates(in: rows, itemsTotal: itemsTotal, itemsCapped: itemsCapped)
         logCandidates("合計", candidates.map { ("\($0.amount)", $0.score, $0.reason) })
         guard let best = candidates.max(by: { lhs, rhs in
             // 点数が同じなら大きいほうを採る。合計は明細より小さくならない。
             (lhs.score, lhs.amount) < (rhs.score, rhs.amount)
         }) else { return nil }
         logChoice("合計", "\(best.amount)", best.score, best.reason)
-        return best.amount
+        return best
     }
+
+    static func totalAmount(
+        from rows: [Row],
+        itemsTotal: Int? = nil,
+        itemsCapped: Bool = false
+    ) -> Int? {
+        bestTotalCandidate(from: rows, itemsTotal: itemsTotal, itemsCapped: itemsCapped)?.amount
+    }
+
+    /// 合計の語そのものを手がかりに選べたかどうか。
+    /// これが立っているときは、AIの答えで上書きしない。
+    static func isWellEvidenced(_ candidate: TotalCandidate) -> Bool {
+        candidate.score >= wellEvidencedScore
+    }
+
+    /// 「合計の語」(200) または「語の直下」(170) を含んでいなければ届かない点数。
+    private static let wellEvidencedScore = 170
 
     static func totalAmount(from lines: [String]) -> Int? {
         totalAmount(from: rows(from: RecognizedLine.lines(fromPlainText: lines.joined(separator: "\n"))))
@@ -443,8 +495,7 @@ enum ReceiptParser {
 
     /// レシート番号や伝票番号の行。金額と桁が近く紛らわしい。
     private static func looksLikeSerialNumber(_ text: String) -> Bool {
-        let lower = text.lowercased()
-        return serialNumberKeywords.contains { lower.contains($0) }
+        containsKeyword(text, from: serialNumberKeywords)
     }
 
     private static func isPlausibleAmount(_ value: Int) -> Bool {
