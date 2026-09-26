@@ -7,6 +7,24 @@
 
 ---
 
+## 2026-09-26 合言葉が出ない原因はコードではなくCloudKitのスキーマだった
+
+**`cloudkit.share` という型が Development にも Production にも無い。** 実機のログは
+`CKError 12/2006`（invalidArguments）。`CKShare` を保存するにはこの型が要るが、
+**手では作れない。Development環境で共有を1回保存したときだけCloudKitが自動で足す。**
+そのあと Deploy Schema Changes で Production へ運ぶ（Appleのサポートの回答:
+https://developer.apple.com/forums/thread/841618 ）。
+
+**TestFlightのビルドは必ず Production につながる。** だからTestFlightで何度試しても
+この型は永遠に増えない。ここが「何度やっても失敗する」ループの正体だった。
+
+回り道として `.github/workflows/ios-dev-build.yml` を足した。Ad Hocで書き出し、
+`iCloudContainerEnvironment` を Development にしたIPAを作る。**入れる前に、書き出した
+IPAの署名を読んで Development であることを確かめてから通す。** 手順の全体は
+`Docs/CLOUDKIT_SHARE_SCHEMA.md`。新しく要るのは Ad Hocプロファイル1つとUDIDだけで、
+証明書は配信用を使い回せる。
+
+
 ## 2026-09-06 PR #27をTestFlightへ配信した（ビルド 2026.0906.0135）
 
 **mainにマージせずに配信できる。** `gh workflow run "iOS build and tests" --ref <ブランチ名>` で
