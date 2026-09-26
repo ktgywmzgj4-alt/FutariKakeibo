@@ -1,0 +1,230 @@
+# CloudKitの **Development** 環境につながるビルドを作る。
+#
+# なぜ要るか: `CKShare` を保存するには、コンテナのスキーマに `cloudkit.share`
+# という型が要る。この型は手では作れない。Development環境で実際に共有を1回
+# 保存したときだけ CloudKit が自動で足す。TestFlightのビルドは必ず Production に
+# つながるので、TestFlightで何度試してもこの型は増えない。
+#
+# 手順の全体は Docs/CLOUDKIT_SHARE_SCHEMA.md にある。
+# このワークフローが作るのは「Development環境につながるIPA」だけで、
+# App Store Connect には何も送らない。
+
+name: iOS dev-environment build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-dev-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dev-build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      TEAM_ID: 79XN3292J9
+      BUNDLE_ID: jp.aikawa.futarikakeibo
+      # Apple Developer で作る Ad Hoc プロファイルの名前。ここと一致しないと署名に失敗する。
+      PROFILE_NAME: FutariKakeibo Ad Hoc
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the Ad Hoc profile secret exists
+        shell: bash
+        env:
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_ADHOC_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$PROVISIONING_PROFILE_BASE64" ]]; then
+            echo "APPLE_ADHOC_PROVISIONING_PROFILE_BASE64 が登録されていません。"
+            echo "Docs/CLOUDKIT_SHARE_SCHEMA.md の「1. 端末を登録してAd Hocプロファイルを作る」を先に行ってください。"
+            exit 1
+          fi
+
+      - name: Select Xcode 26
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' -print | sort -V | tail -n 1)"
+          if [[ -z "$XCODE_PATH" ]]; then
+            echo "Xcode 26 is not installed on this runner."
+            exit 1
+          fi
+          sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+
+      - name: Install XcodeGen and generate project
+        shell: bash
+        run: |
+          set -euo pipefail
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
+          xcodegen generate
+
+      # 証明書は配信用と同じものを使う。Ad Hoc も Apple Distribution で署名する。
+      - name: Import Apple Distribution certificate
+        shell: bash
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CERTIFICATE_PATH="$RUNNER_TEMP/distribution_certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+
+          printf '%s' "$CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+      - name: Install the Ad Hoc provisioning profile
+        shell: bash
+        env:
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_ADHOC_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          PROFILE_PATH="$RUNNER_TEMP/FutariKakeibo_Ad_Hoc.mobileprovision"
+          PROFILE_PLIST="$RUNNER_TEMP/profile.plist"
+          PROFILE_DIRECTORY="$HOME/Library/MobileDevice/Provisioning Profiles"
+
+          printf '%s' "$PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
+          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$PROFILE_PLIST")"
+          mkdir -p "$PROFILE_DIRECTORY"
+          cp "$PROFILE_PATH" "$PROFILE_DIRECTORY/$PROFILE_UUID.mobileprovision"
+          printf '%s' "$PROFILE_UUID" > "$RUNNER_TEMP/profile_uuid"
+
+          # 登録されている端末の台数だけ出す。UDIDそのものは出さない。
+          DEVICE_COUNT="$(/usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$PROFILE_PLIST" 2>/dev/null | grep -c '^ ' || true)"
+          echo "プロファイル名: $(/usr/libexec/PlistBuddy -c 'Print :Name' "$PROFILE_PLIST")"
+          echo "登録されている端末: ${DEVICE_COUNT}台"
+          if [[ "$DEVICE_COUNT" -lt 1 ]]; then
+            echo "端末が1台も入っていません。Ad Hocプロファイルに iPhone を登録してください。"
+            exit 1
+          fi
+
+      - name: Choose a build number
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_NUMBER="$(date -u '+%Y.%m%d.%H%M')"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "build number: $BUILD_NUMBER"
+
+      - name: Archive signed app
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -project FutariKakeibo.xcodeproj \
+            -scheme FutariKakeibo \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/FutariKakeibo.xcarchive" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY='Apple Distribution' \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $RUNNER_TEMP/app-signing.keychain-db"
+
+      # ここが今回の要。`iCloudContainerEnvironment` を Development にすると、
+      # このIPAは CloudKit の Development 環境につながる。
+      # App Store / TestFlight の書き出しではこの指定はできない（必ず Production）。
+      - name: Export Ad Hoc IPA pointed at the Development environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>release-testing</string>
+            <key>destination</key>
+            <string>export</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>teamID</key>
+            <string>$TEAM_ID</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>$BUNDLE_ID</key>
+              <string>$PROFILE_NAME</string>
+            </dict>
+            <key>iCloudContainerEnvironment</key>
+            <string>Development</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>manageAppVersionAndBuildNumber</key>
+            <false/>
+          </dict>
+          </plist>
+          PLIST
+
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/FutariKakeibo.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      # 入れてから「Productionにつながっていた」では意味がないので、書き出した中身で確かめる。
+      - name: Prove the IPA really points at Development
+        shell: bash
+        run: |
+          set -euo pipefail
+          IPA_PATH="$(find "$RUNNER_TEMP/export" -maxdepth 1 -type f -name '*.ipa' -print -quit)"
+          if [[ -z "$IPA_PATH" ]]; then
+            echo "IPAが書き出されていません。"
+            exit 1
+          fi
+
+          WORK="$RUNNER_TEMP/verify"
+          rm -rf "$WORK" && mkdir -p "$WORK"
+          unzip -q "$IPA_PATH" -d "$WORK"
+          APP="$(find "$WORK/Payload" -maxdepth 1 -name '*.app' -print -quit)"
+
+          codesign -d --entitlements :- --xml "$APP" > "$WORK/entitlements.plist" 2>/dev/null
+          echo "--- 署名に入っている権限 ---"
+          plutil -p "$WORK/entitlements.plist" || cat "$WORK/entitlements.plist"
+          echo "---------------------------"
+
+          ENVIRONMENT="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.icloud-container-environment' "$WORK/entitlements.plist" 2>/dev/null || true)"
+          if [[ "$ENVIRONMENT" != "Development" ]]; then
+            echo "iCloudの環境が Development になっていません（読み取れた値: '${ENVIRONMENT:-なし}'）。"
+            echo "このまま入れても Production につながるので、共有は同じ理由で失敗します。"
+            exit 1
+          fi
+          echo "iCloudの環境: Development （これで cloudkit.share を作れます）"
+
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist"
+
+      - name: Upload the IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: FutariKakeibo-development-${{ github.run_number }}
+          path: ${{ runner.temp }}/export/*.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Clean up signing files
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          PROFILE_UUID="$(cat "$RUNNER_TEMP/profile_uuid" 2>/dev/null)"
+          if [[ -n "$PROFILE_UUID" ]]; then
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          fi
+          security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" 2>/dev/null
+          rm -f "$RUNNER_TEMP/distribution_certificate.p12"
+          rm -f "$RUNNER_TEMP/FutariKakeibo_Ad_Hoc.mobileprovision"

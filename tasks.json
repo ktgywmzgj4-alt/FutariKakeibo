@@ -187,6 +187,16 @@
       "evidence": "",
       "dependencies": ["T-013"],
       "notes": "T-013でクラッシュは直った（落ちずにエラーが出た）。次の壁は共有のURLが空だったこと。失敗したら画面の写真を撮ること。カッコの中に、どこで詰まったかが出る"
+    },
+    {
+      "id": "T-020",
+      "task": "cloudkit.share をCloudKitのProductionスキーマに入れる",
+      "status": "todo",
+      "owner": "人間 + 実行役",
+      "passes": "CloudKit Console の Production → Record Types に cloudkit.share が並んでいるスクリーンショット。そのうえでTestFlightの版から8文字の合言葉が出ること",
+      "evidence": "",
+      "dependencies": [],
+      "notes": "2026-09-26 実機ログの CKError 12/2006 の原因。この型は手では作れず、Development環境で共有を1回保存したときだけCloudKitが自動生成する。TestFlightは必ずProductionにつながるので回り道が要る。手順は Docs/CLOUDKIT_SHARE_SCHEMA.md。ワークフロー ios-dev-build.yml がDevelopment環境のIPAを作る。新しく要るのは Ad Hocプロファイル1つとUDIDだけで、証明書は配信用を使い回せる。Reset Environments は実行前に相談すること"
     }
   ]
 }
