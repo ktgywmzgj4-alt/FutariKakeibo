@@ -146,7 +146,12 @@ enum ReceiptParser {
         let itemsTotal = found.isEmpty ? nil : found.reduce(0) { $0 + $1.amount }
         // 上限で打ち切った明細の和は「途中まで」の値。上側の判定には使えない。
         let itemsCapped = found.count >= maximumItems
-        let best = bestTotalCandidate(from: rows, itemsTotal: itemsTotal, itemsCapped: itemsCapped)
+        let best = bestTotalCandidate(
+            from: rows,
+            itemsTotal: itemsTotal,
+            itemsCount: found.count,
+            itemsCapped: itemsCapped
+        )
 
         return ReceiptDraft(
             merchant: shopName,
@@ -289,6 +294,9 @@ enum ReceiptParser {
             hasStrongTotalKeyword(row.text)
                 && !isNeverTotalRow(row.text)
                 && !isSideAmountRow(row.text)
+                // クレジット売上票の「取引内容 お買上」も合計の語を持つ。
+                // そこまでを明細の範囲にすると、売上票の行まで品物として数えてしまう。
+                && !looksLikeSerialNumber(row.text)
         }
     }
 
@@ -362,9 +370,18 @@ enum ReceiptParser {
     /// **最大値でも最後の数字でもなく、点数のいちばん高いものを採る。**
     /// レシートには金額と同じ形の数字が山ほどある（時刻・伝票番号・税額・単価）。
     /// どれを外すかを先に決め、残ったものに手がかりの数で点をつける。
+    /// 明細の和を「上限」の判定にも使ってよくなる件数。
+    ///
+    /// **1〜2件から作った和では、本当の合計がその何倍あってもおかしくない。**
+    /// 20品のレシートで2品しか読めていなければ、和は実際の1割ということもある。
+    /// 何件か積み上がって初めて「この辺りのはず」と言える。
+    private static let minimumItemsForUpperBound = 4
+
     static func totalCandidates(
         in rows: [Row],
         itemsTotal: Int? = nil,
+        // 件数を渡さない呼び出しでは、和はそのまま信用してよいものとして見る。
+        itemsCount: Int = .max,
         itemsCapped: Bool = false
     ) -> [TotalCandidate] {
         // 「合計」の語と金額が別の行に分かれて読まれることがある。
@@ -430,7 +447,7 @@ enum ReceiptParser {
                     // 明細の和より桁がひとつ小さい。読み違いとみなす。
                     score -= 250
                     reasons.append("明細の和より小さすぎる")
-                } else if !itemsCapped,
+                } else if !itemsCapped, itemsCount >= minimumItemsForUpperBound,
                           Double(entry.amount) > Double(itemsTotal) * upperConsistencyRatio {
                     // 明細の和より桁がひとつ大きい。カード会社の番号や伝票番号を
                     // 金額として拾ったときにここへ来る。
@@ -457,9 +474,15 @@ enum ReceiptParser {
     static func bestTotalCandidate(
         from rows: [Row],
         itemsTotal: Int? = nil,
+        itemsCount: Int = .max,
         itemsCapped: Bool = false
     ) -> TotalCandidate? {
-        let candidates = totalCandidates(in: rows, itemsTotal: itemsTotal, itemsCapped: itemsCapped)
+        let candidates = totalCandidates(
+            in: rows,
+            itemsTotal: itemsTotal,
+            itemsCount: itemsCount,
+            itemsCapped: itemsCapped
+        )
         logCandidates("合計", candidates.map { ("\($0.amount)", $0.score, $0.reason) })
         guard let best = candidates.max(by: { lhs, rhs in
             // 点数が同じなら大きいほうを採る。合計は明細より小さくならない。
@@ -472,9 +495,15 @@ enum ReceiptParser {
     static func totalAmount(
         from rows: [Row],
         itemsTotal: Int? = nil,
+        itemsCount: Int = .max,
         itemsCapped: Bool = false
     ) -> Int? {
-        bestTotalCandidate(from: rows, itemsTotal: itemsTotal, itemsCapped: itemsCapped)?.amount
+        bestTotalCandidate(
+            from: rows,
+            itemsTotal: itemsTotal,
+            itemsCount: itemsCount,
+            itemsCapped: itemsCapped
+        )?.amount
     }
 
     /// 合計の語そのものを手がかりに選べたかどうか。

@@ -997,12 +997,30 @@ final class ReceiptParserTests: XCTestCase {
                 line("スーパーどこか", y: 0.05, height: 0.03),
                 line("2026/09/21", y: 0.10),
                 line("りんご", y: 0.20), price("300", y: 0.20),
+                line("みかん", y: 0.24), price("400", y: 0.24),
+                line("ぶどう", y: 0.28), price("250", y: 0.28),
+                line("もも", y: 0.32), price("284", y: 0.32),
                 line(spelling, y: 0.40), price("¥1,234", y: 0.40),
                 line("カード会社 VISA JAPAN 47088", y: 0.70)
             ]
             let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
             XCTAssertEqual(draft.amount, 1_234, "「\(spelling)」で合計を見失った")
         }
+    }
+
+    /// 明細が数件しか読めていないときは、上側の判定をしない。
+    ///
+    /// **20品のレシートで2品しか読めなければ、和は実際の1割ということもある。**
+    /// その和を basis に「大きすぎる」と切ると、正しい合計まで落としてしまう。
+    func testTheUpperBoundNeedsEnoughItemsToMeanAnything() {
+        let rows = ReceiptParser.rows(from: [
+            line("合計", y: 0.50), price("¥9,800", y: 0.50)
+        ])
+        let fewItems = ReceiptParser.totalCandidates(in: rows, itemsTotal: 300, itemsCount: 1)
+        let manyItems = ReceiptParser.totalCandidates(in: rows, itemsTotal: 300, itemsCount: 8)
+
+        XCTAssertGreaterThan(fewItems.first?.score ?? 0, manyItems.first?.score ?? 0)
+        XCTAssertGreaterThan(fewItems.first?.score ?? 0, 0, "明細1件を根拠に合計を落としている")
     }
 
     /// 明細の和より桁がひとつ大きい候補は落とす。
