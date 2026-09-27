@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// レシートを大きく見る画面。指を広げると拡大でき、2回叩くと元に戻る。
+/// レシートを大きく見る画面。指を広げると拡大でき、2回叩くとその場所へ寄る。
 ///
 /// 画像は詳細を開いたこのときにだけ読む。端末に無ければiCloudから取ってくるので、
 /// 「読み込み中」と「読み込めなかった」の両方を必ず画面に出す。落とさない。
@@ -17,13 +17,7 @@ struct ReceiptImageViewer: View {
         case failed(String)
     }
 
-    private static let maxScale: CGFloat = 5
-
     @State private var phase: Phase = .loading
-    @State private var scale: CGFloat = 1
-    @State private var committedScale: CGFloat = 1
-    @State private var offset: CGSize = .zero
-    @State private var committedOffset: CGSize = .zero
 
     var body: some View {
         NavigationStack {
@@ -32,7 +26,9 @@ struct ReceiptImageViewer: View {
                 case .loading:
                     loadingView
                 case let .ready(image):
-                    imageView(image)
+                    ZoomableImage(image: image)
+                        .accessibilityLabel("レシートの画像")
+                        .accessibilityHint("指を広げると拡大、2回叩くとその場所へ寄ります")
                 case let .failed(message):
                     failureView(message)
                 }
@@ -59,67 +55,6 @@ struct ReceiptImageViewer: View {
         }
     }
 
-    private func imageView(_ image: UIImage) -> some View {
-        GeometryReader { proxy in
-            // **枠ごと大きくしてスクロールさせると、中身は左上から伸びる。**
-            // 画像は真ん中を軸に拡大し、見たい場所へは指で動かして寄せる。
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(width: proxy.size.width, height: proxy.size.height)
-                .scaleEffect(scale)
-                .offset(offset)
-                .gesture(
-                    SimultaneousGesture(
-                        MagnifyGesture()
-                            .onChanged { value in
-                                scale = clamped(committedScale * value.magnification)
-                                offset = clampedOffset(offset, in: proxy.size)
-                            }
-                            .onEnded { _ in
-                                committedScale = scale
-                                committedOffset = offset
-                            },
-                        DragGesture()
-                            .onChanged { value in
-                                let moved = CGSize(
-                                    width: committedOffset.width + value.translation.width,
-                                    height: committedOffset.height + value.translation.height
-                                )
-                                offset = clampedOffset(moved, in: proxy.size)
-                            }
-                            .onEnded { _ in
-                                committedOffset = offset
-                            }
-                    )
-                )
-                .onTapGesture(count: 2) {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        let zoomedIn = scale > 1.05
-                        scale = zoomedIn ? 1 : 2.5
-                        committedScale = scale
-                        // 等倍に戻すときは位置も戻す。端に寄ったまま縮むと見失う。
-                        offset = zoomedIn ? .zero : clampedOffset(offset, in: proxy.size)
-                        committedOffset = offset
-                    }
-                }
-                .accessibilityLabel("レシートの画像")
-                .accessibilityHint("指を広げると拡大、2回叩くと元に戻ります")
-        }
-        .clipped()
-    }
-
-    /// 画像を動かせる範囲。拡大してはみ出した分の半分まで。
-    /// これ以上動かせると、画面から画像が消えて戻せなくなる。
-    private func clampedOffset(_ value: CGSize, in size: CGSize) -> CGSize {
-        let overflowX = max(size.width * (scale - 1) / 2, 0)
-        let overflowY = max(size.height * (scale - 1) / 2, 0)
-        return CGSize(
-            width: min(max(value.width, -overflowX), overflowX),
-            height: min(max(value.height, -overflowY), overflowY)
-        )
-    }
-
     private func failureView(_ message: String) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
@@ -141,16 +76,8 @@ struct ReceiptImageViewer: View {
         .padding(AppTheme.screenPadding)
     }
 
-    private func clamped(_ value: CGFloat) -> CGFloat {
-        min(max(value, 1), Self.maxScale)
-    }
-
     private func load() async {
         phase = .loading
-        scale = 1
-        committedScale = 1
-        offset = .zero
-        committedOffset = .zero
         do {
             let data = try await store.receiptImage(for: expense)
             guard let image = UIImage(data: data) else {
@@ -160,6 +87,104 @@ struct ReceiptImageViewer: View {
             phase = .ready(image)
         } catch {
             phase = .failed(error.localizedDescription)
+        }
+    }
+}
+
+/// 写真アプリと同じ操作感で拡大する。
+///
+/// **SwiftUIのジェスチャで自前に作ると、どうしてももたつく。**
+/// 指の動きが毎回SwiftUIの状態更新を通るうえ、慣性も端の跳ね返りも無い。
+/// `UIScrollView` はそれを全部持っていて、拡大と移動を画面側で処理する。
+private struct ZoomableImage: UIViewRepresentable {
+    let image: UIImage
+
+    func makeUIView(context: Context) -> UIScrollView {
+        let scrollView = UIScrollView()
+        scrollView.delegate = context.coordinator
+        scrollView.minimumZoomScale = 1
+        scrollView.maximumZoomScale = 6
+        scrollView.bouncesZoom = true
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.backgroundColor = .clear
+        scrollView.contentInsetAdjustmentBehavior = .never
+
+        let imageView = UIImageView(image: image)
+        imageView.contentMode = .scaleAspectFit
+        imageView.isUserInteractionEnabled = true
+        scrollView.addSubview(imageView)
+        context.coordinator.imageView = imageView
+
+        let doubleTap = UITapGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleDoubleTap(_:))
+        )
+        doubleTap.numberOfTapsRequired = 2
+        scrollView.addGestureRecognizer(doubleTap)
+
+        return scrollView
+    }
+
+    func updateUIView(_ scrollView: UIScrollView, context: Context) {
+        if context.coordinator.imageView?.image !== image {
+            context.coordinator.imageView?.image = image
+            scrollView.zoomScale = scrollView.minimumZoomScale
+        }
+        context.coordinator.layout(in: scrollView)
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator: NSObject, UIScrollViewDelegate {
+        var imageView: UIImageView?
+
+        func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }
+
+        func scrollViewDidZoom(_ scrollView: UIScrollView) {
+            center(in: scrollView)
+        }
+
+        /// 画面の大きさが決まってから、画像をそこにぴったり収める。
+        func layout(in scrollView: UIScrollView) {
+            guard let imageView, scrollView.bounds.width > 0, scrollView.bounds.height > 0 else {
+                return
+            }
+            guard imageView.frame.size != scrollView.bounds.size || scrollView.zoomScale == 1 else {
+                return
+            }
+            imageView.frame = CGRect(origin: .zero, size: scrollView.bounds.size)
+            scrollView.contentSize = scrollView.bounds.size
+            center(in: scrollView)
+        }
+
+        /// 画面より小さいあいだは真ん中に置く。
+        /// これをしないと、縮めたとき左上に張り付いて見失う。
+        private func center(in scrollView: UIScrollView) {
+            guard let imageView else { return }
+            let extraX = max(scrollView.bounds.width - imageView.frame.width, 0) / 2
+            let extraY = max(scrollView.bounds.height - imageView.frame.height, 0) / 2
+            scrollView.contentInset = UIEdgeInsets(
+                top: extraY, left: extraX, bottom: extraY, right: extraX
+            )
+        }
+
+        @objc
+        func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {
+            guard let scrollView = recognizer.view as? UIScrollView else { return }
+            guard scrollView.zoomScale <= scrollView.minimumZoomScale * 1.05 else {
+                scrollView.setZoomScale(scrollView.minimumZoomScale, animated: true)
+                return
+            }
+            // 叩いた場所へ寄せる。真ん中ではなく、見たいところへ。
+            let scale = min(scrollView.maximumZoomScale, 3)
+            let point = recognizer.location(in: imageView)
+            let size = CGSize(
+                width: scrollView.bounds.width / scale,
+                height: scrollView.bounds.height / scale
+            )
+            let origin = CGPoint(x: point.x - size.width / 2, y: point.y - size.height / 2)
+            scrollView.zoom(to: CGRect(origin: origin, size: size), animated: true)
         }
     }
 }

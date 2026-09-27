@@ -158,7 +158,9 @@ final class AppStore: ObservableObject {
         snapshot.expenses.append(expense)
         snapshot.expenses.sort { $0.date > $1.date }
         await persistLocally()
-        await upload(expense)
+        // 端末に書けた時点で記録は残る。**iCloudへの送信を画面に待たせない。**
+        // 送れなくても `syncState` に出るし、次の同期でもう一度送る。
+        Task { await upload(expense) }
     }
 
     func updateExpense(_ expense: Expense) async {
@@ -172,7 +174,7 @@ final class AppStore: ObservableObject {
         snapshot.expenses[index] = changed
         snapshot.expenses.sort { $0.date > $1.date }
         await persistLocally()
-        await upload(changed)
+        Task { await upload(changed) }
     }
 
     func deleteExpense(_ expense: Expense) async {
@@ -256,8 +258,13 @@ final class AppStore: ObservableObject {
                 household: snapshot.household
             )
         }
-        await upload(expense)
-        await uploadReceiptImage(imageID, expenseID: expenseID)
+        // 画像はレシート1枚で数百KBある。回線が細いと送信だけで何秒もかかり、
+        // 「支出を保存」を押してから画面が動くまでの待ち時間になっていた。
+        // 端末には書けているので、送るのは後ろで続ける。
+        Task {
+            await upload(expense)
+            await uploadReceiptImage(imageID, expenseID: expenseID)
+        }
     }
 
     /// 支出からレシート画像を外して消す。

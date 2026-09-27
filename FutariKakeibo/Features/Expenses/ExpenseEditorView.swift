@@ -38,6 +38,8 @@ struct ExpenseEditorView: View {
     @State private var isShowingPhotoPicker = false
     /// いま保存した1件にレシート画像が付いたかどうか。ポップの文言に使う。
     @State private var savedWithReceipt = false
+    /// 保存の処理中。ボタンに印を出して、二重に押されないようにする。
+    @State private var isSaving = false
     @FocusState private var focusedField: Field?
 
     private enum Field {
@@ -68,16 +70,26 @@ struct ExpenseEditorView: View {
                 detectedItemsCard
                 expenseFields
 
+                // レシート画像を書き出して送り出すぶん、保存には少し間がある。
+                // 押したのに何も起きない時間を作らない。動いていることを見せる。
                 Button(action: save) {
-                    Text(originalExpense == nil ? "支出を保存" : "変更を保存")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 15)
-                        .foregroundStyle(.white)
-                        .background(canSave ? AppTheme.accent : AppTheme.secondaryText.opacity(0.4))
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    HStack(spacing: 9) {
+                        if isSaving {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .tint(.white)
+                        }
+                        Text(saveButtonTitle)
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+                    .foregroundStyle(.white)
+                    .background(canSave ? AppTheme.accent : AppTheme.secondaryText.opacity(0.4))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                .disabled(!canSave)
+                .disabled(!canSave || isSaving)
+                .animation(.easeInOut(duration: 0.15), value: isSaving)
 
                 if !recognizedText.isEmpty {
                     DisclosureGroup("読み取った文字を確認") {
@@ -619,9 +631,15 @@ struct ExpenseEditorView: View {
         return "\(known.joined(separator: "・"))を読み取りました。\(missing.joined(separator: "・"))は読み取れなかったので入力してください。"
     }
 
+    private var saveButtonTitle: String {
+        if isSaving { return "保存中…" }
+        return originalExpense == nil ? "支出を保存" : "変更を保存"
+    }
+
     private func save() {
         guard canSave, let paidByMemberID else { return }
         focusedField = nil
+        isSaving = true
         let expense = Expense(
             id: originalExpense?.id ?? UUID(),
             title: effectiveTitle,
@@ -661,6 +679,7 @@ struct ExpenseEditorView: View {
 
             // ここで画面を閉じず、保存できたことを伝えてから次をどうするか選んでもらう。
             savedWithReceipt = attachedReceipt
+            isSaving = false
             showSavedNotice = true
         }
     }
