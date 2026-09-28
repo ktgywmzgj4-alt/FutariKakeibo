@@ -204,7 +204,7 @@
       "status": "todo",
       "owner": "人間 + 実行役",
       "passes": "CloudKit Console の Production → Record Types に cloudkit.share が並んでいるスクリーンショット。そのうえでTestFlightの版から8文字の合言葉が出ること",
-      "evidence": "",
+      "evidence": "2026-09-28 Development環境で cloudkit.share の生成を確認（CloudKit Console の Record Types に Expense/Household/Income/ReceiptImage/ShareInvite/Users と並んで表示）。iPhone SE2 に Ad Hoc版（ビルド 2026.0927.1429）を入れ、合言葉 53VQ-DQ53 の発行に成功したことで生まれた。原因が「Productionに cloudkit.share が無い」ことだったと裏付けられた。残りは Deploy Schema Changes で Production へ運び、TestFlight版どうしで2台の参加を確かめること",
       "dependencies": [],
       "notes": "2026-09-26 実機ログの CKError 12/2006 の原因。この型は手では作れず、Development環境で共有を1回保存したときだけCloudKitが自動生成する。TestFlightは必ずProductionにつながるので回り道が要る。手順は Docs/CLOUDKIT_SHARE_SCHEMA.md。ワークフロー ios-dev-build.yml がDevelopment環境のIPAを作る。新しく要るのは Ad Hocプロファイル1つとUDIDだけで、証明書は配信用を使い回せる。Reset Environments は実行前に相談すること"
     }
