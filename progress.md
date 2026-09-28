@@ -7,6 +7,25 @@
 
 ---
 
+## 2026-09-28 2台の共有が通った（T-016 合格）。反映が遅い原因は同期の順番だった
+
+**Deploy Schema Changes で cloudkit.share が Production に入り、13 mini で発行した
+合言葉で SE2 が参加できた。** 同じ支出一覧と精算が両方に出ている。
+3週間の `CKError 12/2006` はこれで終わり。原因は最後まで「Productionに型が無い」だった。
+
+**相手の記録が画面に出るまで10秒以上かかっていたのは、同期の順番のせい。**
+`refreshFromCloudIfConfigured` は**取得の前に**手元の支出・収入・削除・レシート画像を
+1件ずつ全部送り直していた。7件あれば7往復。取得はその後。
+
+**取得を先にした。** 送り直しは `pushBack` に分けて後ろのTaskへ回し、対象も
+**クラウドに無いか、クラウドのほうが古いものだけ**に絞った（`AppStore.staleIDs`）。
+前回の送信が通っていれば、ここはたいてい空になる。
+`saveHousehold` だけは取得の前に残す — この先で `snapshot.household = cloud.household`
+と丸ごと置き換わるので、手元で変えた呼び名や予算を落とさないため。1往復で済む。
+
+**`staleIDs` を「全部返す」形に戻すと、10秒の問題がそのまま再発する。**
+`SyncPushBackTests` がそれを見張っている。履歴の画面にも引っぱって更新を足した。
+
 ## 2026-09-28 Development環境で合言葉が出た → cloudkit.share は生まれた
 
 **iPhone SE2（Ad Hoc版）で合言葉 53VQ-DQ53 が発行できた。** つまり `CKShare` の保存が

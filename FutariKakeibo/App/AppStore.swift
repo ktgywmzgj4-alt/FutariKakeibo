@@ -683,6 +683,12 @@ final class AppStore: ObservableObject {
         }
     }
 
+    /// iCloudの内容を取り込んで、手元と突き合わせる。
+    ///
+    /// **取ってくるのが先。送り直しは後ろへ回す。**
+    /// 以前はここで手元の支出・収入・削除・レシート画像を1件ずつ全部送り直してから
+    /// 取得していた。7件あれば7往復で、相手の記録が画面に出るまで10秒以上かかっていた。
+    /// 送り直しが本当に要るのは**クラウド側が古いものだけ**で、それは突き合わせの途中で分かる。
     func refreshFromCloudIfConfigured() async {
         guard let household = snapshot.household,
               let location = household.cloudLocation,
@@ -691,47 +697,9 @@ final class AppStore: ObservableObject {
 
         syncState = .syncing
         do {
-            // ローカルの未同期変更と削除を先に再送する。
+            // 家計簿の設定はこの先でクラウド側にまるごと置き換わる。
+            // 手元で変えた呼び名や予算を落とさないよう、これだけは先に送る。1往復で済む。
             try await cloudService.saveHousehold(household)
-            for expense in snapshot.expenses {
-                try await cloudService.saveExpense(expense, household: household)
-            }
-            for (id, deletedAt) in snapshot.deletedExpenseIDs {
-                try await cloudService.deleteExpense(
-                    id: id,
-                    deletedAt: deletedAt,
-                    household: household
-                )
-            }
-            for income in snapshot.incomes {
-                try await cloudService.saveIncome(income, household: household)
-            }
-            for (id, deletedAt) in snapshot.deletedIncomeIDs {
-                try await cloudService.deleteIncome(
-                    id: id,
-                    deletedAt: deletedAt,
-                    household: household
-                )
-            }
-
-            // まだ送れていないレシート画像を送り直す。
-            for imageID in snapshot.pendingReceiptImageIDs {
-                guard let expense = snapshot.expenses.first(where: { $0.receiptImageID == imageID }) else {
-                    snapshot.pendingReceiptImageIDs.removeAll { $0 == imageID }
-                    continue
-                }
-                do {
-                    try await receiptImages.upload(
-                        id: imageID,
-                        expenseID: expense.id,
-                        household: household
-                    )
-                    snapshot.pendingReceiptImageIDs.removeAll { $0 == imageID }
-                } catch {
-                    // 1枚送れなくても、家計のデータの同期は止めない。次の同期でまた試す。
-                    continue
-                }
-            }
 
             let cloud = try await cloudService.fetchSnapshot(at: location)
             let deletions = snapshot.deletedExpenseIDs.merging(cloud.deletedExpenseIDs) {
@@ -767,6 +735,23 @@ final class AppStore: ObservableObject {
                 }
             }.sorted { $0.date > $1.date }
 
+            // クラウドに無い、またはクラウドのほうが古いものだけが送り直しの対象。
+            // 前回の送信が通っていれば、ここはたいてい空になる。
+            let staleExpenseIDs = Self.staleIDs(
+                local: merged.map { ($0.id, $0.updatedAt) },
+                remote: cloud.expenses.map { ($0.id, $0.updatedAt) }
+            )
+            let staleExpenses = merged.filter { staleExpenseIDs.contains($0.id) }
+            let staleIncomeIDs = Self.staleIDs(
+                local: mergedIncomes.map { ($0.id, $0.updatedAt) },
+                remote: cloud.incomes.map { ($0.id, $0.updatedAt) }
+            )
+            let staleIncomes = mergedIncomes.filter { staleIncomeIDs.contains($0.id) }
+            let unsentDeletions = deletions.filter { cloud.deletedExpenseIDs[$0.key] == nil }
+            let unsentIncomeDeletions = incomeDeletions.filter {
+                cloud.deletedIncomeIDs[$0.key] == nil
+            }
+
             var mergedHousehold = cloud.household
             mergedHousehold.cloudLocation = location
             snapshot.household = mergedHousehold
@@ -783,6 +768,17 @@ final class AppStore: ObservableObject {
             snapshot.pendingReceiptImageIDs.removeAll { !liveImageIDs.contains($0) }
             await persistLocally()
             syncState = .synced(.now)
+
+            // ここから先は画面に出ている内容を変えない。待たせない。
+            Task {
+                await pushBack(
+                    expenses: staleExpenses,
+                    incomes: staleIncomes,
+                    deletedExpenses: unsentDeletions,
+                    deletedIncomes: unsentIncomeDeletions,
+                    household: mergedHousehold
+                )
+            }
         } catch {
             syncState = .failed(error.localizedDescription)
         }
@@ -790,6 +786,70 @@ final class AppStore: ObservableObject {
         // 相手が追加したひな形の分も、この端末で計上しておく。
         await applyRecurringExpenses()
         tidyReceiptImages()
+    }
+
+    /// 送り直しが要るものの印。**クラウドに無いか、クラウドのほうが古いものだけ。**
+    ///
+    /// ここを「全部」にすると、同期のたびに件数ぶんの往復が走り、相手の記録が
+    /// 画面に出るまで何秒もかかる。実機で10秒を超えていたのがそれだった。
+    /// 同じ時刻のものは送らない — 送っても中身が変わらないため。
+    nonisolated static func staleIDs(
+        local: [(id: UUID, updatedAt: Date)],
+        remote: [(id: UUID, updatedAt: Date)]
+    ) -> Set<UUID> {
+        let remoteByID = Dictionary(remote.map { ($0.id, $0.updatedAt) }) { first, _ in first }
+        return Set(
+            local
+                .filter { item in
+                    guard let remoteDate = remoteByID[item.id] else { return true }
+                    return item.updatedAt > remoteDate
+                }
+                .map(\.id)
+        )
+    }
+
+    /// 前回の送信が通らなかったぶんを送り直す。
+    ///
+    /// 画面はもう新しくなっているので、ここで失敗しても `syncState` は動かさない。
+    /// 残ったものは次の同期でまた拾われる。
+    private func pushBack(
+        expenses: [Expense],
+        incomes: [Income],
+        deletedExpenses: [UUID: Date],
+        deletedIncomes: [UUID: Date],
+        household: Household
+    ) async {
+        for expense in expenses {
+            try? await cloudService.saveExpense(expense, household: household)
+        }
+        for (id, deletedAt) in deletedExpenses {
+            try? await cloudService.deleteExpense(id: id, deletedAt: deletedAt, household: household)
+        }
+        for income in incomes {
+            try? await cloudService.saveIncome(income, household: household)
+        }
+        for (id, deletedAt) in deletedIncomes {
+            try? await cloudService.deleteIncome(id: id, deletedAt: deletedAt, household: household)
+        }
+
+        // まだ送れていないレシート画像。1枚ずつ、送れたものから印を外す。
+        for imageID in snapshot.pendingReceiptImageIDs {
+            guard let expense = snapshot.expenses.first(where: { $0.receiptImageID == imageID }) else {
+                snapshot.pendingReceiptImageIDs.removeAll { $0 == imageID }
+                continue
+            }
+            do {
+                try await receiptImages.upload(
+                    id: imageID,
+                    expenseID: expense.id,
+                    household: household
+                )
+                snapshot.pendingReceiptImageIDs.removeAll { $0 == imageID }
+            } catch {
+                continue
+            }
+        }
+        await persistLocally()
     }
 
     func exportCSV() throws -> URL {

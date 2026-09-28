@@ -53,6 +53,8 @@ struct ExpenseListView: View {
             }
         }
         .background(AppTheme.background)
+        // 相手の記録を待つのはたいていこの画面。引っぱって取りに行けるようにする。
+        .refreshable { await store.refreshFromCloudIfConfigured() }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "内容やメモを検索")

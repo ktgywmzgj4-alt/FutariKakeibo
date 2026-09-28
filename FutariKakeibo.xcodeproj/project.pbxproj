@@ -66,6 +66,7 @@
 		C00000000000000000000058 /* ShareInvite.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000058 /* ShareInvite.swift */; };
 		C00000000000000000000059 /* SharingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000059 /* SharingView.swift */; };
 		C00000000000000000000060 /* ShareInviteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000060 /* ShareInviteTests.swift */; };
+		C00000000000000000000073 /* SyncPushBackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000073 /* SyncPushBackTests.swift */; };
 		C00000000000000000000062 /* ReceiptInterpreterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000062 /* ReceiptInterpreterTests.swift */; };
 		C00000000000000000000065 /* ReceiptImageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000065 /* ReceiptImageData.swift */; };
 		C00000000000000000000066 /* ReceiptImageProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000066 /* ReceiptImageProcessor.swift */; };
@@ -151,6 +152,7 @@
 		B00000000000000000000058 /* ShareInvite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/ShareInvite.swift; sourceTree = "<group>"; };
 		B00000000000000000000059 /* SharingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Settings/SharingView.swift; sourceTree = "<group>"; };
 		B00000000000000000000060 /* ShareInviteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareInviteTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000073 /* SyncPushBackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPushBackTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000062 /* ReceiptInterpreterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptInterpreterTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000065 /* ReceiptImageData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/ReceiptImageData.swift; sourceTree = "<group>"; };
 		B00000000000000000000066 /* ReceiptImageProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ReceiptImageProcessor.swift; sourceTree = "<group>"; };
@@ -275,6 +277,7 @@
 				B00000000000000000000051 /* SnapshotCompatibilityTests.swift */,
 				B00000000000000000000056 /* IncomeTests.swift */,
 				B00000000000000000000060 /* ShareInviteTests.swift */,
+				B00000000000000000000073 /* SyncPushBackTests.swift */,
 				B00000000000000000000062 /* ReceiptInterpreterTests.swift */,
 				B00000000000000000000064 /* MerchantMemoTests.swift */,
 				B00000000000000000000071 /* ReceiptImageTests.swift */,
@@ -453,6 +456,7 @@
 				C00000000000000000000051 /* SnapshotCompatibilityTests.swift in Sources */,
 				C00000000000000000000056 /* IncomeTests.swift in Sources */,
 				C00000000000000000000060 /* ShareInviteTests.swift in Sources */,
+				C00000000000000000000073 /* SyncPushBackTests.swift in Sources */,
 				C00000000000000000000062 /* ReceiptInterpreterTests.swift in Sources */,
 				C00000000000000000000064 /* MerchantMemoTests.swift in Sources */,
 				C00000000000000000000071 /* ReceiptImageTests.swift in Sources */,
