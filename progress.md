@@ -7,6 +7,21 @@
 
 ---
 
+## 2026-09-28 Development環境で合言葉が出た → cloudkit.share は生まれた
+
+**iPhone SE2（Ad Hoc版）で合言葉 53VQ-DQ53 が発行できた。** つまり `CKShare` の保存が
+成功しており、**`cloudkit.share` が Development 環境に生成されている。**
+3週間追った `CKError 12/2006` の原因が「Production に cloudkit.share が無い」であることが、
+これで裏付けられた。あとは Deploy Schema Changes で Production へ運ぶだけ。
+
+**2台目（iPhone 13 mini）で参加できなかったのは正常。** SE2はAd Hoc版でDevelopment、
+13 miniはTestFlight版でProduction。合言葉のレコードは**Developmentの公開DB**に書かれ、
+13 miniは**Productionの公開DB**を見に行く（`resolveInvite` は
+`container.publicCloudDatabase` から引くだけ）。環境が違えば必ず「見つかりません」になる。
+**この2台の組み合わせでは何度やっても参加できないし、その必要もない。**
+
+環境をまたぐ検証をするときは、この食い違いを先に思い出すこと。
+
 ## 2026-09-28 Ad Hoc版は普段使いの端末に入れてはいけない
 
 **iOSは、TestFlight経由で入ったアプリをAd Hoc署名のアプリで置き換えない。**
