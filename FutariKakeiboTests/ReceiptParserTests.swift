@@ -47,6 +47,72 @@ final class ReceiptParserTests: XCTestCase {
 
     private var referenceNow: Date { date(2026, 9, 2) }
 
+    // 診断形式の検査用データ。実機から採取したOCRではない。
+    private func diagnosticReport(lines: [RecognizedLine]) -> ReceiptOCRReport {
+        var report = ReceiptOCRReport()
+        report.pages = [.init(pixelWidth: 1200, pixelHeight: 2400, orientation: 1,
+            fragments: lines.map { line in
+                .init(text: line.text, confidence: 0.875,
+                      boundingBox: .init(x: line.minX, y: 1 - line.midY - line.height / 2,
+                                         width: line.maxX - line.minX, height: line.height),
+                      parserLine: .init(text: line.text, minX: line.minX, maxX: line.maxX,
+                                        midY: line.midY, height: line.height, slope: line.slope))
+            })]
+        return report
+    }
+
+    func testOCRDiagnosticRoundTripPreservesExactFragmentsAndPageOrder() throws {
+        let lines = [RecognizedLine(text: "円\\\"\n３. ３７４", minX: 0.123456789012345,
+                                    maxX: 0.876543210987654, midY: 0.456789012345678,
+                                    height: 0.018765432109876, slope: -0.134567890123456)]
+        var report = diagnosticReport(lines: lines)
+        var second = report.pages[0]
+        second.fragments[0].text = "  生の文字列  "
+        second.fragments.append(.init(text: nil, confidence: nil,
+                                      boundingBox: .init(x: 0, y: 0, width: 0.1, height: 0.1),
+                                      parserLine: nil))
+        report.pages.append(second)
+        let decoded = try JSONDecoder().decode(ReceiptOCRReport.self, from: Data(report.exportText().utf8))
+        XCTAssertEqual(decoded.lines, lines + lines)
+        XCTAssertEqual(decoded.pages[0].fragments[0].boundingBox.x, lines[0].minX)
+        XCTAssertEqual(decoded.pages[0].fragments[0].confidence, 0.875)
+        XCTAssertEqual(decoded.pages[1].fragments[0].text, "  生の文字列  ")
+        XCTAssertEqual(decoded.pages[1].fragments.count, 2)
+    }
+
+    func testKonomiyaDiagnosticReplayPreservesAllFourFields() throws {
+        let report = diagnosticReport(lines: konomiyaReceipt())
+        let decoded = try JSONDecoder().decode(ReceiptOCRReport.self, from: Data(report.exportText().utf8))
+        let draft = ReceiptParser.parse(lines: decoded.lines, now: referenceNow, calendar: calendar)
+        XCTAssertEqual(draft.merchant, "コノミヤ 城西店")
+        XCTAssertEqual(draft.amount, 3_374)
+        XCTAssertEqual(draft.date, date(2026, 8, 2))
+        XCTAssertEqual(draft.suggestedCategory, .groceries)
+    }
+
+    func testDiagnosticSeparatesParserAIAndDisplayedValues() throws {
+        var report = diagnosticReport(lines: mcdonaldsReceipt())
+        let now = date(2026, 9, 5)
+        let base = ReceiptParser.parse(lines: report.lines, now: now, calendar: calendar)
+        var final = base
+        final.amount = 165
+        final.date = nil
+        report.recordAnalysis(base: base,
+                              answer: ReceiptAnswer(date: "", merchant: "", total: 165, category: ""),
+                              final: final, now: now, calendar: calendar)
+        report.analysis?.displayedDate = now
+        report.analysis?.displayedAmount = "165"
+        let decoded = try JSONDecoder().decode(ReceiptOCRReport.self, from: Data(report.exportText().utf8))
+        let analysis = try XCTUnwrap(decoded.analysis)
+        XCTAssertEqual(analysis.parser.amount, 2_230)
+        XCTAssertEqual(analysis.aiAmount, 165)
+        XCTAssertEqual(analysis.interpreted.amount, 165)
+        XCTAssertNil(analysis.interpreted.date)
+        XCTAssertEqual(analysis.displayedDate, now)
+        XCTAssertEqual(analysis.timeZoneIdentifier, "Asia/Tokyo")
+        XCTAssertTrue(analysis.candidates.contains { $0.amount == 2_230 })
+    }
+
     // MARK: - まとめて
 
     func testReadsWhenWhereWhatAndHowMuch() {

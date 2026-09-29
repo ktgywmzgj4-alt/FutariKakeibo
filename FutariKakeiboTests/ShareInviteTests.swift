@@ -60,7 +60,8 @@ final class ShareInviteTests: XCTestCase {
         let message = AppStore.inviteFailureMessage(
             for: NSError(domain: "test", code: -1, userInfo: nil)
         )
-        XCTAssertEqual(message, "合言葉を発行できませんでした。もう一度お試しください。")
+        XCTAssertTrue(message.hasPrefix("合言葉を発行できませんでした。もう一度お試しください。"))
+        XCTAssertTrue(message.contains("test code=-1"))
     }
 
     /// 家計が無いなど、そもそも始められないときも同じ言葉を出す。黙って終わらない。
@@ -98,6 +99,57 @@ final class ShareInviteTests: XCTestCase {
             for: NSError(domain: "test", code: -1, userInfo: nil),
             fallback: "この合言葉では参加できませんでした。もう一度お試しください。"
         )
-        XCTAssertEqual(message, "この合言葉では参加できませんでした。もう一度お試しください。")
+        XCTAssertTrue(message.hasPrefix("この合言葉では参加できませんでした。もう一度お試しください。"))
+        XCTAssertTrue(message.contains("test code=-1"))
+    }
+
+    func testUnknownCloudErrorIncludesDomainAndCode() {
+        let message = AppStore.inviteFailureMessage(for: CKError(.invalidArguments))
+        XCTAssertTrue(message.contains(CKErrorDomain))
+        XCTAssertTrue(message.contains("CKError 12"))
+    }
+
+    func testNestedPartialFailureExposesRealErrorWithoutRecordData() {
+        let conflict = NSError(domain: CKErrorDomain, code: CKError.Code.serverRecordChanged.rawValue,
+                               userInfo: [NSLocalizedDescriptionKey: "PRIVATE_RECORD_CONTENT"])
+        let nested = NSError(domain: CKErrorDomain, code: CKError.Code.partialFailure.rawValue,
+                             userInfo: [CKPartialErrorsByItemIDKey: ["PRIVATE_RECORD_ID": conflict]])
+        let outer = NSError(domain: CKErrorDomain, code: CKError.Code.partialFailure.rawValue,
+                            userInfo: [CKPartialErrorsByItemIDKey: ["PRIVATE_ZONE": nested]])
+        let message = AppStore.inviteFailureMessage(for: outer)
+        XCTAssertTrue(message.contains("CKError 2"))
+        XCTAssertTrue(message.contains("CKError 14"))
+        XCTAssertFalse(message.contains("PRIVATE_"))
+    }
+
+    func testPerRecordFailureAndStageSurviveAnOperationFailure() {
+        let error = CloudKitSyncService.DiagnosticError(
+            stage: "prepareShare.createShare",
+            underlying: CloudKitSyncService.DiagnosticError(
+                stage: "modifyRecords", underlying: CKError(.partialFailure),
+                itemErrors: [CKError(.batchRequestFailed), CKError(.serverRecordChanged)]
+            )
+        )
+        let message = AppStore.inviteFailureMessage(for: error)
+        XCTAssertTrue(message.contains("prepareShare.createShare"))
+        XCTAssertTrue(message.contains("modifyRecords"))
+        XCTAssertTrue(message.contains("CKError 14"))
+    }
+
+    func testLastSharingDiagnosticPersistsWithoutPrivateErrorDescription() {
+        let key = CloudKitSyncService.lastSharingErrorKey
+        let previous = UserDefaults.standard.object(forKey: key)
+        defer { UserDefaults.standard.set(previous, forKey: key) }
+        let error = CloudKitSyncService.DiagnosticError(
+            stage: "publishInvite.public.save.ShareInvite",
+            underlying: NSError(domain: CKErrorDomain, code: CKError.Code.invalidArguments.rawValue,
+                                userInfo: [NSLocalizedDescriptionKey: "PRIVATE_SHARE_URL_AND_CODE"])
+        )
+        CloudKitSyncService.rememberSharingError(error, action: "startSharingWithCode")
+        let report = UserDefaults.standard.string(forKey: key) ?? ""
+        XCTAssertTrue(report.contains("publishInvite.public.save.ShareInvite"))
+        XCTAssertTrue(report.contains("CKError 12"))
+        XCTAssertTrue(report.contains("build="))
+        XCTAssertFalse(report.contains("PRIVATE_"))
     }
 }
