@@ -964,7 +964,7 @@ actor CloudKitSyncService {
     ///
     /// **区切り方を1つ間違えると、送ったつもりのレコードが黙って落ちる。**
     /// 実機でしか気づけない壊れ方なので、外から確かめられる形にしてある。
-    nonisolated static func chunked<T>(_ items: [T], size: Int = batchSize) -> [[T]] {
+    static func chunked<T>(_ items: [T], size: Int = batchSize) -> [[T]] {
         guard size > 0 else { return items.isEmpty ? [] : [items] }
         return stride(from: 0, to: items.count, by: size).map {
             Array(items[$0..<min($0 + size, items.count)])
