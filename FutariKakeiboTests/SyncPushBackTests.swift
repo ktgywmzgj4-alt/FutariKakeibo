@@ -65,3 +65,48 @@ final class SyncPushBackTests: XCTestCase {
         XCTAssertTrue(AppStore.staleIDs(local: [], remote: []).isEmpty)
     }
 }
+
+/// 「1回の通信に何件まとめるか」の区切り方。
+///
+/// 合言葉を発行するとき、支出と収入は1件ずつではなくまとめて送る。
+/// 1件ずつ「取ってきて、保存する」をしていたころは、支出20件で40往復かかり、
+/// 合言葉が画面に出るまでその往復ぶん待たされていた。
+///
+/// 区切りを1つ間違えると、送ったつもりのレコードが黙って落ちる。
+/// 実機では「相手に出てこない1件」にしか見えないので、ここで確かめておく。
+final class SyncBatchingTests: XCTestCase {
+    /// 何件あっても、全部が1度ずつ、順番どおりに入っていること。
+    func testChunkingKeepsEveryItemOnceAndInOrder() {
+        let items = Array(0..<450)
+        let chunks = CloudKitSyncService.chunked(items, size: 200)
+
+        XCTAssertEqual(chunks.map(\.count), [200, 200, 50])
+        XCTAssertEqual(chunks.flatMap { $0 }, items, "区切ったら中身が変わっている")
+    }
+
+    /// ちょうど割り切れるとき、空の束を作らないこと。
+    /// 空の束をCloudKitへ送ると、意味のない往復が1回増える。
+    func testAnExactMultipleDoesNotLeaveAnEmptyChunk() {
+        let chunks = CloudKitSyncService.chunked(Array(0..<400), size: 200)
+
+        XCTAssertEqual(chunks.count, 2)
+        XCTAssertFalse(chunks.contains { $0.isEmpty }, "空の束ができている")
+    }
+
+    /// 送るものが無いときは、束も作らない。
+    func testNothingProducesNoChunks() {
+        XCTAssertTrue(CloudKitSyncService.chunked([Int](), size: 200).isEmpty)
+    }
+
+    /// 上限より少ないときは、1回で送る。
+    func testFewerItemsThanTheLimitStayInOneChunk() {
+        XCTAssertEqual(CloudKitSyncService.chunked([1, 2, 3], size: 200), [[1, 2, 3]])
+    }
+
+    /// 上限そのものがCloudKitの上限（400件前後）を超えていないこと。
+    /// ここが大きすぎると、まとめた保存が丸ごと失敗する。
+    func testTheDefaultLimitStaysUnderWhatCloudKitAccepts() {
+        XCTAssertGreaterThan(CloudKitSyncService.batchSize, 0)
+        XCTAssertLessThanOrEqual(CloudKitSyncService.batchSize, 400)
+    }
+}

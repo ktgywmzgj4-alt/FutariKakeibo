@@ -106,12 +106,15 @@ actor CloudKitSyncService {
         try await saveZoneIfNeeded(CKRecordZone(zoneID: zoneID), in: database)
 
         let rootRecord = try await upsertHousehold(household, at: location, in: database)
-        for expense in expenses {
-            try await upsertExpense(expense, householdRecordID: rootRecord.recordID, at: location, in: database)
-        }
-        for income in incomes {
-            try await upsertIncome(income, householdRecordID: rootRecord.recordID, at: location, in: database)
-        }
+        // 取得も保存もまとめて出す。1件ずつ往復していたころは、支出20件で40往復かかり、
+        // 合言葉が画面に出るまでそのぶん待たされていた。
+        try await uploadChildren(
+            expenses: expenses,
+            incomes: incomes,
+            householdRecordID: rootRecord.recordID,
+            at: location,
+            in: database
+        )
 
         if let shareReference = rootRecord.share {
             let existingRecord = try await fetchRecord(shareReference.recordID, from: database)
@@ -229,17 +232,26 @@ actor CloudKitSyncService {
     /// 家計のデータは一切入らない。
     func publishInvite(shareURL: URL) async throws -> ShareInvite {
         let database = container.publicCloudDatabase
-        // まず当たらないが、万一同じ合言葉が残っていたら引き直す。
+        // **先に「その合言葉が空いているか」を見に行かない。**
+        // 空いているのが当たり前なので、その1往復はほぼ毎回むだになる。
+        // 代わりに、ぶつかったときだけ引き直す。`CKRecord` を新しく作って保存すると、
+        // 同じ名前がすでにあれば CloudKit が `serverRecordChanged` を返す。
+        // これは往復が1回減るだけでなく、2台が同時に同じ合言葉を引いたときに
+        // 片方が黙って上書きする、という取りこぼしも無くなる。
         for _ in 0..<5 {
             let code = ShareInvite.makeCode()
-            let recordID = inviteRecordID(for: code)
-            if try await fetchRecord(recordID, from: database) != nil { continue }
-
             let expiresAt = Date.now.addingTimeInterval(ShareInvite.lifetime)
-            let record = CKRecord(recordType: RecordType.shareInvite, recordID: recordID)
+            let record = CKRecord(
+                recordType: RecordType.shareInvite,
+                recordID: inviteRecordID(for: code)
+            )
             record["shareURL"] = shareURL.absoluteString as CKRecordValue
             record["expiresAt"] = expiresAt as CKRecordValue
-            _ = try await saveRecord(record, to: database)
+            do {
+                _ = try await saveRecord(record, to: database)
+            } catch let error as CKError where error.code == .serverRecordChanged {
+                continue
+            }
             return ShareInvite(code: code, shareURL: shareURL, expiresAt: expiresAt)
         }
         throw SyncError.inviteUnavailable("合言葉が作れませんでした")
@@ -572,25 +584,31 @@ actor CloudKitSyncService {
         return try await saveRecord(record, to: database)
     }
 
-    private func upsertExpense(
-        _ expense: Expense,
-        householdRecordID: CKRecord.ID,
-        at location: CloudLocation,
-        in database: CKDatabase
-    ) async throws {
-        let recordID = CKRecord.ID(
+    private func expenseRecordID(for expense: Expense, at location: CloudLocation) -> CKRecord.ID {
+        CKRecord.ID(
             recordName: "expense-\(expense.id.uuidString.lowercased())",
             zoneID: zoneID(for: location)
         )
-        let record = try await fetchRecord(recordID, from: database)
-            ?? CKRecord(recordType: RecordType.expense, recordID: recordID)
+    }
+
+    /// 手元の支出をレコードに写す。**保存する必要が無ければ nil を返す。**
+    ///
+    /// 1件ずつ送る経路とまとめて送る経路で、同じ判断と同じ項目を使うためにここに置く。
+    /// 取ってくる部分は呼ぶ側の仕事にしてあるので、この中では往復しない。
+    private func expenseRecord(
+        for expense: Expense,
+        existing: CKRecord?,
+        recordID: CKRecord.ID,
+        householdRecordID: CKRecord.ID
+    ) -> CKRecord? {
+        let record = existing ?? CKRecord(recordType: RecordType.expense, recordID: recordID)
         // 削除印は古いオフライン端末からの再アップロードより常に優先する。
         guard (record["isDeleted"] as? NSNumber)?.boolValue != true else {
-            return
+            return nil
         }
         if let remoteUpdatedAt = record["updatedAt"] as? Date,
            remoteUpdatedAt > expense.updatedAt {
-            return
+            return nil
         }
         record.parent = parentReference(to: householdRecordID)
         record["id"] = expense.id.uuidString as CKRecordValue
@@ -611,6 +629,23 @@ actor CloudKitSyncService {
         }
         record["createdAt"] = expense.createdAt as CKRecordValue
         record["updatedAt"] = expense.updatedAt as CKRecordValue
+        return record
+    }
+
+    private func upsertExpense(
+        _ expense: Expense,
+        householdRecordID: CKRecord.ID,
+        at location: CloudLocation,
+        in database: CKDatabase
+    ) async throws {
+        let recordID = expenseRecordID(for: expense, at: location)
+        let existing = try await fetchRecord(recordID, from: database)
+        guard let record = expenseRecord(
+            for: expense,
+            existing: existing,
+            recordID: recordID,
+            householdRecordID: householdRecordID
+        ) else { return }
         _ = try await saveRecord(record, to: database)
     }
 
@@ -697,25 +732,29 @@ actor CloudKitSyncService {
         return (id, deletedAt)
     }
 
-    private func upsertIncome(
-        _ income: Income,
-        householdRecordID: CKRecord.ID,
-        at location: CloudLocation,
-        in database: CKDatabase
-    ) async throws {
-        let recordID = CKRecord.ID(
+    private func incomeRecordID(for income: Income, at location: CloudLocation) -> CKRecord.ID {
+        CKRecord.ID(
             recordName: "income-\(income.id.uuidString.lowercased())",
             zoneID: zoneID(for: location)
         )
-        let record = try await fetchRecord(recordID, from: database)
-            ?? CKRecord(recordType: RecordType.income, recordID: recordID)
+    }
+
+    /// 手元の収入をレコードに写す。**保存する必要が無ければ nil を返す。**
+    /// 支出側の `expenseRecord(for:existing:recordID:householdRecordID:)` と同じ考え方。
+    private func incomeRecord(
+        for income: Income,
+        existing: CKRecord?,
+        recordID: CKRecord.ID,
+        householdRecordID: CKRecord.ID
+    ) -> CKRecord? {
+        let record = existing ?? CKRecord(recordType: RecordType.income, recordID: recordID)
         // 削除印は古いオフライン端末からの再アップロードより常に優先する。
         guard (record["isDeleted"] as? NSNumber)?.boolValue != true else {
-            return
+            return nil
         }
         if let remoteUpdatedAt = record["updatedAt"] as? Date,
            remoteUpdatedAt > income.updatedAt {
-            return
+            return nil
         }
         record.parent = parentReference(to: householdRecordID)
         record["id"] = income.id.uuidString as CKRecordValue
@@ -728,6 +767,23 @@ actor CloudKitSyncService {
         record["note"] = income.note as CKRecordValue
         record["createdAt"] = income.createdAt as CKRecordValue
         record["updatedAt"] = income.updatedAt as CKRecordValue
+        return record
+    }
+
+    private func upsertIncome(
+        _ income: Income,
+        householdRecordID: CKRecord.ID,
+        at location: CloudLocation,
+        in database: CKDatabase
+    ) async throws {
+        let recordID = incomeRecordID(for: income, at: location)
+        let existing = try await fetchRecord(recordID, from: database)
+        guard let record = incomeRecord(
+            for: income,
+            existing: existing,
+            recordID: recordID,
+            householdRecordID: householdRecordID
+        ) else { return }
         _ = try await saveRecord(record, to: database)
     }
 
@@ -788,6 +844,133 @@ actor CloudKitSyncService {
         }
     }
 
+    /// 1回の操作に入れる件数の上限。CloudKit側の上限（400件前後）より十分小さくとる。
+    static let batchSize = 200
+
+    /// 共有をはじめるときに、手元の支出と収入をまとめてクラウドへ送る。
+    ///
+    /// **ここの目的は、往復の回数を件数に比例させないこと。**
+    /// 以前は1件ごとに「取ってきて、保存する」の2往復をしていたので、
+    /// 支出20件なら40往復。合言葉が出るまでの待ち時間はほとんどこれだった。
+    /// いまは取得が1回、保存が上限ごとに1回で済む。
+    private func uploadChildren(
+        expenses: [Expense],
+        incomes: [Income],
+        householdRecordID: CKRecord.ID,
+        at location: CloudLocation,
+        in database: CKDatabase
+    ) async throws {
+        let expenseIDs = expenses.map { expenseRecordID(for: $0, at: location) }
+        let incomeIDs = incomes.map { incomeRecordID(for: $0, at: location) }
+        guard !expenseIDs.isEmpty || !incomeIDs.isEmpty else { return }
+
+        let existing = try await fetchRecords(expenseIDs + incomeIDs, from: database)
+
+        var recordsToSave: [CKRecord] = []
+        for (expense, recordID) in zip(expenses, expenseIDs) {
+            if let record = expenseRecord(
+                for: expense,
+                existing: existing[recordID],
+                recordID: recordID,
+                householdRecordID: householdRecordID
+            ) {
+                recordsToSave.append(record)
+            }
+        }
+        for (income, recordID) in zip(incomes, incomeIDs) {
+            if let record = incomeRecord(
+                for: income,
+                existing: existing[recordID],
+                recordID: recordID,
+                householdRecordID: householdRecordID
+            ) {
+                recordsToSave.append(record)
+            }
+        }
+        guard !recordsToSave.isEmpty else { return }
+
+        log("共有の準備: \(recordsToSave.count)件をまとめて保存する")
+        for chunk in Self.chunked(recordsToSave) {
+            do {
+                try await modifyRecords(saving: chunk, deleting: [], in: database, atomically: false)
+            } catch let error as CKError where error.code == .partialFailure {
+                // 何件かが競合しただけなら、共有そのものは作れる。
+                // 送れなかったぶんは次の同期で送られるので、ここで合言葉の発行ごと
+                // 止めてしまわない。何件だったかは残す。
+                let failed = error.partialErrorsByItemID?.count ?? 0
+                log("共有の準備: \(failed)件は今回送れなかった。次の同期で送る")
+            }
+        }
+    }
+
+    /// レコードをまとめて取ってくる。
+    ///
+    /// 1件ずつ `fetchRecord` を呼ぶと、件数ぶん往復する。合言葉の発行が10秒以上
+    /// かかっていたのはこれで、支出1件につき「取ってきて、保存する」の2往復を
+    /// していた。20件なら40往復になる。ここを1往復にする。
+    ///
+    /// **まだ無いレコードは結果に入らないだけで、失敗として扱わない。**
+    /// 初めての共有では全件がそれにあたる。
+    private func fetchRecords(
+        _ ids: [CKRecord.ID],
+        from database: CKDatabase
+    ) async throws -> [CKRecord.ID: CKRecord] {
+        var found: [CKRecord.ID: CKRecord] = [:]
+        for chunk in Self.chunked(ids) {
+            let page = try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<[CKRecord.ID: CKRecord], Error>) in
+                let operation = CKFetchRecordsOperation(recordIDs: chunk)
+                let records = LockedState<[CKRecord.ID: CKRecord]>([:])
+                operation.perRecordResultBlock = { id, result in
+                    if case let .success(record) = result {
+                        records.withLock { $0[id] = record }
+                    }
+                }
+                operation.fetchRecordsResultBlock = { result in
+                    switch result {
+                    case .success:
+                        continuation.resume(returning: records.withLock { $0 })
+                    case let .failure(error):
+                        if let ckError = error as? CKError, Self.isOnlyMissingRecords(ckError) {
+                            continuation.resume(returning: records.withLock { $0 })
+                        } else {
+                            continuation.resume(throwing: error)
+                        }
+                    }
+                }
+                database.add(operation)
+            }
+            found.merge(page) { first, _ in first }
+        }
+        return found
+    }
+
+    /// 「そのレコードはまだ無い」以外の失敗が混ざっていないか。
+    ///
+    /// 混ざっていれば本当の失敗なので投げ直す。ここを `partialFailure` というだけで
+    /// 握りつぶすと、権限が無いなどの理由を黙って捨てることになる。
+    private static func isOnlyMissingRecords(_ error: CKError) -> Bool {
+        if error.code == .unknownItem { return true }
+        guard error.code == .partialFailure,
+              let partial = error.partialErrorsByItemID,
+              !partial.isEmpty
+        else {
+            return false
+        }
+        return partial.values.allSatisfy { ($0 as? CKError)?.code == .unknownItem }
+    }
+
+    /// CloudKitは1回の操作に入れられる件数に上限がある。超えないように区切る。
+    ///
+    /// **区切り方を1つ間違えると、送ったつもりのレコードが黙って落ちる。**
+    /// 実機でしか気づけない壊れ方なので、外から確かめられる形にしてある。
+    nonisolated static func chunked<T>(_ items: [T], size: Int = batchSize) -> [[T]] {
+        guard size > 0 else { return items.isEmpty ? [] : [items] }
+        return stride(from: 0, to: items.count, by: size).map {
+            Array(items[$0..<min($0 + size, items.count)])
+        }
+    }
+
     private func fetchRecord(_ id: CKRecord.ID, from database: CKDatabase) async throws -> CKRecord? {
         do {
             return try await withCheckedThrowingContinuation { continuation in
@@ -832,8 +1015,9 @@ actor CloudKitSyncService {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[CKRecord], Error>) in
             let operation = CKModifyRecordsOperation(recordsToSave: records, recordIDsToDelete: recordIDs)
             // 保存の仕方は既定（サーバー側が変わっていなければ保存する）のままにする。
-            // ここを通るのは共有（CKShare）の作成だけで、CKShareの保存に
-            // `.changedKeys` は使えない。
+            // 共有（CKShare）の保存に `.changedKeys` は使えず、
+            // まとめて送る支出や収入のほうも、変更印ごと渡した取得済みレコードを
+            // 保存するので、既定のままで正しく上書きできる。
             operation.isAtomic = atomically
 
             let saved = LockedState<[CKRecord]>([])
