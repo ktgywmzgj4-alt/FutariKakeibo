@@ -201,12 +201,22 @@
     {
       "id": "T-020",
       "task": "cloudkit.share をCloudKitのProductionスキーマに入れる",
-      "status": "todo",
+      "status": "done",
       "owner": "人間 + 実行役",
       "passes": "CloudKit Console の Production → Record Types に cloudkit.share が並んでいるスクリーンショット。そのうえでTestFlightの版から8文字の合言葉が出ること",
-      "evidence": "2026-09-28 Development環境で cloudkit.share の生成を確認（CloudKit Console の Record Types に Expense/Household/Income/ReceiptImage/ShareInvite/Users と並んで表示）。iPhone SE2 に Ad Hoc版（ビルド 2026.0927.1429）を入れ、合言葉 53VQ-DQ53 の発行に成功したことで生まれた。原因が「Productionに cloudkit.share が無い」ことだったと裏付けられた。残りは Deploy Schema Changes で Production へ運び、TestFlight版どうしで2台の参加を確かめること",
+      "evidence": "2026-09-28 合格。Development環境で cloudkit.share の生成を確認したあと（iPhone SE2 の Ad Hoc版 2026.0927.1429 で合言葉 53VQ-DQ53 の発行に成功したことで生まれた）、Deploy Schema Changes で Production へ運んだ。TestFlight版どうしで13 miniが発行しSE2が参加、両方に同じ支出一覧が出た（T-016の証拠と同じ）。3週間の CKError 12/2006 はこれで終わり",
       "dependencies": [],
       "notes": "2026-09-26 実機ログの CKError 12/2006 の原因。この型は手では作れず、Development環境で共有を1回保存したときだけCloudKitが自動生成する。TestFlightは必ずProductionにつながるので回り道が要る。手順は Docs/CLOUDKIT_SHARE_SCHEMA.md。ワークフロー ios-dev-build.yml がDevelopment環境のIPAを作る。新しく要るのは Ad Hocプロファイル1つとUDIDだけで、証明書は配信用を使い回せる。Reset Environments は実行前に相談すること"
+    },
+    {
+      "id": "T-021",
+      "task": "合言葉の発行と、相手の記録が出るまでの時間が短くなったか実機で確かめる",
+      "status": "todo",
+      "owner": "人間 + 検品役",
+      "passes": "(a) 合言葉が画面に出るまでが体感で待たされない。(b) 13 miniで支出を1件追加し、SE2を引っぱったときに数秒で出てくる。どちらも、前は10秒以上かかっていた",
+      "evidence": "TestFlight 2026.0930.1510（b4d013e）で配信済み。CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/36733432518 → 155件中155件成功、UPLOAD SUCCEEDED with no errors（Delivery UUID 38c457fc-de38-4766-afa2-a17c41148526）。アーカイブ内の版は 0.1.0 / 2026.0930.1510 で Info.plist の上書きは起きていない。往復の回数が減ったことはコードで確認済みだが、**実際の秒数は測っていない**",
+      "dependencies": ["T-016"],
+      "notes": "直したのは往復の回数。取得を送り直しより先にし（refreshFromCloudIfConfigured）、合言葉の発行は1件2往復をまとめた（uploadChildren）。支出7件＋収入2件で約25往復→7往復。**この版にはまだ『開いたまま自動で出てくる』は入っていない**（commit bf96e1d、未コンパイル）。引っぱるかアプリを切り替えれば出てくる"
     }
   ]
 }
