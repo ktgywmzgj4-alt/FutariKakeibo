@@ -43,6 +43,18 @@ final class AppStore: ObservableObject {
     /// レシート画像の出し入れ。画像は家計簿データとは別に持つ。
     let receiptImages: ReceiptImageLibrary
     private var didLoad = false
+    /// 前面にいる間だけ回している定期取得。止めるために持っている。
+    private var periodicRefreshTask: Task<Void, Never>?
+
+    /// 自分から取りに行く間隔。
+    ///
+    /// **相手が保存したことを知らせてくれる仕組み（`CKSubscription`）がまだ無い。**
+    /// 無いので、アプリを開いたままにしていると相手の記録はいつまでも出てこなかった。
+    /// 引っぱれば出てくるが、相手を待っているときに引っぱり続ける人はいない。
+    ///
+    /// 短くするほど電池と通信を使う。30秒は「相手の入力に気づくまで」としては
+    /// 十分に短く、待っている人が数えてしまうほど長くはない、という判断。
+    nonisolated static let periodicRefreshInterval: Duration = .seconds(30)
 
     init(
         localStore: LocalSnapshotStore = LocalSnapshotStore(),
@@ -681,6 +693,41 @@ final class AppStore: ObservableObject {
             syncState = .failed(error.localizedDescription)
             errorMessage = "共有への参加に失敗しました。\n\(error.localizedDescription)"
         }
+    }
+
+    /// 前面にいる間だけ、ときどき自分から取りに行きはじめる。
+    ///
+    /// `refreshFromCloudIfConfigured` はアプリが前面に戻ったときと、
+    /// 画面を引っぱったときにしか動かない。つまり開いたまま置いておくと、
+    /// 相手が足した記録は**いつまでも出てこない**。そこを埋める。
+    ///
+    /// **画面には何も出ない。** 取得は `errorMessage` を触らないので、
+    /// 通信が切れていてもアラートは出ず、次の回に回るだけ。
+    /// 設定画面の「同期済み ○○:○○」だけが静かに進む。
+    ///
+    /// 二重に回さない。すでに回っていれば何もしない。
+    func startPeriodicRefresh() {
+        guard periodicRefreshTask == nil else { return }
+        periodicRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                // 先に待つ。前面に戻った直後は呼ぶ側がもう1回取りに行っているので、
+                // ここで即座に取ると同じ往復を2回することになる。
+                do {
+                    try await Task.sleep(for: Self.periodicRefreshInterval)
+                } catch {
+                    return
+                }
+                guard let self, !Task.isCancelled else { return }
+                await self.refreshFromCloudIfConfigured()
+            }
+        }
+    }
+
+    /// 後ろに回ったら止める。
+    /// 止めないと、閉じたアプリのために通信を続けることになる。
+    func stopPeriodicRefresh() {
+        periodicRefreshTask?.cancel()
+        periodicRefreshTask = nil
     }
 
     /// iCloudの内容を取り込んで、手元と突き合わせる。
