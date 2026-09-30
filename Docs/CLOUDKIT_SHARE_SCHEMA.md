@@ -30,13 +30,11 @@ https://developer.apple.com/forums/thread/841618
 
 ## 何が要るか
 
-- すでに持っているもの: Apple Distribution証明書（`.p12`）、Team ID `79XN3292J9`、
-  App ID `jp.aikawa.futarikakeibo`
-- 新しく要るもの: **Ad Hoc のプロビジョニングプロファイル**1つと、iPhoneのUDID
+**GitHub Secrets に新しく足すものはありません。** 端末の登録も、Ad Hoc プロファイルの
+作成も、TestFlight配信で使っているのと同じ App Store Connect のAPIキーでできます
+（`scripts/asc_adhoc_profile.rb` がやります）。証明書も配信用を使い回します。
 
-証明書は配信用と同じものを使い回せます。**新しく作る必要はありません。**
-
----
+必要なのは **iPhoneのUDID** だけです。Apple Developer のポータルを開く必要はありません。
 
 ## 1. iPhoneのUDIDを調べる
 
@@ -47,51 +45,31 @@ Windowsでできます。
 3. サイドバーでiPhoneを選び、端末名のすぐ下の情報の部分を**クリック**する
 4. シリアル番号・UDID などが順に切り替わる。**「UDID」と出ているときの値**を控える
 
-シリアル番号・IMEI とは別物です。UDIDは英数字40文字前後（新しい機種はハイフン入り）。
+シリアル番号・IMEI とは別物です。UDIDは `00008110-001234510EEB801E` のような形。
 
 2台で共有を試すなら、**2台ぶん**控えてください。
 
-## 2. 端末を登録して Ad Hoc プロファイルを作る
-
-Apple Developer のアカウントページで行います。
-
-1. Certificates, Identifiers & Profiles → **Devices** → 「+」
-2. Platform は iOS、名前は分かるもの（例 `iPhone-A`）、UDID を貼って Continue
-3. 2台目があれば同じ要領でもう1件
-4. **Profiles** → 「+」→ Distribution の **Ad Hoc** を選ぶ
-5. App ID に `jp.aikawa.futarikakeibo`
-6. 証明書は、配信で使っているものと**同じ** Apple Distribution を選ぶ
-7. 端末は手順2〜3で登録したものに**チェックを入れる**
-8. 名前を **`FutariKakeibo Ad Hoc`** と入力する
-   （この文字列でないとビルドが失敗します。ワークフローの `PROFILE_NAME` と一致させています）
-9. ダウンロードする
-
-## 3. GitHub Secrets に登録する
-
-値が会話や画面に出ない形で入れます。Git Bash で:
-
-```bash
-cd ~/ios-signing
-base64 -w0 FutariKakeibo_Ad_Hoc.mobileprovision > adhoc.b64
-gh secret set APPLE_ADHOC_PROVISIONING_PROFILE_BASE64 < adhoc.b64
-rm adhoc.b64
-```
-
-ファイル名はダウンロードしたものに合わせてください。
-
-## 4. Development環境のビルドを作る
+## 2. Development環境のビルドを作る
 
 GitHub の **Actions → 「iOS dev-environment build」→ Run workflow**。
-ブランチは `claude/receipt-image-storage-rbs1m6` を選びます。
 
-このワークフローは App Store Connect には**何も送りません**。IPAを1つ作るだけです。
-最後に「iCloudの環境: Development」と出れば成功です。ここが Production になっていたら
-その場で止まるようにしてあるので、入れてから気づくことはありません。
+- ブランチ: `main`
+- **UDID の欄に、控えたUDIDをカンマ区切りで入れる**（登録済みなら空でよい）
 
-完了したら、実行ページの下の **Artifacts** から `FutariKakeibo-development-<番号>` を
-ダウンロードします（zipです。中にIPAが1つ）。
+ワークフローがこの順で動きます。
 
-## 5. iPhoneに入れる
+1. UDIDをApp Store Connectに登録する（すでにあれば飛ばす）
+2. `FutariKakeibo Ad Hoc` のプロファイルを**作り直す**（プロファイルは後から端末を
+   足せないので、毎回消して作る。だから端末が増えても同じ手順で済む）
+3. `iCloudContainerEnvironment` を Development にしてIPAを書き出す
+4. **書き出したIPAの署名を読んで、本当に Development か確かめる**
+
+App Store Connect には**何も送りません**。最後に「iCloudの環境: Development」と出れば
+成功です。Productionになっていたらその場で止まるので、入れてから気づくことはありません。
+
+完了したら、実行ページの下の **Artifacts** から zip をダウンロードします。
+
+## 3. iPhoneに入れる
 
 Ad HocのIPAは、HTTPS越しにリンクを開くとiPhoneに直接入ります（OTAインストール）。
 Windowsからでもできます。Diawi や InstallOnAir のような受け渡しサービスにzipから
@@ -104,7 +82,7 @@ Windowsからでもできます。Diawi や InstallOnAir のような受け渡�
 入れると、TestFlight版と**同じアプリとして上書き**されます（バンドルIDが同じため）。
 手元の家計簿データは消えません。
 
-## 6. 共有を1回つくる
+## 4. 共有を1回つくる
 
 Development版のアプリで、設定 → ふたりで共有 → **合言葉を発行する**。
 
@@ -114,7 +92,7 @@ Development版のアプリで、設定 → ふたりで共有 → **合言葉を
 2台ぶん登録してあるなら、ここでもう1台から参加まで試してください。
 **Productionに触らずに、共有機能の全体を通しで確かめられる**ので、やっておく価値があります。
 
-## 7. 型を確かめて、Productionへ運ぶ
+## 5. 型を確かめて、Productionへ運ぶ
 
 1. CloudKit Console → コンテナ `iCloud.jp.aikawa.futarikakeibo`
 2. **Development** → Record Types に **`cloudkit.share`** が増えていることを確認
@@ -125,7 +103,7 @@ Development版のアプリで、設定 → ふたりで共有 → **合言葉を
 案内しています。ただし**これはDevelopmentのスキーマを上書きする操作**なので、
 実行する前に一度相談してください。
 
-## 8. TestFlightの版で確かめ直す
+## 6. TestFlightの版で確かめ直す
 
 TestFlightから元のビルドを入れ直して、もう一度「合言葉を発行する」。
 ここで8文字が出て、別のApple IDの端末から参加できたら完了です。

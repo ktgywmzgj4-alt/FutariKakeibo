@@ -100,6 +100,66 @@ final class ReceiptInterpreterTests: XCTestCase {
         XCTAssertEqual(merged.suggestedCategory, .groceries)
     }
 
+    /// 明細の和よりずっと小さい答えは捨てる。
+    /// コノミヤのレシートで、AIが 25 と答えてルールの 3,374 を上書きしていた。
+    func testAnAnswerFarBelowTheItemsIsRejected() {
+        let base = ReceiptDraft(
+            merchant: "コノミヤ 城西店",
+            amount: 3_374,
+            items: [ReceiptItem(name: "牛乳", amount: 188), ReceiptItem(name: "ベーコン", amount: 398)],
+            suggestedCategory: .groceries
+        )
+        let answer = ReceiptAnswer(date: "", merchant: "", total: 25, category: "")
+
+        let merged = ReceiptInterpreter.merged(
+            base: base, answer: answer, now: now, calendar: calendar
+        )
+        XCTAssertEqual(merged.amount, 3_374)
+    }
+
+    /// 明細の和よりずっと大きい答えも捨てる。桁がひとつ増えた読み違い。
+    func testAnAnswerFarAboveTheItemsIsRejected() {
+        let base = ReceiptDraft(
+            merchant: "コノミヤ 城西店",
+            amount: 3_374,
+            items: [ReceiptItem(name: "牛乳", amount: 3_000)],
+            suggestedCategory: .groceries
+        )
+        let answer = ReceiptAnswer(date: "", merchant: "", total: 33_740, category: "")
+
+        let merged = ReceiptInterpreter.merged(
+            base: base, answer: answer, now: now, calendar: calendar
+        )
+        XCTAssertEqual(merged.amount, 3_374)
+    }
+
+    /// 外税や読み落としのぶん、合計が明細の和より少し大きいのはふつう。受け取る。
+    func testAnAnswerALittleAboveTheItemsIsAccepted() {
+        let base = ReceiptDraft(
+            merchant: "コノミヤ 城西店",
+            amount: 3_076,
+            items: [ReceiptItem(name: "牛乳", amount: 3_076)],
+            suggestedCategory: .groceries
+        )
+        let answer = ReceiptAnswer(date: "", merchant: "", total: 3_374, category: "")
+
+        let merged = ReceiptInterpreter.merged(
+            base: base, answer: answer, now: now, calendar: calendar
+        )
+        XCTAssertEqual(merged.amount, 3_374)
+    }
+
+    /// 明細が1件も読めていないときは、AIの答えをそのまま受け取る。比べる相手がいない。
+    func testAnAnswerIsAcceptedWhenNoItemsWereRead() {
+        let base = ReceiptDraft(merchant: "どこかの店", amount: nil, suggestedCategory: .other)
+        let answer = ReceiptAnswer(date: "", merchant: "", total: 9_800, category: "")
+
+        let merged = ReceiptInterpreter.merged(
+            base: base, answer: answer, now: now, calendar: calendar
+        )
+        XCTAssertEqual(merged.amount, 9_800)
+    }
+
     /// 知らない種類を答えてきたら捨てる。
     func testUnknownCategoryIsIgnored() {
         let base = ReceiptDraft(merchant: "店", suggestedCategory: .groceries)
@@ -156,5 +216,52 @@ final class ReceiptInterpreterTests: XCTestCase {
         )
         XCTAssertEqual(draft.amount, 2_080)
         XCTAssertEqual(draft.date, date(2026, 8, 29))
+    }
+
+    /// ルールが「合計」の語を手がかりに選べているなら、AIの答えで上書きしない。
+    ///
+    /// イオンのレシートで 47088（カード会社の番号）が通ったのは、明細が1件も
+    /// 読めず、照合する相手がいなかったため。**照合できないときこそ動かさない。**
+    func testAConfidentRuleAmountIsNotOverwrittenByTheModel() {
+        let base = ReceiptDraft(
+            merchant: "イオンスタイル",
+            amount: 3_826,
+            items: [],
+            amountIsWellEvidenced: true
+        )
+        let answer = ReceiptAnswer(date: "", merchant: "", total: 47_088, category: "")
+
+        let draft = ReceiptInterpreter.merged(
+            base: base, answer: answer, now: now, calendar: calendar
+        )
+        XCTAssertEqual(draft.amount, 3_826)
+    }
+
+    /// ルールが合計の語を見つけられなかったときは、これまでどおりAIの答えを使う。
+    /// 手がかりが無い場面でAIを切ってしまうと、足した意味が無くなる。
+    func testTheModelStillFillsInAnAmountTheRulesWereUnsureAbout() {
+        let base = ReceiptDraft(
+            merchant: "どこかの店",
+            amount: 999,
+            items: [],
+            amountIsWellEvidenced: false
+        )
+        let answer = ReceiptAnswer(date: "", merchant: "", total: 2_480, category: "")
+
+        let draft = ReceiptInterpreter.merged(
+            base: base, answer: answer, now: now, calendar: calendar
+        )
+        XCTAssertEqual(draft.amount, 2_480)
+    }
+
+    /// ルールが金額を1つも出せなかったときも、AIの答えを受け取る。
+    func testTheModelFillsInAnAmountWhenTheRulesFoundNone() {
+        let base = ReceiptDraft(merchant: "どこかの店", amount: nil, amountIsWellEvidenced: true)
+        let answer = ReceiptAnswer(date: "", merchant: "", total: 1_500, category: "")
+
+        let draft = ReceiptInterpreter.merged(
+            base: base, answer: answer, now: now, calendar: calendar
+        )
+        XCTAssertEqual(draft.amount, 1_500)
     }
 }

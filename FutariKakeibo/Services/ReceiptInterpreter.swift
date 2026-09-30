@@ -40,7 +40,17 @@ enum ReceiptInterpreter {
             draft.merchant = merchant
         }
 
-        if let total = answer.total, total > 0, total <= 9_999_999 {
+        // AIの合計は、**読めた明細の和とつじつまが合うときだけ**受け取る。
+        // 上限だけを見ていたので、コノミヤのレシートで 25 という答えがそのまま通り、
+        // ルールが出した 3,374 を上書きしていた。これでは「AIを足したことで
+        // 悪くなることはない」と言えない。
+        //
+        // さらに、明細が1件も読めないレシートでは照合する相手がいない。
+        // イオンのレシートがそれで、カード会社の番号 47088 が素通りした。
+        // **ルールが合計の語を手がかりに選べているなら、そちらを動かさない。**
+        if let total = answer.total, total > 0, total <= 9_999_999,
+           !base.amountIsWellEvidenced || base.amount == nil,
+           ReceiptParser.isConsistentWithItems(total, items: base.items) {
             draft.amount = total
         }
 

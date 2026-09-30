@@ -15,6 +15,12 @@ struct ReceiptDraft: Equatable, Sendable {
     var shopKey: String?
     /// 覚えていた店の情報を当てはめたかどうか。画面でそう伝えるために持つ。
     var usedMemo: Bool
+    /// 金額を「合計」「お買上」などの語そのものを手がかりに選んだかどうか。
+    ///
+    /// 立っているときは、端末内のAIの答えで上書きしない。イオンのレシートで
+    /// カード会社の番号 47088 が合計になったのは、明細が読めず照合できないまま
+    /// AIの答えを通してしまったため。**AIは穴を埋めるだけで、根拠のある答えは動かさない。**
+    var amountIsWellEvidenced: Bool
 
     init(
         merchant: String,
@@ -24,7 +30,8 @@ struct ReceiptDraft: Equatable, Sendable {
         suggestedCategory: ExpenseCategory = .other,
         recognizedText: String = "",
         shopKey: String? = nil,
-        usedMemo: Bool = false
+        usedMemo: Bool = false,
+        amountIsWellEvidenced: Bool = false
     ) {
         self.merchant = merchant
         self.amount = amount
@@ -34,6 +41,7 @@ struct ReceiptDraft: Equatable, Sendable {
         self.recognizedText = recognizedText
         self.shopKey = shopKey
         self.usedMemo = usedMemo
+        self.amountIsWellEvidenced = amountIsWellEvidenced
     }
 
     static let empty = ReceiptDraft(merchant: "")

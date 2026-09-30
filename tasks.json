@@ -164,7 +164,7 @@
       "status": "todo",
       "owner": "人間 + 検品役",
       "passes": "同じレシートを（1）正面から（2）斜め45度から撮り、品名と金額の対応と合計が同じになること。正面から撮ったときの精度が落ちていないこと",
-      "evidence": "",
+      "evidence": "TestFlight 2026.0906.0135（42053fa）で配信済み。CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/34004042251 → 134件中134件成功、UPLOAD SUCCEEDED with no errors。実機確認はこれから",
       "dependencies": [],
       "notes": "四隅が見つからなければ補正せず元の画像で読む作りなので悪くなることは無いはずだが、そこは実物でしか確かめられない。外したレシートは写真を残しておくこと"
     },
@@ -174,19 +174,29 @@
       "status": "todo",
       "owner": "人間 + 検品役",
       "passes": "同じレシートを撮り直して、店名「マクドナルド城町店」・種類「外食」・金額 2,230円 になっているスクリーンショット",
-      "evidence": "",
+      "evidence": "TestFlight 2026.0906.0135（42053fa）で配信済み。CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/34004042251 → 134件中134件成功、UPLOAD SUCCEEDED with no errors。実機確認はこれから",
       "dependencies": [],
       "notes": "外したのは店名と種類だけで、金額と日付は前から正しい。**金額を壊していないことも必ず見ること**。原因は looksLikeAddress が「町」1文字で住所と決めつけていたこと"
     },
     {
       "id": "T-016",
       "task": "合言葉が発行できるか実機で確かめ、もう1台から参加する",
-      "status": "todo",
+      "status": "done",
       "owner": "人間 + 検品役",
       "passes": "8文字の合言葉が出るスクリーンショットと、別のApple IDの端末でそれを入力して同じ支出一覧が出るスクリーンショット",
-      "evidence": "",
+      "evidence": "2026-09-28 合格。Production へ cloudkit.share を Deploy したあと、iPhone 13 mini（TestFlight版）で発行した合言葉を iPhone SE2 が入力して参加。両方に同じ支出一覧（甚目寺店 6,172 / EQVo! 6,088 / AEON STYLE 3,826）と精算が表示されたスクリーンショットを提出。3週間続いた CKError 12/2006 の原因は最後まで「Production に cloudkit.share が無い」ことだった",
       "dependencies": ["T-013"],
       "notes": "T-013でクラッシュは直った（落ちずにエラーが出た）。次の壁は共有のURLが空だったこと。失敗したら画面の写真を撮ること。カッコの中に、どこで詰まったかが出る"
+    },
+    {
+      "id": "T-017",
+      "task": "コノミヤのレシートで店名・金額・種類がそろうか実機で確かめる",
+      "status": "todo",
+      "owner": "人間 + 検品役",
+      "passes": "店名「コノミヤ 城西店」・金額 3,374円・種類「食費」・日付 2026/08/02 になっているスクリーンショット",
+      "evidence": "TestFlight 2026.0906.0135（42053fa）で配信済み。CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/34004042251 → 134件中134件成功、UPLOAD SUCCEEDED with no errors。実機確認はこれから",
+      "dependencies": [],
+      "notes": "原因は3つ。桁区切りのカンマがピリオドとして読まれた／「合計」の語が読めず受け皿が弱かった／端末内AIの答え(25)を素通ししていた。マクドナルドのレシートも一緒に撮り直して、壊れていないことを見ること"
     },
     {
       "id": "T-020",
@@ -194,7 +204,7 @@
       "status": "todo",
       "owner": "人間 + 実行役",
       "passes": "CloudKit Console の Production → Record Types に cloudkit.share が並んでいるスクリーンショット。そのうえでTestFlightの版から8文字の合言葉が出ること",
-      "evidence": "",
+      "evidence": "2026-09-28 Development環境で cloudkit.share の生成を確認（CloudKit Console の Record Types に Expense/Household/Income/ReceiptImage/ShareInvite/Users と並んで表示）。iPhone SE2 に Ad Hoc版（ビルド 2026.0927.1429）を入れ、合言葉 53VQ-DQ53 の発行に成功したことで生まれた。原因が「Productionに cloudkit.share が無い」ことだったと裏付けられた。残りは Deploy Schema Changes で Production へ運び、TestFlight版どうしで2台の参加を確かめること",
       "dependencies": [],
       "notes": "2026-09-26 実機ログの CKError 12/2006 の原因。この型は手では作れず、Development環境で共有を1回保存したときだけCloudKitが自動生成する。TestFlightは必ずProductionにつながるので回り道が要る。手順は Docs/CLOUDKIT_SHARE_SCHEMA.md。ワークフロー ios-dev-build.yml がDevelopment環境のIPAを作る。新しく要るのは Ad Hocプロファイル1つとUDIDだけで、証明書は配信用を使い回せる。Reset Environments は実行前に相談すること"
     }
