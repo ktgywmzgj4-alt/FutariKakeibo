@@ -211,12 +211,22 @@
     {
       "id": "T-021",
       "task": "合言葉の発行と、相手の記録が出るまでの時間が短くなったか実機で確かめる",
-      "status": "todo",
+      "status": "done",
       "owner": "人間 + 検品役",
       "passes": "(a) 合言葉が画面に出るまでが体感で待たされない。(b) 13 miniで支出を1件追加し、SE2を引っぱったときに数秒で出てくる。どちらも、前は10秒以上かかっていた",
-      "evidence": "TestFlight 2026.0930.1510（b4d013e）で配信済み。CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/36733432518 → 155件中155件成功、UPLOAD SUCCEEDED with no errors（Delivery UUID 38c457fc-de38-4766-afa2-a17c41148526）。アーカイブ内の版は 0.1.0 / 2026.0930.1510 で Info.plist の上書きは起きていない。往復の回数が減ったことはコードで確認済みだが、**実際の秒数は測っていない**",
+      "evidence": "2026-10-01 合格。TestFlight 2026.0930.1510（b4d013e）で (a)(b) ともに利用者が合格と判定。CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/36733432518 → 155件中155件成功、UPLOAD SUCCEEDED（Delivery UUID 38c457fc-de38-4766-afa2-a17c41148526）。アーカイブ内の版は 0.1.0 / 2026.0930.1510 で Info.plist の上書きは起きていない。**秒数は測っていない**（往復が約25回→7回に減ったことはコードで確認済み）",
       "dependencies": ["T-016"],
-      "notes": "直したのは往復の回数。取得を送り直しより先にし（refreshFromCloudIfConfigured）、合言葉の発行は1件2往復をまとめた（uploadChildren）。支出7件＋収入2件で約25往復→7往復。**この版にはまだ『開いたまま自動で出てくる』は入っていない**（commit bf96e1d、未コンパイル）。引っぱるかアプリを切り替えれば出てくる"
+      "notes": "直したのは往復の回数。取得を送り直しより先にし（refreshFromCloudIfConfigured）、合言葉の発行は1件2往復をまとめた（uploadChildren）。**この版には『開いたまま自動で出てくる』は入っていない** — それは T-022"
+    },
+    {
+      "id": "T-022",
+      "task": "開いたまま置いても相手の記録が出るか、レシート画像が全体で開くか実機で確かめる",
+      "status": "todo",
+      "owner": "人間 + 検品役",
+      "passes": "(a) 支出を開いて「レシートを見る」を押した瞬間に、レシート全体が画面に収まっているスクリーンショット。(b) 13 miniで支出を1件追加し、SE2は引っぱらず履歴の画面を見たまま待って、30秒ほどで出てくること",
+      "evidence": "TestFlight 2026.1001.2325（13ede92）で配信済み。CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/36939882822 → 156件中156件成功、UPLOAD SUCCEEDED with no errors（Delivery UUID 355d99b9-d269-44e6-8d89-1cef29b5dc10）。アーカイブ内の版は 0.1.0 / 2026.1001.2325 で Info.plist の上書きは起きていない。**画面の大きさはシミュレータのテストに出てこないので、画像が全体で開くかはCIでは分からない**",
+      "dependencies": ["T-021"],
+      "notes": "(a) の原因は、大きさを合わせる処理を UIViewRepresentable.updateUIView に置いていたこと。SwiftUIはスクロールビューの大きさが決まったときにそれを呼ばないので、bounds が 0 のまま呼ばれて何もせず終わり、画像の実寸のframeが残っていた。「拡大されすぎ」と「指一本で動かない」は同じ1つの原因。**全体が入っている状態では指一本で動かないのが正しい**（動かす先が無い。写真アプリと同じ）。(b) は前面にいる間だけ30秒ごとに取りに行く仕組み。本命は CKSubscription ＋無音プッシュだが署名を作り直すことになるため後回し"
     }
   ]
 }
