@@ -7,6 +7,27 @@
 
 ---
 
+## 2026-10-01 レシート画像が拡大されきって出ていた（症状2つ・原因1つ）
+
+**`UIViewRepresentable.updateUIView` で大きさを合わせていたのが間違い。**
+SwiftUIは**スクロールビューの大きさが決まったときに `updateUIView` を呼ばない**。
+初回は `bounds` が 0 のまま呼ばれて早期returnし、`UIImageView(image:)` が付けた
+画像の実寸（写真なら3000点超）のframeが残り、`contentSize` も入らなかった。
+
+そのため (1) 巨大な画像の左上だけが見えて「拡大されすぎ」、
+(2) `contentSize` が 0 なのでスクロールビューが「動かす先が無い」と判断して
+指一本で動かない。ピンチすると `UIScrollView` が `contentSize` を計算し直すので
+そこから動き出す。**別々に見えた2つの不具合は同じ1つの原因だった。**
+
+`ReceiptScrollView`（`UIScrollView` の派生）を作り、**`layoutSubviews` で組む**ようにした。
+UIKitは大きさが変わるたびにここを呼ぶ。画像は等倍で置き、縮めるのは `zoomScale` の側。
+最小倍率を「画面に収まる倍率」にしたので、開いた直後は必ず全体が見える。
+**`updateUIView` で大きさを合わせる形に戻さないでください。**
+
+なお**全体が入っている状態では指一本で動きません。動かす先が無いからで、写真アプリと同じ。**
+拡大すれば動きます。これは不具合ではない。
+
+
 ## 2026-09-30 TestFlight 2026.0930.1510 を配信（PR #27 をmainへ）
 
 CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/36733432518
