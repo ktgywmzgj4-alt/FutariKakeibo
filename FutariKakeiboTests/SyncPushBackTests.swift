@@ -110,3 +110,19 @@ final class SyncBatchingTests: XCTestCase {
         XCTAssertLessThanOrEqual(CloudKitSyncService.batchSize, 400)
     }
 }
+
+/// 開いたままのアプリが、自分から相手の記録を取りに行く間隔。
+///
+/// 相手が保存したことを知らせてくれる仕組み（CKSubscription）はまだ無い。
+/// 無いあいだは、前面にいるときだけ静かに取りに行くことで埋めている。
+final class PeriodicRefreshTests: XCTestCase {
+    /// **0秒や負の値だと、待たずに回り続けてCloudKitを叩き続ける。**
+    /// 実機では電池が溶けるまで誰も気づかない壊れ方なので、ここで止める。
+    /// 逆に長すぎると「開いたまま待っていても出てこない」という元の不満に戻る。
+    func testTheIntervalHelpsWithoutHammeringTheCloud() {
+        let seconds = AppStore.periodicRefreshInterval.components.seconds
+
+        XCTAssertGreaterThanOrEqual(seconds, 10, "短すぎる。通信と電池を無駄に使う")
+        XCTAssertLessThanOrEqual(seconds, 120, "長すぎる。待っている人には出てこないのと同じ")
+    }
+}
