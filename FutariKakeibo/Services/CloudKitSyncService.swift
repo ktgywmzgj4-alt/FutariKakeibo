@@ -84,6 +84,78 @@ actor CloudKitSyncService {
         }
     }
 
+    /// 家計簿のゾーンの名前はこの形で決まる。**名前で見分けられることが戻り道になる。**
+    static let householdZonePrefix = "household-"
+
+    nonisolated func householdZoneName(for householdID: UUID) -> String {
+        "\(Self.householdZonePrefix)\(householdID.uuidString.lowercased())"
+    }
+
+    /// 名前から家計簿のゾーンだけを選ぶ。
+    ///
+    /// 前の名前と見分けられなくなると戻り道が塞がるので、外から確かめられる形にしてある。
+    static func householdZoneNames(from zoneNames: [String]) -> [String] {
+        zoneNames.filter { $0.hasPrefix(householdZonePrefix) }.sorted()
+    }
+
+    /// この利用者のiCloudに、すでにある家計簿が残っていないか探す。
+    ///
+    /// **アプリを消して入れ直したときの戻り道。**
+    /// 合言葉で参加した側は、もう一度合言葉を入れれば `joinSharing` が全部取り直す。
+    /// だが**発行した側は入れる合言葉を持たない。** 合言葉は使い切りで消えるので
+    /// それも残っていない。結果、データはiCloudにあるのに手元から届かなくなっていた。
+    ///
+    /// ゾーンだけ残って中身が空のこともあるので、**家計簿のレコードがあるものだけ**返す。
+    func findExistingHouseholdLocation() async throws -> CloudLocation? {
+        let status = try await accountStatus()
+        guard status == .available else { return nil }
+
+        let database = container.privateCloudDatabase
+        let zoneNames = try await allRecordZones(in: database).map(\.zoneID.zoneName)
+        let candidates = Self.householdZoneNames(from: zoneNames)
+        log("iCloudのゾーン \(zoneNames.count)件、うち家計簿らしきもの \(candidates.count)件")
+
+        for zoneName in candidates {
+            let location = CloudLocation(
+                scope: .privateDatabase,
+                zoneName: zoneName,
+                ownerName: CKCurrentUserDefaultName,
+                rootRecordName: zoneName
+            )
+            let rootID = CKRecord.ID(
+                recordName: location.rootRecordName,
+                zoneID: zoneID(for: location)
+            )
+            if try await fetchRecord(rootID, from: database) != nil {
+                log("家計簿が見つかった。ここから取り戻せる")
+                return location
+            }
+        }
+        return nil
+    }
+
+    private func allRecordZones(in database: CKDatabase) async throws -> [CKRecordZone] {
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<[CKRecordZone], Error>) in
+            let operation = CKFetchRecordZonesOperation.fetchAllRecordZonesOperation()
+            let zones = LockedState<[CKRecordZone]>([])
+            operation.perRecordZoneResultBlock = { _, result in
+                if case let .success(zone) = result {
+                    zones.withLock { $0.append(zone) }
+                }
+            }
+            operation.fetchRecordZonesResultBlock = { result in
+                switch result {
+                case .success:
+                    continuation.resume(returning: zones.withLock { $0 })
+                case let .failure(error):
+                    continuation.resume(throwing: error)
+                }
+            }
+            database.add(operation)
+        }
+    }
+
     func prepareShare(
         household: Household,
         expenses: [Expense],
@@ -97,9 +169,9 @@ actor CloudKitSyncService {
 
         let location = CloudLocation(
             scope: .privateDatabase,
-            zoneName: "household-\(household.id.uuidString.lowercased())",
+            zoneName: householdZoneName(for: household.id),
             ownerName: CKCurrentUserDefaultName,
-            rootRecordName: "household-\(household.id.uuidString.lowercased())"
+            rootRecordName: householdZoneName(for: household.id)
         )
         let database = container.privateCloudDatabase
         let zoneID = zoneID(for: location)

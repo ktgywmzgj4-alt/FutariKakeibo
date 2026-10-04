@@ -144,8 +144,71 @@ final class AppStore: ObservableObject {
             errorMessage = "保存データを読み込めませんでした。データは上書きしていません。\n\(error.localizedDescription)"
             return
         }
+        // **ここでCloudKitを触らないでください。**
+        // `CKContainer.default()` は iCloudのentitlementを持たないビルドで
+        // `CKException` を投げ、**Objective-Cの例外なのでSwiftのcatchでは捕まらず**
+        // プロセスごと終わります。起動時に呼ぶと、アプリが開いた瞬間に落ちます。
+        // 一度ここに取り戻し処理を置いてテストが全滅しました（2026-10-04）。
+        // 取り戻しは `recoverHouseholdFromCloud()` で、利用者がボタンを押したときだけ動かします。
         await applyRecurringExpenses()
         tidyReceiptImages()
+    }
+
+    /// 結果を画面に出すための状態。取り戻しはボタンから動かす。
+    enum RecoveryOutcome: Equatable {
+        case recovered
+        case nothingFound
+        case failed(String)
+    }
+
+    @Published var isRecovering = false
+    @Published var recoveryOutcome: RecoveryOutcome?
+
+    /// iCloudに残っている家計簿を探して取り戻す。
+    ///
+    /// **アプリを消して入れ直すと、合言葉を発行した側は家計簿に戻れなかった。**
+    /// 参加した側は合言葉をもう一度入れれば `joinSharing` が全部取り直すが、
+    /// 発行した側は入れる合言葉を持たない。合言葉は使い切りで消えるからだ。
+    /// iCloudにデータはあるのに手元から届かない、という状態だった。
+    ///
+    /// **自動では動かさない。** 起動時にCloudKitを触ると、entitlementの無いビルドで
+    /// アプリごと落ちる（`loadIfNeeded` のコメント）。押した人がいるときだけ動く。
+    func recoverHouseholdFromCloud() async {
+        guard snapshot.household == nil, !isRecovering else { return }
+        isRecovering = true
+        recoveryOutcome = nil
+        defer { isRecovering = false }
+
+        do {
+            guard let location = try await cloudService.findExistingHouseholdLocation() else {
+                recoveryOutcome = .nothingFound
+                return
+            }
+            let cloud = try await cloudService.fetchSnapshot(at: location)
+            var household = cloud.household
+            household.cloudLocation = location
+            // 取り戻しているのは、このiCloudの持ち主。つまり発行した側。
+            let ownerID = household.ownerMemberID
+            let me = household.members.first { $0.id == ownerID }?.id
+                ?? household.members.first?.id
+            snapshot = AppSnapshot(
+                household: household,
+                selectedMemberID: me,
+                expenses: cloud.expenses,
+                incomes: cloud.incomes,
+                deletedExpenseIDs: cloud.deletedExpenseIDs,
+                deletedIncomeIDs: cloud.deletedIncomeIDs
+            )
+            await persistLocally()
+            syncState = .synced(.now)
+            recoveryOutcome = .recovered
+        } catch {
+            syncState = .localOnly
+            recoveryOutcome = .failed(Self.inviteFailureMessage(
+                for: error,
+                fallback: "iCloudに繋がりませんでした。電波の届くところでもう一度お試しください。"
+            ))
+        }
     }
 
     func createHousehold(selfName: String, partnerName: String, monthlyBudget: Int) async {

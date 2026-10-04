@@ -1111,4 +1111,97 @@ final class ReceiptParserTests: XCTestCase {
         XCTAssertEqual(draft.date, date(2026, 9, 23))
         XCTAssertEqual(draft.suggestedCategory, .groceries)
     }
+
+    // MARK: - Eggs 'n Things 名古屋PARCO店（2026-10-04 実機）
+
+    /// 実機で読み取った1枚。**店名が崩れ、種類が「その他」になった。**
+    ///
+    /// 店名は読み取りそのものが外している（`Eggs'` → `R`、`PARCO` → `PARC0`）。
+    /// そこは直せないが、**飲食店の伝票だと分かる手がかりは本文に残っている。**
+    /// 金額と日付は最初から正しく読めていた。
+    private func eggsNThingsReceipt() -> [RecognizedLine] {
+        [
+            // ロゴは筆記体で、文字としてはほとんど読めない。
+            line("Eggs'n Things", y: 0.030, height: 0.034),
+            line("Hawaii", y: 0.050),
+            line("Established in 1974", y: 0.062),
+            // 実機がここをこう読んだ。テストでも同じ崩れ方を入れておく。
+            line("「R Things名古屋PARC0店", y: 0.082, height: 0.022),
+            line("愛知県名古屋市中区栄3-29-11", y: 0.096),
+            line("名古屋PARCO midi", y: 0.108),
+            line("TEL 052-241-6565", y: 0.120),
+            line("店No-0000000000010-0001", y: 0.132),
+            line("2026/10/04 （日） 12:02", y: 0.146),
+            line("伝票No-00216", y: 0.158),
+            line("テーブル１０１", y: 0.170),
+            line("2名", y: 0.186),
+            line("EAT-IN", y: 0.200),
+
+            line("ベネディクトサーモン", y: 0.220), price("¥1,826", y: 0.220),
+            line("マッシュポテト", y: 0.234), price("¥0", y: 0.234),
+            line("セットパイナップルパンケーキ", y: 0.248), price("¥638", y: 0.248),
+            line("ロコモコ", y: 0.268), price("¥1,485", y: 0.268),
+            line("アイスコーヒー", y: 0.282), price("¥660", y: 0.282),
+            line("マンゴーパッションフルーツレモネード", y: 0.296), price("¥693", y: 0.296),
+
+            line("合計 6点", y: 0.330, height: 0.026), price("¥5,302", y: 0.330),
+            line("（内消費税等", y: 0.346), price("¥482）", y: 0.346),
+            line("10%対象", y: 0.358), price("¥5,302", y: 0.358),
+            line("（標準税率", y: 0.370), price("¥482）", y: 0.370),
+            line("クレジット", y: 0.384),
+            line("1", y: 0.398), price("¥5,302", y: 0.398),
+
+            line("EGGS' N THINGS JAPAN株式会社", y: 0.430),
+            line("登録番号 T6011001062650", y: 0.444),
+            line("会計担当 Yu-a", y: 0.458),
+            line("No0109531", y: 0.470)
+        ]
+    }
+
+    /// 金額と日付。ここは実機でも最初から合っていた。壊さないための押さえ。
+    func testEggsNThingsReceiptReadsFiveThousandThreeHundredAndTwo() {
+        let draft = ReceiptParser.parse(
+            lines: eggsNThingsReceipt(),
+            now: date(2026, 10, 5),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.amount, 5_302)
+        XCTAssertEqual(draft.date, date(2026, 10, 4))
+    }
+
+    /// **実機で外したのはここ。** 種類が「その他」になっていた。
+    ///
+    /// 店名が崩れているので店名からは何も分からず、品名も
+    /// 「ロコモコ」「アイスコーヒー」のようにスーパーでも買えるものばかり。
+    /// 残る手がかりは `EAT-IN` のような、**飲食店の伝票にしか出ない語**だけ。
+    func testARestaurantBillIsDiningEvenWhenTheShopNameIsMisread() {
+        let draft = ReceiptParser.parse(
+            lines: eggsNThingsReceipt(),
+            now: date(2026, 10, 5),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.suggestedCategory, .dining)
+    }
+
+    /// **「テーブル」を外食の語にしてはいけない。**
+    ///
+    /// EQVo! の店名は「ファミリーテーブル」で、これはスーパー。
+    /// 便利そうに見える語を足すと、こういう1枚が黙って外食に化ける。
+    func testATableInTheShopNameDoesNotMakeItDining() {
+        XCTAssertNotEqual(
+            ReceiptParser.category(from: "", merchant: "EQVo! ファミリーテーブル"),
+            .dining
+        )
+    }
+
+    /// ローマ字の「AEON」でも食費と分かること。
+    /// カタカナの「イオン」しか見ていないと、店名からは何も分からなかった。
+    func testAeonInRomanLettersIsGroceries() {
+        XCTAssertEqual(
+            ReceiptParser.category(from: "", merchant: "AEON STYLE"),
+            .groceries
+        )
+    }
 }
