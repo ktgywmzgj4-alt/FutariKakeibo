@@ -126,3 +126,45 @@ final class PeriodicRefreshTests: XCTestCase {
         XCTAssertLessThanOrEqual(seconds, 120, "長すぎる。待っている人には出てこないのと同じ")
     }
 }
+
+/// アプリを消して入れ直したとき、iCloudに残っている家計簿を見つけられるか。
+///
+/// **発行した側には戻り道が無かった。** 参加した側は合言葉をもう一度入れれば
+/// 全部取り直せるが、発行した側は入れる合言葉を持たない（使い切りで消える）。
+/// 残っていた手がかりは、ゾーンの名前だけだった。
+final class HouseholdRecoveryTests: XCTestCase {
+    /// 家計簿のゾーンだけを拾うこと。
+    /// CloudKitは他の用途のゾーンも返すので、取り違えると別物を家計簿として開く。
+    func testOnlyHouseholdZonesAreTakenAsCandidates() {
+        let names = CloudKitSyncService.householdZoneNames(from: [
+            "_defaultZone",
+            "household-6a1f0c2e-0000-4000-8000-000000000001",
+            "com.apple.coredata.cloudkit.zone",
+            "household-6a1f0c2e-0000-4000-8000-000000000002",
+            "receipts"
+        ])
+
+        XCTAssertEqual(names, [
+            "household-6a1f0c2e-0000-4000-8000-000000000001",
+            "household-6a1f0c2e-0000-4000-8000-000000000002"
+        ])
+    }
+
+    /// 1つも無ければ空。初めてアプリを開いた人がこれにあたる。
+    func testNothingToRecoverProducesNoCandidates() {
+        XCTAssertTrue(CloudKitSyncService.householdZoneNames(from: ["_defaultZone"]).isEmpty)
+        XCTAssertTrue(CloudKitSyncService.householdZoneNames(from: []).isEmpty)
+    }
+
+    /// 名前の付け方を変えたら、前に作った家計簿が見つからなくなる。
+    /// **この接頭辞は prepareShare が作るゾーン名と同じでなければならない。**
+    func testThePrefixStillMatchesTheNameWeWrite() {
+        let service = CloudKitSyncService()
+        let id = UUID()
+
+        let zoneName = service.householdZoneName(for: id)
+
+        XCTAssertTrue(zoneName.hasPrefix(CloudKitSyncService.householdZonePrefix))
+        XCTAssertEqual(CloudKitSyncService.householdZoneNames(from: [zoneName]), [zoneName])
+    }
+}

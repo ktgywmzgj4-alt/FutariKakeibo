@@ -144,8 +144,50 @@ final class AppStore: ObservableObject {
             errorMessage = "保存データを読み込めませんでした。データは上書きしていません。\n\(error.localizedDescription)"
             return
         }
+        // 手元が空のときだけiCloudを見に行く。アプリを入れ直した直後がこれにあたる。
+        // ここで待つのは、先に「家計簿を作る」画面を出してしまうと、
+        // 入力している途中で古い家計簿が下から現れることになるため。
+        await recoverHouseholdIfNeeded()
         await applyRecurringExpenses()
         tidyReceiptImages()
+    }
+
+    /// 手元に家計簿が無いとき、iCloudに残っていないか見に行って取り戻す。
+    ///
+    /// **アプリを消して入れ直すと、発行した側は家計簿に戻れなかった。**
+    /// 参加した側は合言葉をもう一度入れれば `joinSharing` が全部取り直すが、
+    /// 発行した側は入れる合言葉を持たない。合言葉は使い切りで消えるからだ。
+    /// iCloudにデータはあるのに手元から届かない、という状態だった。
+    ///
+    /// **取り戻せなくても、新しく作る道は塞がない。** 失敗は黙って見送る。
+    /// ここで赤い字を出しても、初めて開いた人には意味が分からない。
+    func recoverHouseholdIfNeeded() async {
+        guard snapshot.household == nil else { return }
+
+        do {
+            guard let location = try await cloudService.findExistingHouseholdLocation() else {
+                return
+            }
+            let cloud = try await cloudService.fetchSnapshot(at: location)
+            var household = cloud.household
+            household.cloudLocation = location
+            // 取り戻しているのは、このiCloudの持ち主。つまり発行した側。
+            let ownerID = household.ownerMemberID
+            let me = household.members.first { $0.id == ownerID }?.id
+                ?? household.members.first?.id
+            snapshot = AppSnapshot(
+                household: household,
+                selectedMemberID: me,
+                expenses: cloud.expenses,
+                incomes: cloud.incomes,
+                deletedExpenseIDs: cloud.deletedExpenseIDs,
+                deletedIncomeIDs: cloud.deletedIncomeIDs
+            )
+            await persistLocally()
+            syncState = .synced(.now)
+        } catch {
+            syncState = .localOnly
+        }
     }
 
     func createHousehold(selfName: String, partnerName: String, monthlyBudget: Int) async {
