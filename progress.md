@@ -7,6 +7,32 @@
 
 ---
 
+## 2026-10-04 起動時にCloudKitを触ってアプリを落とした（重大・自戒）
+
+取り戻し処理を `loadIfNeeded` に置いたら、**アプリが起動した瞬間に落ちた。**
+CIのテストが1件も走らず全滅した（run 37240602787）。
+
+```
+*** Terminating app due to uncaught exception 'CKException',
+    reason: 'containerIdentifier can not be nil'
+```
+
+**`CKException` は Objective-C の例外で、Swiftの `catch` では捕まらない。**
+`do { } catch { }` で囲んであっても意味がない。プロセスごと終わる。
+T-013 で踏んだ `.deleteSelf` の事故とまったく同じ形。
+
+**しかもこの危険は `CloudKitSyncService.swift` のコメントに最初から書いてあった** —
+「起動時に必ず作るのをやめ、実際にCloudKitを使う時まで生成を遅らせる」。
+**そう書いてある場所に、起動時の呼び出しを足したのが今回の誤り。**
+
+**起動時・画面の表示時にCloudKitを呼ばないでください。** entitlementを持たない
+ビルド（テスト用のホストアプリがこれ）では、呼んだ瞬間にアプリが終わります。
+`accountStatus()` も `container` を作るので同じです。
+
+取り戻しは **ボタンを押したときだけ動く形**にした（`recoverHouseholdFromCloud`、
+最初の画面の「以前の家計簿を取り戻す」）。押した人がいるときだけCloudKitに触る。
+
+
 ## 2026-10-04 別アカウントの共有が通った。発行した側の戻り道を作った
 
 **別々のApple IDでの共有が実機で合格（T-003）。** 要件の完成条件3が埋まった。

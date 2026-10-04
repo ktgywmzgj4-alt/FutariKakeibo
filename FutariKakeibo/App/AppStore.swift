@@ -144,28 +144,44 @@ final class AppStore: ObservableObject {
             errorMessage = "保存データを読み込めませんでした。データは上書きしていません。\n\(error.localizedDescription)"
             return
         }
-        // 手元が空のときだけiCloudを見に行く。アプリを入れ直した直後がこれにあたる。
-        // ここで待つのは、先に「家計簿を作る」画面を出してしまうと、
-        // 入力している途中で古い家計簿が下から現れることになるため。
-        await recoverHouseholdIfNeeded()
+        // **ここでCloudKitを触らないでください。**
+        // `CKContainer.default()` は iCloudのentitlementを持たないビルドで
+        // `CKException` を投げ、**Objective-Cの例外なのでSwiftのcatchでは捕まらず**
+        // プロセスごと終わります。起動時に呼ぶと、アプリが開いた瞬間に落ちます。
+        // 一度ここに取り戻し処理を置いてテストが全滅しました（2026-10-04）。
+        // 取り戻しは `recoverHouseholdFromCloud()` で、利用者がボタンを押したときだけ動かします。
         await applyRecurringExpenses()
         tidyReceiptImages()
     }
 
-    /// 手元に家計簿が無いとき、iCloudに残っていないか見に行って取り戻す。
+    /// 結果を画面に出すための状態。取り戻しはボタンから動かす。
+    enum RecoveryOutcome: Equatable {
+        case recovered
+        case nothingFound
+        case failed(String)
+    }
+
+    @Published var isRecovering = false
+    @Published var recoveryOutcome: RecoveryOutcome?
+
+    /// iCloudに残っている家計簿を探して取り戻す。
     ///
-    /// **アプリを消して入れ直すと、発行した側は家計簿に戻れなかった。**
+    /// **アプリを消して入れ直すと、合言葉を発行した側は家計簿に戻れなかった。**
     /// 参加した側は合言葉をもう一度入れれば `joinSharing` が全部取り直すが、
     /// 発行した側は入れる合言葉を持たない。合言葉は使い切りで消えるからだ。
     /// iCloudにデータはあるのに手元から届かない、という状態だった。
     ///
-    /// **取り戻せなくても、新しく作る道は塞がない。** 失敗は黙って見送る。
-    /// ここで赤い字を出しても、初めて開いた人には意味が分からない。
-    func recoverHouseholdIfNeeded() async {
-        guard snapshot.household == nil else { return }
+    /// **自動では動かさない。** 起動時にCloudKitを触ると、entitlementの無いビルドで
+    /// アプリごと落ちる（`loadIfNeeded` のコメント）。押した人がいるときだけ動く。
+    func recoverHouseholdFromCloud() async {
+        guard snapshot.household == nil, !isRecovering else { return }
+        isRecovering = true
+        recoveryOutcome = nil
+        defer { isRecovering = false }
 
         do {
             guard let location = try await cloudService.findExistingHouseholdLocation() else {
+                recoveryOutcome = .nothingFound
                 return
             }
             let cloud = try await cloudService.fetchSnapshot(at: location)
@@ -185,8 +201,13 @@ final class AppStore: ObservableObject {
             )
             await persistLocally()
             syncState = .synced(.now)
+            recoveryOutcome = .recovered
         } catch {
             syncState = .localOnly
+            recoveryOutcome = .failed(Self.inviteFailureMessage(
+                for: error,
+                fallback: "iCloudに繋がりませんでした。電波の届くところでもう一度お試しください。"
+            ))
         }
     }
 

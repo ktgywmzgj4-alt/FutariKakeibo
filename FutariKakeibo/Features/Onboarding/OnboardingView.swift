@@ -81,6 +81,8 @@ struct OnboardingView: View {
                 .disabled(parsedBudget <= 0)
                 .opacity(parsedBudget <= 0 ? 0.5 : 1)
 
+                recoverySection
+
                 Label(
                     "最初はこのiPhone内だけに保存します。iCloud共有は設定画面から、準備ができた時に有効にできます。",
                     systemImage: "lock.shield.fill"
@@ -96,6 +98,64 @@ struct OnboardingView: View {
 
     private var parsedBudget: Int {
         Int(budgetText.filter(\.isNumber)) ?? 0
+    }
+
+    /// アプリを入れ直した人のための入口。
+    ///
+    /// **押したときだけiCloudを見に行く。** 起動時に見に行くと、iCloudの
+    /// entitlementを持たないビルドで `CKException` が飛び、Swiftのcatchでは
+    /// 捕まらずアプリごと落ちる。初めて開いた人を待たせないためでもある。
+    @ViewBuilder
+    private var recoverySection: some View {
+        VStack(spacing: 10) {
+            Button {
+                focusedField = nil
+                Task { await store.recoverHouseholdFromCloud() }
+            } label: {
+                HStack(spacing: 8) {
+                    if store.isRecovering {
+                        ProgressView().tint(AppTheme.accent)
+                    }
+                    Text(store.isRecovering ? "さがしています…" : "以前の家計簿を取り戻す")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .foregroundStyle(AppTheme.accent)
+                .background(AppTheme.card)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .disabled(store.isRecovering)
+            .accessibilityHint("このiPhoneで前に使っていた家計簿をiCloudから探します")
+
+            if let outcome = store.recoveryOutcome {
+                recoveryMessage(outcome)
+            } else {
+                Text("このiPhoneを前にも使っていたなら、ここから戻せます。")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func recoveryMessage(_ outcome: AppStore.RecoveryOutcome) -> some View {
+        switch outcome {
+        case .recovered:
+            // 取り戻せたときは画面そのものが入れ替わるので、ここはまず見えない。
+            EmptyView()
+        case .nothingFound:
+            Text("このiCloudには家計簿が見つかりませんでした。相手から合言葉をもらって参加するか、新しく始めてください。")
+                .font(.caption)
+                .foregroundStyle(AppTheme.secondaryText)
+                .multilineTextAlignment(.center)
+        case let .failed(message):
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(AppTheme.warning)
+                .multilineTextAlignment(.center)
+        }
     }
 
     private func labeledField(
