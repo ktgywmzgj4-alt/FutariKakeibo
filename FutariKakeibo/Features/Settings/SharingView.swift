@@ -92,7 +92,8 @@ struct SharingView: View {
                 Task { await store.startSharingWithCode() }
             } label: {
                 if store.isPreparingInvite {
-                    ProgressView().frame(maxWidth: .infinity)
+                    WalletSpinner(size: 22, label: "iCloudとやりとり中")
+                        .frame(maxWidth: .infinity)
                 } else {
                     Text("合言葉を発行する")
                         .font(.headline)
@@ -194,7 +195,8 @@ struct SharingView: View {
                 }
             } label: {
                 if store.isPreparingInvite {
-                    ProgressView().frame(maxWidth: .infinity)
+                    WalletSpinner(size: 22, label: "iCloudとやりとり中")
+                        .frame(maxWidth: .infinity)
                 } else {
                     Text("この合言葉で参加する")
                         .font(.headline)
