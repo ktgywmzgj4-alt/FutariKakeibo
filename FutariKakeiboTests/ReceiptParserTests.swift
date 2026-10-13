@@ -1204,4 +1204,185 @@ final class ReceiptParserTests: XCTestCase {
             .groceries
         )
     }
+
+    // MARK: - 富士サファリパーク テイクアウトフード（2026-10-13 実機）
+
+    /// 実機で読み取った1枚。**種類が「その他」になった。**
+    ///
+    /// 店名は「領収算書」の朱印を崩し字のまま拾っていて（実機では「漬汁算素」）、
+    /// そこは読み取りそのものが外しているので直せない。
+    /// 品名も「モンブランソフト」「フルーツソーダ」で、スーパーの菓子売り場にもある。
+    /// **残っていた手がかりは、店名の行に並んだ「テイクアウトフード」だけ。**
+    ///
+    /// 金額と日付は最初から正しく読めていた。
+    ///
+    /// 並びは実機の画面に出た読み取り結果と、レシートに見える行から組み直したもので、
+    /// 1文字ずつの写しではない。品の値段は合計と足し算が合う（750 + 600 = 1,350）。
+    private func fujiSafariReceipt() -> [RecognizedLine] {
+        [
+            // 朱印。いちばん大きいので、店名はここから取られてしまう。
+            line("漬汁算素", y: 0.028, height: 0.040),
+            line("富士サファリパーク テイクアウトフード", y: 0.058, height: 0.020),
+            line("〒410-1231 静岡県裾野市須山2255-27", y: 0.072),
+            line("TEL 055-998-1311", y: 0.084),
+            line("2026年10月12日(月) 14:30", y: 0.100),
+            line("No.0007653", y: 0.112),
+
+            line("モンブランソフト 和栗", y: 0.140), price("¥750", y: 0.140),
+            line("フルーツソーダ ストロベリー", y: 0.154), price("¥600", y: 0.154),
+
+            line("合計 2点", y: 0.186, height: 0.026), price("¥1,350", y: 0.186),
+            line("8%対象", y: 0.202), price("¥1,350", y: 0.202),
+            line("(内消費税等", y: 0.214), price("¥100)", y: 0.214),
+            line("クレジット", y: 0.230), price("¥1,350", y: 0.230),
+
+            line("登録番号 T6010001139401", y: 0.260)
+        ]
+    }
+
+    /// 金額と日付。ここは実機でも最初から合っていた。壊さないための押さえ。
+    func testFujiSafariReceiptReadsOneThousandThreeHundredAndFifty() {
+        let draft = ReceiptParser.parse(
+            lines: fujiSafariReceipt(),
+            now: date(2026, 10, 13),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.amount, 1_350)
+        XCTAssertEqual(draft.date, date(2026, 10, 12))
+    }
+
+    /// **実機で外したのはここ。** 種類が「その他」になっていた。
+    ///
+    /// 店名が崩し字で読めず、品名もスーパーで買えるものばかり。
+    /// 「テイクアウト」は売店の伝票にしか出ない語なので、最後の手がかりとして効く。
+    func testATakeawayFoodStallIsDiningEvenWhenTheShopNameIsUnreadable() {
+        let draft = ReceiptParser.parse(
+            lines: fujiSafariReceipt(),
+            now: date(2026, 10, 13),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.suggestedCategory, .dining)
+    }
+
+    // MARK: - ミスタードーナツ mozoワンダーシティショップ（2026-10-13 実機）
+
+    /// 実機で読み取った1枚。**種類が「水道・光熱」になった。**
+    ///
+    /// このレシートは品名と値段が別の行に分かれて印字されている。
+    /// 値段の側の行が「1点※」なので、**店名がその「1点」になった。**
+    /// 店名からも品名からも何も分からず、本文まで落ちたところで
+    /// 裏書きの「クーポンは携帯・スマホ専用です」の**「携帯」**が引っかかり、
+    /// ドーナツ代が光熱費になった。
+    ///
+    /// 金額と日付は最初から正しく読めていた。
+    ///
+    /// 並びは実機の画面に出た読み取り結果と、レシートに見える行から組み直したもので、
+    /// 1文字ずつの写しではない。品の値段は合計と足し算が合う
+    /// （270 + 183 + 226 + 205 = 884）。
+    private func misterDonutReceipt() -> [RecognizedLine] {
+        [
+            line("mister Donut", y: 0.030, height: 0.030),
+            line("No. 1914", y: 0.048),
+            line("mozoワンダーシティショップ", y: 0.062),
+            line("電話052-501-2661", y: 0.074),
+            line("2026年10月04日(日) 17時40分", y: 0.090),
+
+            // 品名の行に値段が無く、次の行の「1点※」に値段が付く。
+            // 店名がここから取られた。
+            line("サクッと香る煮込みトマチキパイ", y: 0.118),
+            line("1点※", y: 0.130, height: 0.022), price("¥270", y: 0.130),
+            line("オールドファッション", y: 0.146),
+            line("1点※", y: 0.158, height: 0.022), price("¥183", y: 0.158),
+            line("ポン・デ・ザクショコラ", y: 0.174),
+            line("1点※", y: 0.186, height: 0.022), price("¥226", y: 0.186),
+            line("ポン・デ・ダブルショコラ", y: 0.202),
+            line("1点※", y: 0.214, height: 0.022), price("¥205", y: 0.214),
+
+            line("合計 4点", y: 0.246, height: 0.026), price("¥884", y: 0.246),
+            line("(10%対象", y: 0.262), price("¥0)", y: 0.262),
+            line("( 8%対象", y: 0.274), price("¥819)", y: 0.274),
+            line("(内消費税等", y: 0.286), price("¥65)", y: 0.286),
+            line("クレジット", y: 0.302), price("¥884", y: 0.302),
+
+            line("※は軽減税率対象商品です", y: 0.330),
+            line("登録番号 T5180001037671", y: 0.344),
+
+            // 裏書き。ここが種類を決めてしまっていた。
+            line("クーポンは携帯・スマホ専用です", y: 0.372),
+            line("全国のミスタードーナツでご利用いただけます", y: 0.386)
+        ]
+    }
+
+    /// 金額と日付。ここは実機でも最初から合っていた。壊さないための押さえ。
+    func testMisterDonutReceiptReadsEightHundredAndEightyFour() {
+        let draft = ReceiptParser.parse(
+            lines: misterDonutReceipt(),
+            now: date(2026, 10, 13),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.amount, 884)
+        XCTAssertEqual(draft.date, date(2026, 10, 4))
+    }
+
+    /// **実機で外したのはここ。** 種類が「水道・光熱」になっていた。
+    ///
+    /// 店名が「1点」で、品名も「1点※」。本文の店名だけが残る手がかり。
+    func testMisterDonutIsDiningEvenWhenTheShopNameIsAQuantity() {
+        let draft = ReceiptParser.parse(
+            lines: misterDonutReceipt(),
+            now: date(2026, 10, 13),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(draft.suggestedCategory, .dining)
+    }
+
+    // MARK: - 短い一般語を水道・光熱に置かないこと
+
+    /// **「携帯」を水道・光熱の語にしてはいけない。**
+    ///
+    /// クーポンやアンケートの注意書きに必ず出る語で、レシートの中身とは関係がない。
+    /// これだけでミスタードーナツのレシートが光熱費になった。
+    func testACouponAboutMobilePhonesIsNotAUtilityBill() {
+        XCTAssertNotEqual(
+            ReceiptParser.category(from: "クーポンは携帯・スマホ専用です"),
+            .utilities
+        )
+    }
+
+    /// **「ガス」を水道・光熱の語にしてはいけない。**
+    ///
+    /// 「ガスト」に「ガス」が入っている。水道・光熱は外食より前に並んでいるので、
+    /// 1件ずつの同点では水道・光熱が勝ち（`bestMatch` は `hits > best?.hits`）、
+    /// ファミレスの代金が光熱費になる。
+    func testGustoIsDiningAndNotAUtilityBill() {
+        XCTAssertEqual(
+            ReceiptParser.category(from: "", merchant: "ガスト 名古屋栄店"),
+            .dining
+        )
+    }
+
+    /// 短い語を外した代わりに、公共料金そのものは取り逃がさないこと。
+    /// 「東京電力」に「電気」は入っていない（「電力」）ので、両方を見る。
+    func testRealUtilityBillsAreStillUtilities() {
+        XCTAssertEqual(
+            ReceiptParser.category(from: "", merchant: "東京電力エナジーパートナー"),
+            .utilities
+        )
+        XCTAssertEqual(
+            ReceiptParser.category(from: "", merchant: "東京ガス 都市ガス料金"),
+            .utilities
+        )
+        XCTAssertEqual(
+            ReceiptParser.category(from: "", merchant: "ソフトバンク"),
+            .utilities
+        )
+        XCTAssertEqual(
+            ReceiptParser.category(from: "", merchant: "名古屋市上下水道局 水道料金"),
+            .utilities
+        )
+    }
 }

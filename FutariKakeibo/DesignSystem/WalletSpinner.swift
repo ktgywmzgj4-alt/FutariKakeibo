@@ -5,8 +5,10 @@ import SwiftUI
 /// `ProgressView` のくるくるの代わり。既製の輪が回るより、**アプリの顔が回るほうが
 /// 「これが動いている」と分かる**、という利用者の判断（2026-10-08）。
 ///
-/// **平らにではなく、縦軸で回している。** 平らに回すと財布が逆さまになる瞬間があり、
-/// 絵が壊れて見える。縦軸なら硬貨が回るように見えて、いつも上が上のまま。
+/// **正面を向いたまま、右へ回す。** 以前は縦軸で回していた（硬貨が回るような動き）。
+/// 横を向く瞬間に財布が薄くなって絵が消えるので、
+/// **正面のまま右回転にしてほしい**という利用者の指示（2026-10-13）。
+/// どちらにするかは見た目の好みの話なので、指示のほうを採る。
 ///
 /// 進み具合が分かる場面（予算の使用率など）には使わないこと。
 /// そこは `ProgressView(value:)` の棒のままにする。これは「終わりが見えない待ち」用。
@@ -26,10 +28,8 @@ struct WalletSpinner: View {
             .scaledToFit()
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: size * 0.23, style: .continuous))
-            .rotation3DEffect(
-                .degrees(spinning ? 360 : 0),
-                axis: (x: 0, y: 1, z: 0)
-            )
+            // 角度は正。SwiftUI では正の角度が右回り（時計回り）。
+            .rotationEffect(.degrees(spinning ? 360 : 0))
             .animation(
                 .linear(duration: 1.1).repeatForever(autoreverses: false),
                 value: spinning

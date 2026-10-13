@@ -197,9 +197,13 @@ struct SettingsView: View {
     private var aboutCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionTitle("ふたり家計簿", icon: "house.and.flag.fill")
-            Text("Version 0.1.0 (1)")
+            // **決め打ちにしないこと。** 以前ここに文字列で書いてあったため、
+            // どのビルドを入れても「Version 0.1.0 (1)」と出ていた（`AppVersion` の注を参照）。
+            Text(AppVersion(bundle: .main).displayText)
                 .font(.footnote.monospaced())
                 .foregroundStyle(AppTheme.secondaryText)
+                // 不具合の報告のときに、長押しで写して送れるように。
+                .textSelection(.enabled)
             Text("広告・課金機能はまだ実装していません。")
                 .font(.footnote)
                 .foregroundStyle(AppTheme.secondaryText)

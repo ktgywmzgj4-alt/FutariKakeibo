@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		C00000000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* AppDelegate.swift */; };
 		C00000000000000000000002 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* AppStore.swift */; };
+		C00000000000000000000076 /* AppVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000076 /* AppVersion.swift */; };
 		C00000000000000000000003 /* FutariKakeiboApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* FutariKakeiboApp.swift */; };
 		C00000000000000000000004 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000004 /* RootView.swift */; };
 		C00000000000000000000005 /* ExpenseRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000005 /* ExpenseRow.swift */; };
@@ -78,6 +79,7 @@
 		C00000000000000000000069 /* ReceiptThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000069 /* ReceiptThumbnail.swift */; };
 		C00000000000000000000070 /* ReceiptImageViewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000070 /* ReceiptImageViewer.swift */; };
 		C00000000000000000000071 /* ReceiptImageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000071 /* ReceiptImageTests.swift */; };
+		C00000000000000000000077 /* AppVersionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000077 /* AppVersionTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -93,6 +95,7 @@
 /* Begin PBXFileReference section */
 		B00000000000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/AppDelegate.swift; sourceTree = "<group>"; };
 		B00000000000000000000002 /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/AppStore.swift; sourceTree = "<group>"; };
+		B00000000000000000000076 /* AppVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/AppVersion.swift; sourceTree = "<group>"; };
 		B00000000000000000000003 /* FutariKakeiboApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/FutariKakeiboApp.swift; sourceTree = "<group>"; };
 		B00000000000000000000004 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/RootView.swift; sourceTree = "<group>"; };
 		B00000000000000000000005 /* ExpenseRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/ExpenseRow.swift; sourceTree = "<group>"; };
@@ -166,6 +169,7 @@
 		B00000000000000000000069 /* ReceiptThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/ReceiptThumbnail.swift; sourceTree = "<group>"; };
 		B00000000000000000000070 /* ReceiptImageViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Expenses/ReceiptImageViewer.swift; sourceTree = "<group>"; };
 		B00000000000000000000071 /* ReceiptImageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptImageTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000077 /* AppVersionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVersionTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -209,6 +213,7 @@
 			children = (
 				B00000000000000000000001 /* AppDelegate.swift */,
 				B00000000000000000000002 /* AppStore.swift */,
+				B00000000000000000000076 /* AppVersion.swift */,
 				B00000000000000000000003 /* FutariKakeiboApp.swift */,
 				B00000000000000000000004 /* RootView.swift */,
 				B00000000000000000000005 /* ExpenseRow.swift */,
@@ -287,6 +292,7 @@
 				B00000000000000000000062 /* ReceiptInterpreterTests.swift */,
 				B00000000000000000000064 /* MerchantMemoTests.swift */,
 				B00000000000000000000071 /* ReceiptImageTests.swift */,
+				B00000000000000000000077 /* AppVersionTests.swift */,
 			);
 			path = FutariKakeiboTests;
 			sourceTree = "<group>";
@@ -394,6 +400,7 @@
 			files = (
 				C00000000000000000000001 /* AppDelegate.swift in Sources */,
 				C00000000000000000000002 /* AppStore.swift in Sources */,
+				C00000000000000000000076 /* AppVersion.swift in Sources */,
 				C00000000000000000000003 /* FutariKakeiboApp.swift in Sources */,
 				C00000000000000000000004 /* RootView.swift in Sources */,
 				C00000000000000000000005 /* ExpenseRow.swift in Sources */,
@@ -468,6 +475,7 @@
 				C00000000000000000000062 /* ReceiptInterpreterTests.swift in Sources */,
 				C00000000000000000000064 /* MerchantMemoTests.swift in Sources */,
 				C00000000000000000000071 /* ReceiptImageTests.swift in Sources */,
+				C00000000000000000000077 /* AppVersionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -530,7 +538,7 @@
 				INFOPLIST_FILE = FutariKakeibo/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = jp.aikawa.FutariKakeibo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -556,7 +564,7 @@
 				INFOPLIST_FILE = FutariKakeibo/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = jp.aikawa.FutariKakeibo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
