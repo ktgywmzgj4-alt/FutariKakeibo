@@ -7,8 +7,14 @@ struct RootView: View {
         ZStack {
             AppTheme.background.ignoresSafeArea()
             if store.isLoading {
-                ProgressView("読み込み中…")
-                    .tint(AppTheme.accent)
+                VStack(spacing: 14) {
+                    WalletSpinner(size: 54)
+                        // すぐ下に同じ言葉があるので、読み上げが二重になるのを避ける。
+                        .accessibilityHidden(true)
+                    Text("読み込み中…")
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
             } else if store.household == nil {
                 OnboardingView()
             } else {

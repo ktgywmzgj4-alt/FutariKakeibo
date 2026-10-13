@@ -48,7 +48,7 @@ struct ReceiptImageViewer: View {
 
     private var loadingView: some View {
         VStack(spacing: 12) {
-            ProgressView().tint(AppTheme.accent)
+            WalletSpinner(size: 44, label: "レシートを読み込み中")
             Text("レシートを読み込み中…")
                 .font(.footnote)
                 .foregroundStyle(AppTheme.secondaryText)

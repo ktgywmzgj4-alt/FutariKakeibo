@@ -101,33 +101,59 @@ actor CloudKitSyncService {
     /// この利用者のiCloudに、すでにある家計簿が残っていないか探す。
     ///
     /// **アプリを消して入れ直したときの戻り道。**
-    /// 合言葉で参加した側は、もう一度合言葉を入れれば `joinSharing` が全部取り直す。
-    /// だが**発行した側は入れる合言葉を持たない。** 合言葉は使い切りで消えるので
-    /// それも残っていない。結果、データはiCloudにあるのに手元から届かなくなっていた。
+    /// 合言葉は使い切りで、使った時点で消える。発行した側は入れる合言葉を持たず、
+    /// 参加した側ももう一度もらい直さないと戻れなかった。
+    /// データはiCloudにあるのに、手元から届かない状態になっていた。
+    ///
+    /// **自分のぶんと、相手から共有されたぶんの両方を見る。**
+    /// 自分で作った家計簿はプライベート側に、相手から共有された家計簿は共有側にある。
+    /// 最初はプライベート側しか見ておらず、参加した側の端末では必ず
+    /// 「見つかりませんでした」になった（2026-10-04 実機で判明）。
+    ///
+    /// 共有への参加はiCloudのアカウントに残るので、アプリを消しても共有側のゾーンは見える。
     ///
     /// ゾーンだけ残って中身が空のこともあるので、**家計簿のレコードがあるものだけ**返す。
     func findExistingHouseholdLocation() async throws -> CloudLocation? {
         let status = try await accountStatus()
         guard status == .available else { return nil }
 
-        let database = container.privateCloudDatabase
-        let zoneNames = try await allRecordZones(in: database).map(\.zoneID.zoneName)
-        let candidates = Self.householdZoneNames(from: zoneNames)
-        log("iCloudのゾーン \(zoneNames.count)件、うち家計簿らしきもの \(candidates.count)件")
+        // 自分で作ったものを先に見る。両方にあるなら自分のぶんが本体。
+        for scope in [CloudLocation.Scope.privateDatabase, .sharedDatabase] {
+            if let location = try await findHouseholdZone(in: scope) {
+                return location
+            }
+        }
+        return nil
+    }
 
-        for zoneName in candidates {
+    private func findHouseholdZone(in scope: CloudLocation.Scope) async throws -> CloudLocation? {
+        let database = switch scope {
+        case .privateDatabase: container.privateCloudDatabase
+        case .sharedDatabase: container.sharedCloudDatabase
+        }
+
+        let zoneIDs = try await allRecordZones(in: database).map(\.zoneID)
+        let wanted = Set(Self.householdZoneNames(from: zoneIDs.map(\.zoneName)))
+        let candidates = zoneIDs
+            .filter { wanted.contains($0.zoneName) }
+            .sorted { $0.zoneName < $1.zoneName }
+        log("\(scope.rawValue): ゾーン \(zoneIDs.count)件、うち家計簿らしきもの \(candidates.count)件")
+
+        for zoneID in candidates {
             let location = CloudLocation(
-                scope: .privateDatabase,
-                zoneName: zoneName,
-                ownerName: CKCurrentUserDefaultName,
-                rootRecordName: zoneName
+                scope: scope,
+                zoneName: zoneID.zoneName,
+                // **持ち主の名前はゾーンから取る。** 共有された家計簿は相手のもので、
+                // ここに自分（CKCurrentUserDefaultName）を入れると別のゾーンを指してしまう。
+                ownerName: zoneID.ownerName,
+                rootRecordName: zoneID.zoneName
             )
             let rootID = CKRecord.ID(
                 recordName: location.rootRecordName,
-                zoneID: zoneID(for: location)
+                zoneID: zoneID
             )
             if try await fetchRecord(rootID, from: database) != nil {
-                log("家計簿が見つかった。ここから取り戻せる")
+                log("家計簿が見つかった（\(scope.rawValue)）。ここから取り戻せる")
                 return location
             }
         }

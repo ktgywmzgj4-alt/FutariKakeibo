@@ -168,3 +168,57 @@ final class HouseholdRecoveryTests: XCTestCase {
         XCTAssertEqual(CloudKitSyncService.householdZoneNames(from: [zoneName]), [zoneName])
     }
 }
+
+/// 取り戻したあと、この端末の「自分」を誰にするか。
+///
+/// **実機で判明した取りこぼしの続き。** 最初はプライベート側（自分で作った家計簿）
+/// しか探しておらず、参加した側の端末では必ず「見つかりませんでした」になった。
+/// 共有側も探すようにしたので、こんどは**どちら側として戻ってきたか**で
+/// 自分が入れ替わる。
+final class RecoveredMemberTests: XCTestCase {
+    private let owner = Member(displayName: "まさる", role: .owner)
+    private let partner = Member(displayName: "つばさ", role: .partner)
+
+    /// 自分で作った家計簿（プライベート側）から戻したなら、自分は発行した側。
+    func testRecoveringOwnLedgerMakesYouTheOwner() {
+        let me = AppStore.memberOnThisPhone(
+            after: .privateDatabase,
+            members: [owner, partner],
+            ownerMemberID: owner.id
+        )
+
+        XCTAssertEqual(me, owner.id)
+    }
+
+    /// 相手から共有された家計簿（共有側）から戻したなら、自分は参加した側。
+    /// **ここを取り違えると支出が相手の名前で記録されていく。**
+    func testRecoveringASharedLedgerMakesYouThePartner() {
+        let me = AppStore.memberOnThisPhone(
+            after: .sharedDatabase,
+            members: [owner, partner],
+            ownerMemberID: owner.id
+        )
+
+        XCTAssertEqual(me, partner.id, "共有された家計簿なのに、持ち主を自分だと思っている")
+    }
+
+    /// 相手がまだ居ない家計簿を共有側から戻しても、誰も選べないまま落ちない。
+    func testASharedLedgerWithOnlyTheOwnerStillPicksSomebody() {
+        let me = AppStore.memberOnThisPhone(
+            after: .sharedDatabase,
+            members: [owner],
+            ownerMemberID: owner.id
+        )
+
+        XCTAssertEqual(me, owner.id)
+    }
+
+    /// 人が1人も居なければ nil。ここで落とさない。
+    func testNoMembersProducesNothing() {
+        XCTAssertNil(AppStore.memberOnThisPhone(
+            after: .privateDatabase,
+            members: [],
+            ownerMemberID: UUID()
+        ))
+    }
+}

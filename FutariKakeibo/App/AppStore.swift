@@ -187,10 +187,15 @@ final class AppStore: ObservableObject {
             let cloud = try await cloudService.fetchSnapshot(at: location)
             var household = cloud.household
             household.cloudLocation = location
-            // 取り戻しているのは、このiCloudの持ち主。つまり発行した側。
-            let ownerID = household.ownerMemberID
-            let me = household.members.first { $0.id == ownerID }?.id
-                ?? household.members.first?.id
+            // **どちら側として戻ってきたかで「自分」が変わる。**
+            // プライベート側にあるのは自分で作った家計簿なので、自分は発行した側。
+            // 共有側にあるのは相手から共有された家計簿なので、自分は参加した側。
+            // ここを取り違えると、支出が相手の名前で記録されていく。
+            let me = Self.memberOnThisPhone(
+                after: location.scope,
+                members: household.members,
+                ownerMemberID: household.ownerMemberID
+            )
             snapshot = AppSnapshot(
                 household: household,
                 selectedMemberID: me,
@@ -523,6 +528,25 @@ final class AppStore: ObservableObject {
         let updated = household.merchantMemos.filter { $0.key != key }
         guard updated.count != household.merchantMemos.count else { return }
         household.merchantMemos = updated
+        await saveHousehold(household)
+    }
+
+    /// 覚えた店の名前を直す。
+    ///
+    /// 忘れて覚え直すには同じ店のレシートをもう一度撮るしかない。
+    /// 「ほぼ合っているが一文字違う」ときに、撮り直しを強いるのは重すぎる。
+    ///
+    /// **鍵（`key`）は変えない。** 鍵は登録番号や電話番号から作られていて、
+    /// 同じ店かどうかを見分けているのはそちら。名前だけが人の読むもの。
+    func renameMerchant(key: String, to merchant: String) async {
+        let trimmed = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, var household = snapshot.household else { return }
+        guard let index = household.merchantMemos.firstIndex(where: { $0.key == key }),
+              household.merchantMemos[index].merchant != trimmed
+        else { return }
+
+        household.merchantMemos[index].merchant = trimmed
+        household.merchantMemos[index].updatedAt = .now
         await saveHousehold(household)
     }
 
@@ -903,6 +927,27 @@ final class AppStore: ObservableObject {
     /// ここを「全部」にすると、同期のたびに件数ぶんの往復が走り、相手の記録が
     /// 画面に出るまで何秒もかかる。実機で10秒を超えていたのがそれだった。
     /// 同じ時刻のものは送らない — 送っても中身が変わらないため。
+    /// 取り戻したあと、この端末の「自分」を誰にするか。
+    ///
+    /// **どちら側として戻ってきたかで入れ替わる。**
+    /// プライベート側にあるのは自分で作った家計簿なので、自分は発行した側（owner）。
+    /// 共有側にあるのは相手から共有された家計簿なので、自分は参加した側。
+    ///
+    /// ここを取り違えると**支出が相手の名前で記録されていき**、精算額が狂う。
+    /// 実機では気づくまで時間がかかるので、ここで縛っておく。
+    nonisolated static func memberOnThisPhone(
+        after scope: CloudLocation.Scope,
+        members: [Member],
+        ownerMemberID: UUID
+    ) -> UUID? {
+        switch scope {
+        case .privateDatabase:
+            members.first { $0.id == ownerMemberID }?.id ?? members.first?.id
+        case .sharedDatabase:
+            members.first { $0.id != ownerMemberID }?.id ?? members.first?.id
+        }
+    }
+
     nonisolated static func staleIDs(
         local: [(id: UUID, updatedAt: Date)],
         remote: [(id: UUID, updatedAt: Date)]

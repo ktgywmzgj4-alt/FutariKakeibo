@@ -114,7 +114,7 @@ struct OnboardingView: View {
             } label: {
                 HStack(spacing: 8) {
                     if store.isRecovering {
-                        ProgressView().tint(AppTheme.accent)
+                        WalletSpinner(size: 20, label: "さがしています")
                     }
                     Text(store.isRecovering ? "さがしています…" : "以前の家計簿を取り戻す")
                         .font(.subheadline.weight(.semibold))

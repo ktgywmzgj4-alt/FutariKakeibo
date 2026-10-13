@@ -40,6 +40,8 @@ struct ExpenseEditorView: View {
     @State private var savedWithReceipt = false
     /// 保存の処理中。ボタンに印を出して、二重に押されないようにする。
     @State private var isSaving = false
+    /// 覚えている店の一覧を開いているか。
+    @State private var isShowingShopList = false
     @FocusState private var focusedField: Field?
 
     private enum Field {
@@ -75,9 +77,7 @@ struct ExpenseEditorView: View {
                 Button(action: save) {
                     HStack(spacing: 9) {
                         if isSaving {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .tint(.white)
+                            WalletSpinner(size: 22, label: "保存中")
                         }
                         Text(saveButtonTitle)
                             .font(.headline)
@@ -140,6 +140,15 @@ struct ExpenseEditorView: View {
                 }
                 recognize([image])
             }
+        }
+        .sheet(isPresented: $isShowingShopList) {
+            RememberedShopsView(
+                shops: rememberedShops,
+                onPick: { shop in
+                    merchant = shop.merchant
+                    category = shop.category
+                }
+            )
         }
         .sheet(isPresented: $isShowingScanner) {
             ReceiptScannerView(onCancel: {
@@ -208,37 +217,17 @@ struct ExpenseEditorView: View {
         (store.household?.merchantMemos ?? []).sorted { $0.updatedAt > $1.updatedAt }
     }
 
-    /// いま入力されている店名に対応する、覚えた1件。忘れる操作の対象になる。
-    private var matchedShop: MerchantMemo? {
-        let name = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return nil }
-        return rememberedShops.first { $0.merchant == name }
-    }
 
-    /// 覚えた店から選ぶ、または間違って覚えた店を忘れる。
+    /// 覚えた店の一覧を開くボタン。
+    ///
+    /// **以前はメニューだった。** メニューでは行をスワイプできず、長押しもできないので、
+    /// 間違って覚えた店を消すには「いまその店を入力している」必要があった。
+    /// 一覧（`List`）にすると、スワイプで消す・長押しで直すがどちらも使える。
     @ViewBuilder
     private var shopMenu: some View {
         if !rememberedShops.isEmpty {
-            Menu {
-                Section("覚えている店") {
-                    ForEach(rememberedShops) { shop in
-                        Button {
-                            merchant = shop.merchant
-                            category = shop.category
-                        } label: {
-                            Label(shop.merchant, systemImage: shop.category.systemImage)
-                        }
-                    }
-                }
-                if let matchedShop {
-                    Section {
-                        Button(role: .destructive) {
-                            Task { await store.forgetMerchant(key: matchedShop.key) }
-                        } label: {
-                            Label("「\(matchedShop.merchant)」を忘れる", systemImage: "trash")
-                        }
-                    }
-                }
+            Button {
+                isShowingShopList = true
             } label: {
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.footnote.weight(.bold))
@@ -274,7 +263,7 @@ struct ExpenseEditorView: View {
             HStack(spacing: 13) {
                 ZStack {
                     if isRecognizing {
-                        ProgressView().tint(AppTheme.accent)
+                        WalletSpinner(size: 40, label: "レシートを読み取り中")
                     } else {
                         Image(systemName: "doc.viewfinder")
                             .font(.system(size: 34, weight: .semibold))
@@ -486,7 +475,7 @@ struct ExpenseEditorView: View {
             }
 
             field("内容") {
-                TextField("例：ガソリン", text: $title)
+                TextField("例：ガソリンスタンド", text: $title)
                     .textInputAutocapitalization(.never)
                     .focused($focusedField, equals: .title)
             }

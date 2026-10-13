@@ -14,9 +14,11 @@
 		C00000000000000000000005 /* ExpenseRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000005 /* ExpenseRow.swift */; };
 		C00000000000000000000006 /* MonthNavigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000006 /* MonthNavigator.swift */; };
 		C00000000000000000000007 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000007 /* AppTheme.swift */; };
+		C00000000000000000000074 /* WalletSpinner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000074 /* WalletSpinner.swift */; };
 		C00000000000000000000008 /* CategoryStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000008 /* CategoryStyle.swift */; };
 		C00000000000000000000009 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000009 /* DashboardView.swift */; };
 		C00000000000000000000010 /* ExpenseEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000010 /* ExpenseEditorView.swift */; };
+		C00000000000000000000075 /* RememberedShopsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000075 /* RememberedShopsView.swift */; };
 		C00000000000000000000011 /* ExpenseListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000011 /* ExpenseListView.swift */; };
 		C00000000000000000000012 /* ReceiptScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000012 /* ReceiptScannerView.swift */; };
 		C00000000000000000000013 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000013 /* OnboardingView.swift */; };
@@ -96,9 +98,11 @@
 		B00000000000000000000005 /* ExpenseRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/ExpenseRow.swift; sourceTree = "<group>"; };
 		B00000000000000000000006 /* MonthNavigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/MonthNavigator.swift; sourceTree = "<group>"; };
 		B00000000000000000000007 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem/AppTheme.swift; sourceTree = "<group>"; };
+		B00000000000000000000074 /* WalletSpinner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem/WalletSpinner.swift; sourceTree = "<group>"; };
 		B00000000000000000000008 /* CategoryStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem/CategoryStyle.swift; sourceTree = "<group>"; };
 		B00000000000000000000009 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Dashboard/DashboardView.swift; sourceTree = "<group>"; };
 		B00000000000000000000010 /* ExpenseEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Expenses/ExpenseEditorView.swift; sourceTree = "<group>"; };
+		B00000000000000000000075 /* RememberedShopsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Expenses/RememberedShopsView.swift; sourceTree = "<group>"; };
 		B00000000000000000000011 /* ExpenseListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Expenses/ExpenseListView.swift; sourceTree = "<group>"; };
 		B00000000000000000000012 /* ReceiptScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Expenses/ReceiptScannerView.swift; sourceTree = "<group>"; };
 		B00000000000000000000013 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Onboarding/OnboardingView.swift; sourceTree = "<group>"; };
@@ -210,9 +214,11 @@
 				B00000000000000000000005 /* ExpenseRow.swift */,
 				B00000000000000000000006 /* MonthNavigator.swift */,
 				B00000000000000000000007 /* AppTheme.swift */,
+				B00000000000000000000074 /* WalletSpinner.swift */,
 				B00000000000000000000008 /* CategoryStyle.swift */,
 				B00000000000000000000009 /* DashboardView.swift */,
 				B00000000000000000000010 /* ExpenseEditorView.swift */,
+				B00000000000000000000075 /* RememberedShopsView.swift */,
 				B00000000000000000000011 /* ExpenseListView.swift */,
 				B00000000000000000000012 /* ReceiptScannerView.swift */,
 				B00000000000000000000013 /* OnboardingView.swift */,
@@ -393,9 +399,11 @@
 				C00000000000000000000005 /* ExpenseRow.swift in Sources */,
 				C00000000000000000000006 /* MonthNavigator.swift in Sources */,
 				C00000000000000000000007 /* AppTheme.swift in Sources */,
+				C00000000000000000000074 /* WalletSpinner.swift in Sources */,
 				C00000000000000000000008 /* CategoryStyle.swift in Sources */,
 				C00000000000000000000009 /* DashboardView.swift in Sources */,
 				C00000000000000000000010 /* ExpenseEditorView.swift in Sources */,
+				C00000000000000000000075 /* RememberedShopsView.swift in Sources */,
 				C00000000000000000000011 /* ExpenseListView.swift in Sources */,
 				C00000000000000000000012 /* ReceiptScannerView.swift in Sources */,
 				C00000000000000000000013 /* OnboardingView.swift in Sources */,

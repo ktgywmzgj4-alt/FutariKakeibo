@@ -68,9 +68,9 @@
       "status": "review",
       "owner": "実行役",
       "passes": "新しく届いたレシートを再現したテストが ReceiptParserTests に1件以上追加され、CIのtestジョブが成功し、既存のテストが1件も減っていない",
-      "evidence": "PR #16（店番号を金額と読まない・虹色の修正）CI緑65件。PR #17（端末内AIによる読み取り）— CI結果待ち。どちらも実機での再確認が必要",
+      "evidence": "2026-10-08 時点でレシート7枚。**7枚すべて合計金額と日付が正解**（必須2項目は全勝）。コノミヤ／イオン／EQVo!／マクドナルド／AEON STYLE 5,524／Eggs 'n Things 5,302。種類は Eggs 'n Things が「その他」に外れたが EAT-IN を手がかりに直して合格（2026-10-08 実機確認）。**店名は Eggs 'n Things が「2 Things名古屋PARC0店」のまま外れている** — 文字認識そのものの読み違い（Eggs' n → 2、PARCO → PARC0）で、選ぶ側の問題ではない。要件では店名は8割・人が直せる扱い。PR #33 の店一覧（長押しで改名）で一度直せば以後は覚える",
       "dependencies": ["T-004"],
-      "notes": "合計と日付は必須、店名は8割、明細は参考情報（Docs/requirements.md の受け入れ基準）。ルールの積み上げには限界があるので、明細の精度は深追いしない"
+      "notes": "合計と日付は必須、店名は8割、明細は参考情報（Docs/requirements.md の受け入れ基準）。ルールの積み上げには限界があるので、明細の精度は深追いしない。**完成条件4は10枚以上。あと3枚。** 外れたレシートが出たら、そのレシートからテストを起こしてから直すこと"
     },
     {
       "id": "T-006",
@@ -233,9 +233,9 @@
       "status": "todo",
       "owner": "実行役 + 人間",
       "passes": "合言葉を発行した端末でアプリを削除して入れ直し、家計簿（支出・収入・呼び名・予算）が戻ってくること",
-      "evidence": "",
+      "evidence": "2026-10-04 実装してTestFlight 2026.1004.2302（fadf1c3）で配信済み。CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/37241866486 → 163件中163件成功、UPLOAD SUCCEEDED with no errors（Delivery UUID 4f7ca571-b463-4054-a7c1-532c5ec9fc07）。アーカイブ内は 0.1.0 / 2026.1004.2302 で Info.plist の上書きは起きていない。**実機確認はこれから。** CIが確かめたのはコンパイルとゾーン名の見分けだけで、iCloudから家計簿が戻るところは一度も動いていない",
       "dependencies": ["T-016"],
-      "notes": "**実際にデータを失う可能性のある唯一の穴。** refreshFromCloudIfConfigured は手元に家計簿と cloudLocation の両方が無いと何もせず戻る（AppStore.swift:739）。新規インストールはどちらも持たない。参加した側は joinSharing が fetchSnapshot で全部取り直して保存するので戻れる（AppStore.swift:639-656）が、発行した側は入れる合言葉を持っていないうえ、合言葉は使い切りで消える。iCloudにデータはあるのに手元から届かない状態。直し方は、起動時に自分のゾーンを一覧して見つかったらそこから fetchSnapshot すること。CSVの取り込みが無いので保険も無い（exportCSV のみ）"
+      "notes": "**試す順番がある。先にこの版を両方の端末に入れてから**、発行した側の端末でアプリを削除→入れ直し→最初の画面の「以前の家計簿を取り戻す」を押す。**この版より前に消すと戻せない。** 直し方は最初の画面のボタン（recoverHouseholdFromCloud）。**起動時に自動では呼ばない** — 一度 loadIfNeeded に置いたら CKException でアプリが起動時に落ち、テストが全滅した（progress.md 2026-10-04）。ゾーン名の接頭辞 household- が戻り道そのもので、変えると以前の家計簿が永久に見つからなくなる（HouseholdRecoveryTests が縛っている）"
     }
   ]
 }
