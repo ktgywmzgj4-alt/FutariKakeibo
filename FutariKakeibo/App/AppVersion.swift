@@ -43,10 +43,10 @@ struct AppVersion {
         let shownBuild = build.trimmingCharacters(in: .whitespaces)
 
         switch (shownVersion.isEmpty, shownBuild.isEmpty) {
-        case (false, false): "Version \(shownVersion) (\(shownBuild))"
-        case (false, true): "Version \(shownVersion)"
-        case (true, false): "Build \(shownBuild)"
-        case (true, true): "Version 不明"
+        case (false, false): return "Version \(shownVersion) (\(shownBuild))"
+        case (false, true): return "Version \(shownVersion)"
+        case (true, false): return "Build \(shownBuild)"
+        case (true, true): return "Version 不明"
         }
     }
 }
