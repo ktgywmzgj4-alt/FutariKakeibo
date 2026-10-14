@@ -86,10 +86,16 @@ jobs:
             test
 
   testflight:
-    if: github.event_name == 'workflow_dispatch'
+    # **TestFlight へ送るのは main からだけ。** 以前は起動したブランチをそのまま送っていて、
+    # 機能ブランチからの送信が5回あった（2026-09。うち2回はマージされていない PR #29）。
+    # 配信は Claude が起こすので、ブランチを取り違えても送れない形にしておく（2026-10-14 利用者が承認）。
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: test
     runs-on: macos-26
     timeout-minutes: 45
+    outputs:
+      # testflight-status が、どのビルドを待てばよいか知るため。
+      build_number: ${{ steps.build_number.outputs.value }}
     env:
       TEAM_ID: 79XN3292J9
       BUNDLE_ID: jp.aikawa.futarikakeibo
@@ -154,6 +160,7 @@ jobs:
           printf '%s' "$PROFILE_UUID" > "$RUNNER_TEMP/profile_uuid"
 
       - name: Choose a build number
+        id: build_number
         shell: bash
         run: |
           set -euo pipefail
@@ -161,6 +168,7 @@ jobs:
           # 撮影時刻から作れば必ず前より大きくなり、各要素も5桁に収まる。
           BUILD_NUMBER="$(date -u '+%Y.%m%d.%H%M')"
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "value=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
           echo "build number: $BUILD_NUMBER"
 
       - name: Archive signed app
@@ -258,3 +266,54 @@ jobs:
           rm -f "$RUNNER_TEMP/distribution_certificate.p12"
           rm -f "$RUNNER_TEMP/FutariKakeibo_App_Store.mobileprovision"
           rm -f "$RUNNER_TEMP/private_keys/AuthKey_"*.p8
+
+  testflight-status:
+    # 送ったあと、App Store Connect の処理が終わって**内部テスターに配られたか**を見る。
+    # altool の UPLOAD SUCCEEDED は「Appleが受け取った」までしか言わない。
+    # 処理は10〜30分かかり、そのあいだ利用者からは「配信されていない」と見えていた。
+    #
+    # **鍵はこのジョブの中でだけ使う。** Claude は鍵を見ず、この結果だけを読む。
+    # ここが落ちても、送信（testflight）が成功したことは変わらない。
+    needs: testflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      BUNDLE_ID: jp.aikawa.futarikakeibo
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait until internal testers have the build
+        shell: bash
+        env:
+          BUILD_NUMBER: ${{ needs.testflight.outputs.build_number }}
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$API_PRIVATE_KEY_BASE64" | base64 --decode > "$ASC_KEY_PATH"
+          chmod 600 "$ASC_KEY_PATH"
+          ruby scripts/testflight_status.rb
+
+      - name: Clean up the API key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"
+
+  scripts:
+    # 配信まわりのスクリプトの自己点検。本物の鍵も通信も使わない。
+    # testflight-status は配信のときしか走らないので、壊れていたらPRの段階で分かるようにする。
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Self-test the TestFlight status script
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby --version
+          ruby scripts/testflight_status.rb --self-test

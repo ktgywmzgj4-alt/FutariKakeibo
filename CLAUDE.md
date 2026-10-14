@@ -3,11 +3,37 @@
 まず `AGENTS.md` を読んでください。この仕事の地図です。
 このファイルには、Claude Codeで作業するときだけの追加ルールを書きます。
 
+## 分担と完了条件（2026-10-14 利用者が決定。要約・再開のあとも有効）
+
+| | 担当 |
+| --- | --- |
+| Claude | 要件確認と方針 → 実装 → 静的解析・ビルド・テスト → コミット・プッシュ → **CIが緑のPRのマージ** → **TestFlight内部テスト配信の起動** → 配信結果の確認と報告 → 実機のフィードバックを受けた修正と再配信 |
+| 利用者 | TestFlightからのインストール、iPhone実機での確認、不具合と要望のフィードバック |
+
+- **Actionsの起動・マージ・配信を利用者に頼まない。** 利用者がこの分担を明示している
+- 範囲は**TestFlightの内部テスト配信だけ**。App Store公開・外部テスター・課金や契約の変更は含まない（毎回確認する）
+- **実装が終わっただけでは完了ではない。** 配信まで頼まれた作業は、配信結果（`UPLOAD SUCCEEDED` と、アーカイブ内の版・ビルド番号）を確かめるまでが完了
+- 実際に止められたときは、**どの層が止めたか**（Claude Codeの判定器／GitHubの認可／プロキシ／ワークフローの条件）と、**解くのに要る操作**だけを報告する。止められる前から「できない」と言わない。前にどうやったかを `progress.md` と実行履歴で先に確かめる
+- 止められた操作を、形を変えて通そうとしない
+- `Docs/safety.md` は「TestFlightへのアップロード」「`main` へのマージ」を**その都度確認**としている。このうち内部テスト配信と、CIが緑のPRのマージは、利用者が2026-10-14に**包括的に承認した**。safety.md はAIが書き換えないファイルなので、本文の改訂は利用者が行う
+- **指示ファイル（このファイル、`.claude/skills/`、`AGENTS.md`）と配信ワークフローを書き換えるときは、先に利用者に文面の承認を取る。** 2026-10-14、承認の前は auto モードの判定器に止められ、承認のあとに通った
+
+配信の手順は `.claude/skills/release/SKILL.md`。いまの状態は `progress.md` の一番上。
+
 ## 環境
 
-- Windows 11 / Git Bash（`Bash` ツール）と PowerShell が使えます
-- **PythonもNode.jsもSwiftも入っていません。** 使えるのは bash / perl / git / gh / openssl です
-- `scripts/validate_project.sh` は python3 を前提にしているので**この環境では動きません**。代わりに `bash scripts/check_all.sh` を使ってください
+**2種類あります。** どちらで動いているか先に確かめてください。どちらでもSwiftはコンパイルできません。
+
+| | Windows（利用者のPC） | クラウド（claude.ai/code） |
+| --- | --- | --- |
+| 道具 | bash / perl / git / gh / openssl。**Python・Node.js・Swiftは無い** | bash / python3 / ruby / perl / git。`gh` は **`gh api` だけ** |
+| マージ | `gh pr merge` | GitHub MCP の `merge_pull_request`（実績5回） |
+| 配信の起動 | `gh workflow run` は2026-09-03に止められた記録あり | GitHub MCP の `actions_run_trigger`（実績5回） |
+
+- `scripts/validate_project.sh` は python3 前提でWindowsでは動きません。`bash scripts/check_all.sh` を使ってください
+- 2026-10-14、クラウドで Bash の `gh api` からの配信の起動と、Bash のループでの配信の見張りが auto モードの判定器に止められました。**同じことを形を変えて繰り返さないでください**
+- `gh pr merge --admin`（検査を飛ばすマージ）は使わないでください
+- CIは1回およそ8〜15分です。待つあいだは他の作業を進めてください
 
 ## ファイルを書き換えるときの注意
 
@@ -20,22 +46,6 @@
   { sed -n '1,50p' file; cat new_part.txt; sed -n '60,$p' file; } > tmp && cp tmp file
   ```
 - 書き換えたら必ず `bash scripts/check_all.sh` を通してください
-
-## gh コマンド
-
-`gh` はログイン済みです。次のことができます。
-
-```bash
-gh pr create / gh pr merge / gh pr checks
-gh run list / gh run view <id> --log-failed / gh run watch <id>
-gh workflow run "iOS build and tests" --ref main
-gh secret list                     # 名前だけ。値は見られません
-```
-
-CIは1回およそ8分かかります。`gh run watch` は `run_in_background: true` で投げて、
-終わってから結果を読んでください。**待っている間、他の作業を進められます。**
-
-`gh pr merge --admin`（検査を飛ばすマージ）は使えません。使わないでください。
 
 ## 秘密情報
 
@@ -50,6 +60,7 @@ CIは1回およそ8分かかります。`gh run watch` は `run_in_background: t
 ```
 CI: 成功 / 失敗（実行URL）
 テスト: NN件中NN件成功
+配信: 版 / ビルド番号 / UPLOAD SUCCEEDED（配信まで頼まれたとき）
 確認できていないこと: （あれば正直に）
 ```
 
@@ -60,3 +71,4 @@ CI: 成功 / 失敗（実行URL）
 
 会話が長くなると要約されます。要約で消えて困る情報は、その場で
 `progress.md` か `tasks.json` の `evidence` に書いてください。頭の中に置かないこと。
+**要約のあとは、まず `progress.md` の「いまの状態」を読んでください。**
