@@ -274,7 +274,7 @@
       "owner": "人間 + 実行役",
       "blocked_by": "",
       "passes": "AGENTS.md の「セッションが切れたら」が progress.md の一番上を指していること。現状の表がテスト181件・共有は動作済みになっていること。罠の表の配信の行が CLAUDE.md の分担と矛盾しないこと",
-      "evidence": "2026-10-14 利用者が GitHub から直した（d6e25eb）。2026-10-15 AIが表の形を整えた: 罠の表の配信の行が1列になっていたのを2列に、共有機能の行の全角空白を除去、テスト件数は固定せず「progress.md のいまの状態」を指す形に（62件のまま古くなっていたのが元の問題）。「progress.md の一番上」の行は利用者の版のまま。**CIとマージはこれから。**",
+      "evidence": "2026-10-14 利用者が GitHub から直した（d6e25eb）。2026-10-15 AIが表の形を整えた: 罠の表の配信の行が1列になっていたのを2列に、共有機能の行の全角空白を除去、テスト件数は固定せず「progress.md のいまの状態」を指す形に（62件のまま古くなっていたのが元の問題）。「progress.md の一番上」の行は利用者の版のまま。PR #36 で main へ（5ecd9ae、CI 187件中187件成功）。**検品の注意:** 完了条件の文言は「テスト181件」だが、件数を書かず progress.md を指す形にしたので字面は一致しない。条件はAIが書き換えないので、合否は利用者が決める。",
       "dependencies": [],
       "notes": "直し方（3か所）: (1) 「1. `progress.md` の一番下（前回の到達点と、次にやること）」→「1. `progress.md` の一番上（「いまの状態」と直近の記録）」。progress.md 自身は新しいものを一番上に足す決まりで、一番下は最も古い記録になっている。(2) 現状の表: テスト「62件」→「181件（2026-10-14）」、共有機能「まだ動かない」→「動いている（別々のApple IDの2台で確認、2026-10-04）」。(3) 罠の表「TestFlightへの配信をAIが実行しようとする」の行 →「配信の起動 | Windowsの gh workflow run は止められた（2026-09-03）。クラウドでは GitHub MCP から起動できる。誰が配信を起こすかは CLAUDE.md の分担に従う」"
     },
@@ -291,10 +291,10 @@
     {
       "id": "T-029",
       "task": "配信を main に限り、TestFlight側の処理完了まで確かめる",
-      "status": "review",
+      "status": "done",
       "owner": "実行役",
       "passes": "次の配信で testflight-status ジョブが緑になり、ログの最後に TESTFLIGHT STATUS: ready が出ること。PRのCIで scripts ジョブ（自己点検）が緑であること",
-      "evidence": "2026-10-14 実装（利用者が承認）。testflight ジョブを workflow_dispatch かつ main のときだけにし、testflight-status（ubuntu、scripts/testflight_status.rb）と scripts（自己点検）を足した。手元で自己点検15項目と、通信を差し替えた4通りの筋書き（配られた／処理失敗／鍵の権限不足／時間切れ）が想定どおり。**本物の鍵とPRのCIはこれから。**",
+      "evidence": "2026-10-14 実装（利用者が承認）。testflight ジョブを workflow_dispatch かつ main のときだけにし、testflight-status（ubuntu、scripts/testflight_status.rb）と scripts（自己点検）を足した。手元で自己点検15項目と、通信を差し替えた4通りの筋書き（配られた／処理失敗／鍵の権限不足／時間切れ）が想定どおり。2026-10-15 検品: PR #36 の scripts が緑（run 38677414155）。main からの配信（run 38678734766）で testflight → testflight-status が動き、本物の鍵での初回で「TESTFLIGHT STATUS: ready version=0.2.1 build=2026.1015.0405 processingState=VALID internalBuildState=IN_BETA_TESTING」。送信から約4分で確定した。合格。",
       "dependencies": [],
       "notes": "鍵はジョブの中でだけ使い、Claude は結果の1行（TESTFLIGHT STATUS:）と注記だけを読む。JWTの作り方は本物の鍵で通った実績のある scripts/asc_adhoc_profile.rb と同じ。機能ブランチからの送信は2026-09に5回あった（うち2回は未マージの PR #29）"
     },
@@ -304,19 +304,29 @@
       "status": "review",
       "owner": "実行役 + 人間",
       "passes": "待機中・保存中・引っ張って更新のお財布が、まわりの白い四角なしに回ること。引っ張って更新では、更新中だけ回り、終われば止まること。通信が詰まっても回りっぱなしにならないこと（15秒で止まる）。スクロールの邪魔をしないこと",
-      "evidence": "2026-10-15 実装。外側の白だけを抜いた WalletGlyph（scripts/make_wallet_glyph.py）を TimelineView で回す。引っ張って更新は walletRefreshable（.refreshable に任せ、標準のくるくるを透明にしてお財布を出す）。WalletSpinnerTests 6件。**CIと実機はこれから。**",
+      "evidence": "2026-10-15 実装。外側の白だけを抜いた WalletGlyph（scripts/make_wallet_glyph.py）を TimelineView で回す。引っ張って更新は walletRefreshable（.refreshable に任せ、標準のくるくるを透明にしてお財布を出す）。WalletSpinnerTests 6件。2026-10-15 CI 187件中187件成功（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/38677414155）、PR #36 を main へ（5ecd9ae）。TestFlight 0.2.1 / 2026.1015.0405 を配信（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/38678734766）: UPLOAD SUCCEEDED（Delivery UUID d06b62c9-6e2d-4783-a0d1-c50b311c1359）、Apple側 VALID、内部テスト IN_BETA_TESTING（13:12 JST、testflight-status）。**実機はこれから。**",
       "dependencies": ["T-026"],
       "notes": "「¥」も白なので白を一律に抜かない。囲まれた白は「¥」だけ残す。青い保存ボタンの上では左の青い玉が地と同じ色で見えなくなる（透明にした以上、避けられない）。標準のくるくるを消すのは UIRefreshControl.appearance().tintColor = .clear（アプリ全体）。もし消えない iOS があっても、両方が出るだけで壊れはしない"
     },
     {
       "id": "T-031",
       "task": "TestFlightの自動アップデートで最新にならない件を調べる",
-      "status": "doing",
+      "status": "review",
       "owner": "実行役 + 人間",
       "passes": "配信のたびに testflight-status が「内部テスターに配られた」まで確かめ、内部テストのグループが自動で配る設定かどうかがログで分かること。端末側の設定方法と、最新かを確かめる方法を利用者に渡してあること",
-      "evidence": "2026-10-15 testflight_status.rb に読むだけの診断（内部グループの自動配布の設定、最近5件のビルドの状態）を足した。グループ名やテスターはログに出さない（公開リポジトリ）。**0.2.1 の配信で初めて本物の鍵で動く。**",
+      "evidence": "2026-10-15 testflight_status.rb に読むだけの診断（内部グループの自動配布の設定、最近5件のビルドの状態）を足した。グループ名やテスターはログに出さない（公開リポジトリ）。2026-10-15 0.2.1 の配信で読めたこと: 内部テストのグループは「ビルドを自動で配る」設定。外部テストのグループが1つあり「手で足す」設定。最近5件のビルド（0.1.0 の 2026.1001.2325 / 1004.2302 / 1013.2229、0.2.0 の 2026.1014.1016、0.2.1 の 2026.1015.405）はすべて VALID / IN_BETA_TESTING / 有効。**Apple側の配信の流れは、ずっと正しく届いていた。** 残る原因は端末側（TestFlightアプリの自動アップデートの設定、iOSが入れ替える時機）か、外部グループに入っている人への手動配布。端末側の設定と確かめ方は利用者に渡した。",
       "dependencies": ["T-029"],
       "notes": "アプリ側で決められるのは、新しいビルド番号で送ること・Apple側の処理を通すこと・内部テスターに配ることまで。端末がいつ入れ替えるかは iOS とTestFlightアプリが決める（TestFlightアプリの各アプリのページにある自動アップデートの設定）。版の表示（AppVersion）は Info.plist から読むので、入っているビルドと必ず一致する"
+    },
+    {
+      "id": "T-032",
+      "task": "ビルド番号の先頭の0をやめて、TestFlightとアプリの表示をそろえる",
+      "status": "todo",
+      "owner": "実行役 + 人間（文面の承認）",
+      "passes": "TestFlight（App Store Connect）に出るビルド番号と、設定画面の版の行のビルド番号が同じ字面になること",
+      "evidence": "",
+      "dependencies": ["T-024"],
+      "notes": "2026-10-15 に分かった。Apple側は各要素の先頭の0を落とす（2026.1015.0405 → 2026.1015.405）。並び順は数として比べるので変わらない。直し方はワークフローの1行（date の結果を 10# で数にしてから並べる）。**配信ワークフローの変更なので、先に利用者に文面の承認を取る**（CLAUDE.md）。日本時間の9時〜19時（UTC 0〜9時）に作ったビルドで必ず起きる"
     }
   ]
 }
