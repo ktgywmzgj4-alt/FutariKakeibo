@@ -24,7 +24,7 @@ struct ReportView: View {
         .background(AppTheme.background)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await store.refreshFromCloudIfConfigured() }
+        .walletRefreshable { await store.refreshFromPull() }
     }
 
     private func summaryCard(_ report: MonthlyReport) -> some View {

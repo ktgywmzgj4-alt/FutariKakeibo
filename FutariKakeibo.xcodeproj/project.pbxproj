@@ -16,6 +16,7 @@
 		C00000000000000000000006 /* MonthNavigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000006 /* MonthNavigator.swift */; };
 		C00000000000000000000007 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000007 /* AppTheme.swift */; };
 		C00000000000000000000074 /* WalletSpinner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000074 /* WalletSpinner.swift */; };
+		C00000000000000000000078 /* WalletRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000078 /* WalletRefresh.swift */; };
 		C00000000000000000000008 /* CategoryStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000008 /* CategoryStyle.swift */; };
 		C00000000000000000000009 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000009 /* DashboardView.swift */; };
 		C00000000000000000000010 /* ExpenseEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000010 /* ExpenseEditorView.swift */; };
@@ -80,6 +81,7 @@
 		C00000000000000000000070 /* ReceiptImageViewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000070 /* ReceiptImageViewer.swift */; };
 		C00000000000000000000071 /* ReceiptImageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000071 /* ReceiptImageTests.swift */; };
 		C00000000000000000000077 /* AppVersionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000077 /* AppVersionTests.swift */; };
+		C00000000000000000000079 /* WalletSpinnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000079 /* WalletSpinnerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -102,6 +104,7 @@
 		B00000000000000000000006 /* MonthNavigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/MonthNavigator.swift; sourceTree = "<group>"; };
 		B00000000000000000000007 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem/AppTheme.swift; sourceTree = "<group>"; };
 		B00000000000000000000074 /* WalletSpinner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem/WalletSpinner.swift; sourceTree = "<group>"; };
+		B00000000000000000000078 /* WalletRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem/WalletRefresh.swift; sourceTree = "<group>"; };
 		B00000000000000000000008 /* CategoryStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem/CategoryStyle.swift; sourceTree = "<group>"; };
 		B00000000000000000000009 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Dashboard/DashboardView.swift; sourceTree = "<group>"; };
 		B00000000000000000000010 /* ExpenseEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Expenses/ExpenseEditorView.swift; sourceTree = "<group>"; };
@@ -170,6 +173,7 @@
 		B00000000000000000000070 /* ReceiptImageViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Expenses/ReceiptImageViewer.swift; sourceTree = "<group>"; };
 		B00000000000000000000071 /* ReceiptImageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptImageTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000077 /* AppVersionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVersionTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000079 /* WalletSpinnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletSpinnerTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -220,6 +224,7 @@
 				B00000000000000000000006 /* MonthNavigator.swift */,
 				B00000000000000000000007 /* AppTheme.swift */,
 				B00000000000000000000074 /* WalletSpinner.swift */,
+				B00000000000000000000078 /* WalletRefresh.swift */,
 				B00000000000000000000008 /* CategoryStyle.swift */,
 				B00000000000000000000009 /* DashboardView.swift */,
 				B00000000000000000000010 /* ExpenseEditorView.swift */,
@@ -293,6 +298,7 @@
 				B00000000000000000000064 /* MerchantMemoTests.swift */,
 				B00000000000000000000071 /* ReceiptImageTests.swift */,
 				B00000000000000000000077 /* AppVersionTests.swift */,
+				B00000000000000000000079 /* WalletSpinnerTests.swift */,
 			);
 			path = FutariKakeiboTests;
 			sourceTree = "<group>";
@@ -407,6 +413,7 @@
 				C00000000000000000000006 /* MonthNavigator.swift in Sources */,
 				C00000000000000000000007 /* AppTheme.swift in Sources */,
 				C00000000000000000000074 /* WalletSpinner.swift in Sources */,
+				C00000000000000000000078 /* WalletRefresh.swift in Sources */,
 				C00000000000000000000008 /* CategoryStyle.swift in Sources */,
 				C00000000000000000000009 /* DashboardView.swift in Sources */,
 				C00000000000000000000010 /* ExpenseEditorView.swift in Sources */,
@@ -476,6 +483,7 @@
 				C00000000000000000000064 /* MerchantMemoTests.swift in Sources */,
 				C00000000000000000000071 /* ReceiptImageTests.swift in Sources */,
 				C00000000000000000000077 /* AppVersionTests.swift in Sources */,
+				C00000000000000000000079 /* WalletSpinnerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -538,7 +546,7 @@
 				INFOPLIST_FILE = FutariKakeibo/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = jp.aikawa.FutariKakeibo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -564,7 +572,7 @@
 				INFOPLIST_FILE = FutariKakeibo/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = jp.aikawa.FutariKakeibo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

@@ -263,18 +263,18 @@
       "status": "review",
       "owner": "実行役 + 人間",
       "passes": "待機中・保存中のアニメーションで、お財布が正面を向いたまま右（時計回り）に回っていること",
-      "evidence": "2026-10-13 実装。rotation3DEffect（縦軸）から rotationEffect（平面・正の角度＝右回り）に変えた。2026-10-14 CI 181件中181件成功（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/38545156585）、PR #34 を main へ（1403409）。TestFlight 0.2.0 / 2026.1014.1016 を配信、UPLOAD SUCCEEDED（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/38547126006、Delivery UUID 80f2be7e-a347-4137-89d4-06b42ab54791）。**実機はこれから。**",
+      "evidence": "2026-10-13 実装。rotation3DEffect（縦軸）から rotationEffect（平面・正の角度＝右回り）に変えた。2026-10-14 CI 181件中181件成功（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/38545156585）、PR #34 を main へ（1403409）。TestFlight 0.2.0 / 2026.1014.1016 を配信、UPLOAD SUCCEEDED（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/38547126006、Delivery UUID 80f2be7e-a347-4137-89d4-06b42ab54791）。**実機はこれから。** 2026-10-15 利用者が 0.2.0 / 2026.1014.1016 を実機で確認。回り方ではなく、まわりの白い四角を指摘された（T-030 で対応）。",
       "dependencies": [],
       "notes": "以前は縦軸で回していた（横を向く瞬間に絵が消えるのを避けるため）。利用者の指示で正面のまま右回転にした（2026-10-13）。見た目の好みの話なので指示を採る。進み具合が分かる場面（予算の使用率など）は ProgressView(value:) の棒のままにしてある — ReportView:201、DashboardView:54、DashboardView:285"
     },
     {
       "id": "T-027",
       "task": "AGENTS.md の古い3か所を直す（progress.md の「一番下」、現状の表、配信の罠の行）",
-      "status": "blocked",
-      "owner": "人間",
-      "blocked_by": "AIによる AGENTS.md の書き換え（読み取りも）は、利用者の承認後も auto モードの判定器に止められた（2026-10-14、[Instruction Poisoning]）。利用者が GitHub の画面で直す",
+      "status": "review",
+      "owner": "実行役",
+      "blocked_by": "",
       "passes": "AGENTS.md の「セッションが切れたら」が progress.md の一番上を指していること。現状の表がテスト181件・共有は動作済みになっていること。罠の表の配信の行が CLAUDE.md の分担と矛盾しないこと",
-      "evidence": "",
+      "evidence": "2026-10-15 利用者が改めて実施を依頼。AIが4行を直した（progress.md の一番下→一番上、現状の表のテスト件数と共有機能、罠の表の配信の行）。件数は書かず「progress.md のいまの状態」を指す形にした（62件のまま古くなっていたのが元の問題）。2026-10-14 は auto モードの判定器に止められ、2026-10-15 は通った。**CIとマージはこれから。**",
       "dependencies": [],
       "notes": "直し方（3か所）: (1) 「1. `progress.md` の一番下（前回の到達点と、次にやること）」→「1. `progress.md` の一番上（「いまの状態」と直近の記録）」。progress.md 自身は新しいものを一番上に足す決まりで、一番下は最も古い記録になっている。(2) 現状の表: テスト「62件」→「181件（2026-10-14）」、共有機能「まだ動かない」→「動いている（別々のApple IDの2台で確認、2026-10-04）」。(3) 罠の表「TestFlightへの配信をAIが実行しようとする」の行 →「配信の起動 | Windowsの gh workflow run は止められた（2026-09-03）。クラウドでは GitHub MCP から起動できる。誰が配信を起こすかは CLAUDE.md の分担に従う」"
     },
@@ -286,7 +286,7 @@
       "passes": "safety.md の「人間の承認が要る操作」に、内部テスト配信とCIが緑のPRのマージを除く旨の段落があること",
       "evidence": "",
       "dependencies": [],
-      "notes": "safety.md はAIが書き換えない約束（承認があっても）。利用者が2026-10-14に包括承認を決めたが、本文は「その都度確認」のまま。文案: 表の下に「**例外（2026-10-14 利用者が決定）:** TestFlightの内部テスト配信と、CIが緑のPRの `main` へのマージは、その都度の確認なしでClaudeが行う。App Store公開・外部テスター・課金や契約の変更は従来どおり毎回確認する。」"
+      "notes": "safety.md はAIが書き換えない約束（承認があっても）。利用者が2026-10-14に包括承認を決めたが、本文は「その都度確認」のまま。文案: 表の下に「**例外（2026-10-14 利用者が決定）:** TestFlightの内部テスト配信と、CIが緑のPRの `main` へのマージは、その都度の確認なしでClaudeが行う。App Store公開・外部テスター・課金や契約の変更は従来どおり毎回確認する。」 2026-10-15 利用者から実施の依頼があったが、safety.md は「承認をもらっても、AIは書き換えない」と自ら定めている（絶対にやらないことの一覧）。タスクの担当も「人間」のため、AIは書き換えず、そのまま貼れる文面を渡した。"
     },
     {
       "id": "T-029",
@@ -297,6 +297,26 @@
       "evidence": "2026-10-14 実装（利用者が承認）。testflight ジョブを workflow_dispatch かつ main のときだけにし、testflight-status（ubuntu、scripts/testflight_status.rb）と scripts（自己点検）を足した。手元で自己点検15項目と、通信を差し替えた4通りの筋書き（配られた／処理失敗／鍵の権限不足／時間切れ）が想定どおり。**本物の鍵とPRのCIはこれから。**",
       "dependencies": [],
       "notes": "鍵はジョブの中でだけ使い、Claude は結果の1行（TESTFLIGHT STATUS:）と注記だけを読む。JWTの作り方は本物の鍵で通った実績のある scripts/asc_adhoc_profile.rb と同じ。機能ブランチからの送信は2026-09に5回あった（うち2回は未マージの PR #29）"
+    },
+    {
+      "id": "T-030",
+      "task": "待ち時間のお財布を、まわりを透明にして絵だけ回す。引っ張って更新でも回す",
+      "status": "review",
+      "owner": "実行役 + 人間",
+      "passes": "待機中・保存中・引っ張って更新のお財布が、まわりの白い四角なしに回ること。引っ張って更新では、更新中だけ回り、終われば止まること。通信が詰まっても回りっぱなしにならないこと（15秒で止まる）。スクロールの邪魔をしないこと",
+      "evidence": "2026-10-15 実装。外側の白だけを抜いた WalletGlyph（scripts/make_wallet_glyph.py）を TimelineView で回す。引っ張って更新は walletRefreshable（.refreshable に任せ、標準のくるくるを透明にしてお財布を出す）。WalletSpinnerTests 6件。**CIと実機はこれから。**",
+      "dependencies": ["T-026"],
+      "notes": "「¥」も白なので白を一律に抜かない。囲まれた白は「¥」だけ残す。青い保存ボタンの上では左の青い玉が地と同じ色で見えなくなる（透明にした以上、避けられない）。標準のくるくるを消すのは UIRefreshControl.appearance().tintColor = .clear（アプリ全体）。もし消えない iOS があっても、両方が出るだけで壊れはしない"
+    },
+    {
+      "id": "T-031",
+      "task": "TestFlightの自動アップデートで最新にならない件を調べる",
+      "status": "doing",
+      "owner": "実行役 + 人間",
+      "passes": "配信のたびに testflight-status が「内部テスターに配られた」まで確かめ、内部テストのグループが自動で配る設定かどうかがログで分かること。端末側の設定方法と、最新かを確かめる方法を利用者に渡してあること",
+      "evidence": "2026-10-15 testflight_status.rb に読むだけの診断（内部グループの自動配布の設定、最近5件のビルドの状態）を足した。グループ名やテスターはログに出さない（公開リポジトリ）。**0.2.1 の配信で初めて本物の鍵で動く。**",
+      "dependencies": ["T-029"],
+      "notes": "アプリ側で決められるのは、新しいビルド番号で送ること・Apple側の処理を通すこと・内部テスターに配ることまで。端末がいつ入れ替えるかは iOS とTestFlightアプリが決める（TestFlightアプリの各アプリのページにある自動アップデートの設定）。版の表示（AppVersion）は Info.plist から読むので、入っているビルドと必ず一致する"
     }
   ]
 }

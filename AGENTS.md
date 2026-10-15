@@ -12,8 +12,8 @@ iPhone向け。すでに動いていて、TestFlightで実機に配信済みで�
 | --- | --- |
 | アプリ | iOS 17以降 / SwiftUI / Swift 5 |
 | 配信 | TestFlightで内部テスト中 |
-| テスト | 62件（CIで全件実行） |
-| 共有機能 | コードは完成、CloudKitの設定待ちで**まだ動かない** |
+| テスト | CIで全件実行（件数は `progress.md` の「いまの状態」） |
+| 共有機能 | 動いている（別々のApple IDの2台で確認、2026-10-04） |
 
 ## いちばん大事な制約
 
@@ -91,7 +91,7 @@ iPhone向け。すでに動いていて、TestFlightで実機に配信済みで�
 
 会話が切れても、別のAIに変わっても、次の3つを読めば再開できます。
 
-1. `progress.md` の一番下（前回の到達点と、次にやること）
+1. `progress.md` の一番上（「いまの状態」と、直近の記録）
 2. `tasks.json` の `status` が `"doing"` のタスク
 3. `git log --oneline -10` と `git status`
 
@@ -115,7 +115,7 @@ iPhone向け。すでに動いていて、TestFlightで実機に配信済みで�
 | perl や sed での置換で `\` が消える | `s/\r\n/\n/g` と書いたつもりが、改行そのものに化けた。**この罠を記録しようとして、また踏んだ。** 長い置換はヒアドキュメントに書いてから行番号で差し込む（`CLAUDE.md`） |
 | gitを通したファイルはCRLFになる | `perl -0pi` の `\n` が当たらず、置換が静かに失敗する。`\r?\n` で探し、`\r\n` を書く |
 | コードをpushした直後にもう一度push | 同じブランチの前のCIが打ち切られ、結果が取れない。**終わるまで待つ** |
-| TestFlightへの配信をAIが実行しようとする | `gh workflow run` はAIの実行権限で止められる。`Docs/safety.md` のルールとは別の、ツール側の安全機構。**人間に渡す**（スマホのブラウザからでも実行できる。`.claude/skills/release/SKILL.md`） |
+| 配信の起動 | Windowsの `gh workflow run` は止められた（2026-09-03）。クラウドでは GitHub MCP から起動できる。**誰が配信を起こすかは `CLAUDE.md` の分担に従う** |
 | レシート解析の調整 | 直すと別の箇所が壊れる。**実物のレシートからテストを起こしてから**触ること |
 | `CKRecord.parent` に `.deleteSelf` | Appleの決まりで参照は `.none` のみ。違うと**CloudKitが例外を投げ、Swiftのcatchでは捕まらずアプリごと落ちる**。合言葉の発行だけが落ちていた（共有前は保存が入口で引き返すため、そこが初めて動く場所だった） |
 | `CGRect.isFinite` | **存在しない。** SwiftUIが同名のものを内部用（`package`）に持っているので、補完には出るのにビルドで弾かれる。`isNull` / `isInfinite` と各成分の `isFinite` を自分で見る |

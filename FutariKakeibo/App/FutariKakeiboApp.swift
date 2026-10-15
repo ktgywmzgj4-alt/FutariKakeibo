@@ -6,6 +6,12 @@ struct FutariKakeiboApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var store = AppStore()
 
+    init() {
+        // 引っ張って更新のときは、標準のくるくるの代わりにお財布を回す（walletRefreshable）。
+        // 画面が作られる前に済ませる必要があるので、ここで呼ぶ。
+        PullToRefresh.hideSystemIndicator()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
