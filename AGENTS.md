@@ -91,7 +91,7 @@ iPhone向け。すでに動いていて、TestFlightで実機に配信済みで�
 
 会話が切れても、別のAIに変わっても、次の3つを読めば再開できます。
 
-1. `progress.md` の一番上（「いまの状態」と、直近の記録）
+1. `progress.md` の一番上（前回の到達点と、次にやること）
 2. `tasks.json` の `status` が `"doing"` のタスク
 3. `git log --oneline -10` と `git status`
 
