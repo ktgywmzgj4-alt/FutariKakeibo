@@ -30,7 +30,7 @@ struct DashboardView: View {
         .background(AppTheme.background)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await store.refreshFromCloudIfConfigured() }
+        .walletRefreshable { await store.refreshFromPull() }
     }
 
     private var budgetCard: some View {

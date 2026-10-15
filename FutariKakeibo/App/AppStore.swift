@@ -817,6 +817,28 @@ final class AppStore: ObservableObject {
         periodicRefreshTask = nil
     }
 
+    /// 引っ張って更新したとき（`walletRefreshable` から呼ぶ）。
+    ///
+    /// 30秒ごとの取得（`startPeriodicRefresh`）がちょうど走っていたら、新しく始めずに
+    /// **それが終わるのを待つ**。終われば、それがいちばん新しい内容になっている。
+    /// `refreshFromCloudIfConfigured` は同期中だとすぐ戻るので、そのまま呼ぶと
+    /// 引っ張っても一瞬で終わり、何も起きなかったように見える。
+    ///
+    /// 待つ時間の上限は呼ぶ側（`PullToRefresh.timeout`）が決める。
+    func refreshFromPull() async {
+        guard syncState == .syncing else {
+            await refreshFromCloudIfConfigured()
+            return
+        }
+        while syncState == .syncing {
+            do {
+                try await Task.sleep(for: .milliseconds(200))
+            } catch {
+                return
+            }
+        }
+    }
+
     /// iCloudの内容を取り込んで、手元と突き合わせる。
     ///
     /// **取ってくるのが先。送り直しは後ろへ回す。**

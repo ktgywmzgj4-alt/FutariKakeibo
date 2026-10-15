@@ -45,16 +45,19 @@ struct ExpenseListView: View {
             .padding(.horizontal, AppTheme.screenPadding)
             .padding(.bottom, 4)
 
+            // 相手の記録を待つのはたいていこの画面。引っぱって取りに行けるようにする。
+            // 一覧そのものに付ける。外側に付けると、待つあいだのお財布が
+            // 上の「支出／収入」の切り替えに重なる（お財布は付けた部品の上端に出る）。
             if mode == .expense {
                 categoryFilter
                 expenseList
+                    .walletRefreshable { await store.refreshFromPull() }
             } else {
                 incomeList
+                    .walletRefreshable { await store.refreshFromPull() }
             }
         }
         .background(AppTheme.background)
-        // 相手の記録を待つのはたいていこの画面。引っぱって取りに行けるようにする。
-        .refreshable { await store.refreshFromCloudIfConfigured() }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "内容やメモを検索")

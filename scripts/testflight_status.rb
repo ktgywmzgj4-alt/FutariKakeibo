@@ -133,6 +133,93 @@ def write_summary(lines)
   File.open(path, 'a') { |file| file.puts(lines) }
 end
 
+# --- 配り方の診断（読むだけ） -------------------------------------------------
+#
+# 「新しいビルドが来ても自動で入れ替わらない」という報告（2026-10-15）を調べるためのもの。
+# Apple側で確かめられるのは、内部テストのグループに「ビルドを自動で配る」設定が
+# 入っているかと、最近のビルドがそれぞれどの状態にあるかまで。
+# 端末側の自動アップデート（TestFlightアプリの設定と、iOSが入れ替える時機）は見えない。
+#
+# **リポジトリは公開なので、ログにはテスターの名前やメールも、グループ名も出さない。**
+
+# 内部テストのグループの一覧から、気をつけることを挙げる。
+def distribution_findings(groups)
+  internal = groups.select { |group| group.dig('attributes', 'isInternalGroup') }
+  return ['内部テストのグループが1つも無い。ビルドを受け取れるテスターがいない'] if internal.empty?
+
+  if internal.none? { |group| group.dig('attributes', 'hasAccessToAllBuilds') }
+    return ['内部テストのグループに「ビルドを自動で配る」設定が無い。' \
+            '新しいビルドは App Store Connect で手で足さないとテスターに出ない']
+  end
+
+  []
+end
+
+# 最近のビルドを、表の行にする。
+def build_rows(response)
+  included = (response['included'] || []).to_h { |item| [[item['type'], item['id']], item] }
+  (response['data'] || []).map do |build|
+    version_ref = build.dig('relationships', 'preReleaseVersion', 'data')
+    detail_ref = build.dig('relationships', 'buildBetaDetail', 'data')
+    version = version_ref && included[[version_ref['type'], version_ref['id']]]&.dig('attributes', 'version')
+    internal = detail_ref && included[[detail_ref['type'], detail_ref['id']]]&.dig('attributes', 'internalBuildState')
+    attributes = build['attributes'] || {}
+    {
+      version: version || '-',
+      build: attributes['version'] || '-',
+      processing: attributes['processingState'] || '-',
+      internal: internal || '-',
+      expiry: attributes['expired'] ? '期限切れ' : '有効',
+      uploaded: attributes['uploadedDate'] || '-'
+    }
+  end
+end
+
+# 読むだけ。ここで何が起きても、配信の判定（終わり方）は変えない。
+def report_distribution(client, app_id)
+  lines = ['', '### 配り方（読むだけの診断）', '']
+
+  code, body = client.get('/v1/betaGroups', { 'filter[app]' => app_id, 'limit' => 50 })
+  if (200..299).cover?(code)
+    groups = JSON.parse(body)['data'] || []
+    groups.each do |group|
+      attributes = group['attributes'] || {}
+      kind = attributes['isInternalGroup'] ? '内部' : '外部'
+      delivery = attributes['hasAccessToAllBuilds'] ? 'ビルドを自動で配る' : 'ビルドは手で足す'
+      puts "テストのグループ: #{kind}・#{delivery}"
+      lines << "- テストのグループ: #{kind}・#{delivery}"
+    end
+    distribution_findings(groups).each do |finding|
+      annotate('warning', finding)
+      lines << "- **#{finding}**"
+    end
+  else
+    annotate('warning', "テストのグループを読めなかった（HTTP #{code}）")
+  end
+
+  code, body = client.get('/v1/builds', {
+                            'filter[app]' => app_id,
+                            'sort' => '-uploadedDate',
+                            'include' => 'preReleaseVersion,buildBetaDetail',
+                            'limit' => 5
+                          })
+  if (200..299).cover?(code)
+    lines += ['', '| 版 | ビルド番号 | 処理 | 内部テスト | 期限 | 送った日時 |', '| --- | --- | --- | --- | --- | --- |']
+    build_rows(JSON.parse(body)).each do |row|
+      puts "最近のビルド: #{row[:version]} (#{row[:build]}) #{row[:processing]} / #{row[:internal]} / " \
+           "#{row[:expiry]} / #{row[:uploaded]}"
+      lines << "| #{row[:version]} | #{row[:build]} | #{row[:processing]} | #{row[:internal]} | " \
+               "#{row[:expiry]} | #{row[:uploaded]} |"
+    end
+  else
+    annotate('warning', "最近のビルドを読めなかった（HTTP #{code}）")
+  end
+
+  write_summary(lines)
+rescue StandardError => e
+  annotate('warning', "配り方の診断を最後まで読めなかった（#{e.class}）")
+end
+
 class Client
   def initialize(key_id:, issuer_id:, key_path:)
     @key_id = key_id
@@ -254,6 +341,8 @@ def main
                   "| 内部テスト | #{internal || '-'} |"
                 ])
 
+  report_distribution(client, app['id'])
+
   case verdict
   when :ready
     annotate('notice', "#{version} (#{build_number}) が内部テスターに配られた")
@@ -337,6 +426,33 @@ def self_test
   check.call('輸出コンプライアンス待ち → 人の操作', classify(build.call('VALID', 'MISSING_EXPORT_COMPLIANCE')).first == :needs_action)
   check.call('版を読める', version_of(build.call('VALID', 'IN_BETA_TESTING')) == '0.2.0')
 
+
+  auto = [{ 'attributes' => { 'isInternalGroup' => true, 'hasAccessToAllBuilds' => true } }]
+  manual = [{ 'attributes' => { 'isInternalGroup' => true, 'hasAccessToAllBuilds' => false } }]
+  external = [{ 'attributes' => { 'isInternalGroup' => false, 'hasAccessToAllBuilds' => true } }]
+  check.call('内部グループが自動で配る → 指摘なし', distribution_findings(auto).empty?)
+  check.call('内部グループが手で足す → 指摘あり', distribution_findings(manual).size == 1)
+  check.call('内部グループが無い → 指摘あり', distribution_findings(external).size == 1)
+
+  listing = {
+    'data' => [{
+      'type' => 'builds', 'id' => 'b1',
+      'attributes' => { 'version' => '2026.1015.0300', 'processingState' => 'VALID', 'expired' => false,
+                        'uploadedDate' => '2026-10-15T03:00:00Z' },
+      'relationships' => {
+        'preReleaseVersion' => { 'data' => { 'type' => 'preReleaseVersions', 'id' => 'v1' } },
+        'buildBetaDetail' => { 'data' => { 'type' => 'buildBetaDetails', 'id' => 'd1' } }
+      }
+    }],
+    'included' => [
+      { 'type' => 'preReleaseVersions', 'id' => 'v1', 'attributes' => { 'version' => '0.2.1' } },
+      { 'type' => 'buildBetaDetails', 'id' => 'd1', 'attributes' => { 'internalBuildState' => 'IN_BETA_TESTING' } }
+    ]
+  }
+  row = build_rows(listing).first
+  check.call('最近のビルドを表の行にできる',
+             !row.nil? && row[:version] == '0.2.1' && row[:build] == '2026.1015.0300' &&
+             row[:internal] == 'IN_BETA_TESTING' && row[:expiry] == '有効')
   if failures.empty?
     puts 'self-test: OK'
     0

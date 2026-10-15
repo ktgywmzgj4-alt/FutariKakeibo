@@ -121,3 +121,22 @@ def write_png(path, size, pixels):
     out += chunk(b'IDAT', zlib.compress(bytes(rows), 9))
     out += chunk(b'IEND', b'')
     open(path, 'wb').write(out)
+
+
+def write_png_rgba(path, width, height, pixels):
+    """RGBA（アルファ付き）で書く。アプリ内で使う絵用。アイコンには使わないこと。"""
+    rows = bytearray()
+    stride = width * 4
+    for y in range(height):
+        rows.append(0)
+        rows += pixels[y * stride:(y + 1) * stride]
+
+    def chunk(tag, body):
+        return (struct.pack('>I', len(body)) + tag + body
+                + struct.pack('>I', zlib.crc32(tag + body) & 0xFFFFFFFF))
+
+    out = b'\x89PNG\r\n\x1a\n'
+    out += chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 6, 0, 0, 0))
+    out += chunk(b'IDAT', zlib.compress(bytes(rows), 9))
+    out += chunk(b'IEND', b'')
+    open(path, 'wb').write(out)
