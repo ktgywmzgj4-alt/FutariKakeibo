@@ -10,7 +10,7 @@ import Foundation
 /// 支出に記録する種類は1つのまま（データの形は変えない）。品ごとの内訳は読み取りの中だけで使う。
 extension ReceiptParser {
     /// 店で決まる種類。品の内訳で上書きしない。
-    private static let shopDecidedCategories: Set<ExpenseCategory> = [
+    static let shopDecidedCategories: Set<ExpenseCategory> = [
         .dining, .transportation, .utilities, .travel, .entertainment
     ]
 
@@ -22,10 +22,18 @@ extension ReceiptParser {
     ///
     /// 正式な名前は**辞書にある略し方だけ**。分からない略し方は読み取ったままにする
     /// （もっともらしい名前を作らない）。
-    static func annotated(_ items: [ReceiptItem], dictionary: ReceiptDictionary) -> [ReceiptItem] {
+    ///
+    /// この店で人が直した品（`ItemNote`）は、直した名前と種類を辞書より先に使う。
+    /// 書き方がそのまま同じ品だけ（似た書き方の別の品に当てないため）。
+    static func annotated(
+        _ items: [ReceiptItem],
+        dictionary: ReceiptDictionary,
+        notes: [ItemNote] = []
+    ) -> [ReceiptItem] {
         items.map { item in
             var annotated = item
-            let key = Array(dictionaryKey(item.name).unicodeScalars)
+            let text = dictionaryKey(item.name)
+            let key = Array(text.unicodeScalars)
             if let product = dictionary.productNames.first(where: { entry in
                 entry.keyScalars.contains { exactSpan(of: $0, in: key) != nil }
             }) {
@@ -38,6 +46,10 @@ extension ReceiptParser {
             annotated.category = dictionary.productCategories.first { entry in
                 entry.keyScalars.contains { word in keys.contains { exactSpan(of: word, in: $0) != nil } }
             }?.category
+            if let note = notes.first(where: { $0.key == text }) {
+                annotated.normalizedName = note.name ?? annotated.normalizedName
+                annotated.category = note.category ?? annotated.category
+            }
             return annotated
         }
     }

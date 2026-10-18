@@ -528,6 +528,17 @@ final class AppStore: ObservableObject {
         await saveHousehold(household)
     }
 
+    /// ある店で覚えた品の1件を忘れる。
+    ///
+    /// 間違って直した品を、同じ店のレシートを撮り直さずに消せるようにする。
+    func forgetItemNote(shopKey: String, noteKey: String) async {
+        guard var household = snapshot.household else { return }
+        let updated = MerchantMemory.forgettingItemNote(household.merchantMemos, shopKey: shopKey, noteKey: noteKey)
+        guard updated != household.merchantMemos else { return }
+        household.merchantMemos = updated
+        await saveHousehold(household)
+    }
+
     /// 覚えた店の名前を直す。
     ///
     /// 忘れて覚え直すには同じ店のレシートをもう一度撮るしかない。

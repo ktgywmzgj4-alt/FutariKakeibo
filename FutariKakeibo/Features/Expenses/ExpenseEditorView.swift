@@ -36,6 +36,12 @@ struct ExpenseEditorView: View {
     /// 覚えた店を当てはめる前に、読み取りが出した種類と、それが品から決まったか。
     @State private var readCategory: ExpenseCategory?
     @State private var readCategoryByItems = false
+    /// 読み取った品の一覧で、人が直した品の番号。直した品だけを店と一緒に覚える。
+    @State private var editedItemIndices: Set<Int> = []
+    /// 読み取った品の一覧（名前と種類を直す画面）を開いているか。
+    @State private var isShowingItems = false
+    /// 直した品から決め直した種類。人が種類を選び直したかどうかを見分けるのに使う。
+    @State private var categoryFromEditedItems: ExpenseCategory?
     /// 読み取りのあとに残す、保存用の小さな画像。原寸はここには入らない。
     @State private var capturedReceipt: ReceiptImageData?
     /// レシート画像を保存するかどうか。基本はON。人が外せる。
@@ -151,6 +157,9 @@ struct ExpenseEditorView: View {
                 }
                 recognize([image])
             }
+        }
+        .sheet(isPresented: $isShowingItems, onDismiss: itemsDidChange) {
+            ReceiptItemsView(items: $detectedItems, edited: $editedItemIndices)
         }
         .sheet(isPresented: $isShowingShopList) {
             RememberedShopsView(
@@ -473,7 +482,16 @@ struct ExpenseEditorView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Text("レシートから読み取った品名です。記録されるのは日付・店名・合計金額・種類の4つだけです。")
+                Button {
+                    isShowingItems = true
+                } label: {
+                    Label("品の名前と種類を直す", systemImage: "pencil")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.borderless)
+
+                Text("レシートから読み取った品名です。支出として記録されるのは日付・店名・合計金額・種類の4つだけです。"
+                    + "品の名前や種類を直した品だけ、その店での品の書き方と直した内容を覚えます（金額と日付は残しません）。")
                     .font(.caption)
                     .foregroundStyle(AppTheme.secondaryText)
             }
@@ -638,6 +656,8 @@ struct ExpenseEditorView: View {
                 )
                 recognizedText = remembered.recognizedText
                 detectedItems = remembered.items
+                editedItemIndices = []
+                categoryFromEditedItems = nil
                 shopKey = remembered.shopKey
                 businessKey = remembered.businessKey
                 shopIdentifiers = remembered.shopIdentifiers
@@ -654,6 +674,23 @@ struct ExpenseEditorView: View {
             } catch {
                 validationMessage = error.localizedDescription
             }
+        }
+    }
+
+    /// 品の名前と種類を直す画面を閉じたとき。
+    ///
+    /// 種類を品から決めていて、人がまだ種類を選び直していなければ、直した品で決め直す。
+    /// 店で決まる種類（外食・ガソリンなど）は品では動かさない（読み取りと同じ決まり）。
+    private func itemsDidChange() {
+        guard !editedItemIndices.isEmpty,
+              category == proposedCategory || category == categoryFromEditedItems
+        else { return }
+        if let proposedCategory, ReceiptParser.shopDecidedCategories.contains(proposedCategory), !readCategoryByItems {
+            return
+        }
+        if let weighted = ReceiptParser.weightedCategory(of: detectedItems) {
+            category = weighted
+            categoryFromEditedItems = weighted
         }
     }
 
@@ -716,6 +753,24 @@ struct ExpenseEditorView: View {
             // （読み違いに気づかずに保存されたのかもしれないので）。
             if let shopKey {
                 let savedMerchant = expense.merchant ?? expense.title
+                // 人が直した品。前後の空白を落とし、書き方の分かる品だけ。
+                let itemNotes = editedItemIndices.sorted().compactMap { index -> ItemNote? in
+                    guard detectedItems.indices.contains(index) else { return nil }
+                    let item = detectedItems[index]
+                    let key = ReceiptParser.dictionaryKey(item.name)
+                    guard key.count >= 2 else { return nil }
+                    let name = item.normalizedName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return ItemNote(
+                        key: key,
+                        text: item.name,
+                        name: (name?.isEmpty ?? true) ? nil : name,
+                        category: item.category,
+                        updatedAt: .now
+                    )
+                }
+                // 品を直したなら、読み取りの種類は「直した品から決まる種類」として覚える。
+                // そうしないと、品を直したことで変わった種類を、店ごとの直し方として覚えてしまう。
+                let itemsCategory = itemNotes.isEmpty ? nil : ReceiptParser.weightedCategory(of: detectedItems)
                 let corrected = MerchantKey.comparable(savedMerchant) != MerchantKey.comparable(proposedMerchant)
                     || expense.category != proposedCategory
                 // 合計の行の書き方（店ごとの書式）。読み取りと同じく、画面の処理とは別に調べる。
@@ -733,8 +788,9 @@ struct ExpenseEditorView: View {
                     businessKey: businessKey,
                     totalLabel: totalLabel,
                     totalCorrected: proposedAmount != expense.amount,
-                    readCategory: readCategory,
-                    readCategoryByItems: readCategoryByItems
+                    readCategory: itemsCategory ?? readCategory,
+                    readCategoryByItems: itemsCategory != nil || readCategoryByItems,
+                    itemNotes: itemNotes
                 ))
             }
 
@@ -785,6 +841,8 @@ struct ExpenseEditorView: View {
         proposedAmount = nil
         readCategory = nil
         readCategoryByItems = false
+        editedItemIndices = []
+        categoryFromEditedItems = nil
         capturedReceipt = nil
         shouldSaveReceipt = true
     }

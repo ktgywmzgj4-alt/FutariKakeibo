@@ -43,6 +43,11 @@ struct MerchantMemo: Identifiable, Codable, Hashable, Sendable {
     /// （ドラッグストアの食べ物も「医療・健康」に付ける、のような家ごとの付け方）。
     /// **品の名前は残さない。** 種類の組だけ。
     var categoryCorrections: [String: ExpenseCategory]?
+    /// この店での品の書き方と、人が直した名前・種類（`ItemNote`）。新しいものが先。
+    ///
+    /// 人が読み取った品の一覧で直した品だけ（2026-10-18 利用者が決定）。金額・日付・
+    /// どのレシートの品かは残さない。
+    var itemNotes: [ItemNote]?
 
     var id: String { key }
 
@@ -56,7 +61,8 @@ struct MerchantMemo: Identifiable, Codable, Hashable, Sendable {
         confirmations: Int? = nil,
         identifiers: [String]? = nil,
         format: ReceiptFormat? = nil,
-        categoryCorrections: [String: ExpenseCategory]? = nil
+        categoryCorrections: [String: ExpenseCategory]? = nil,
+        itemNotes: [ItemNote]? = nil
     ) {
         self.key = key
         self.merchant = merchant
@@ -68,6 +74,7 @@ struct MerchantMemo: Identifiable, Codable, Hashable, Sendable {
         self.identifiers = identifiers
         self.format = format
         self.categoryCorrections = categoryCorrections
+        self.itemNotes = itemNotes
     }
 
     /// 読み取りの推測より優先してよい店か。人が直したか、直さずに同じ内容で2回保存されたか。
@@ -100,6 +107,23 @@ struct ReceiptFormat: Codable, Hashable, Sendable {
     }
 }
 
+/// この店での品の書き方と、人が直した名前・種類。
+///
+/// 同じ店のレシートは、同じ品を同じ書き方で刷る（「ボールドJ」）。人が一度直せば、
+/// 次からその書き方の品は最初から直した名前と種類になる。**人が直した品だけ**を覚え、
+/// 金額・日付・どのレシートの品かは残さない。
+struct ItemNote: Codable, Hashable, Sendable {
+    /// 品の書き方を照らし合わせる形にしたもの（`ReceiptParser.dictionaryKey`）。
+    var key: String
+    /// 読み取った書き方。一覧に出すため。
+    var text: String
+    /// 人が付けた名前。付けていなければ nil。
+    var name: String?
+    /// 人が選んだ種類。選んでいなければ nil。
+    var category: ExpenseCategory?
+    var updatedAt: Date
+}
+
 /// 保存された1枚から、店について覚えること。
 struct MerchantObservation: Equatable, Sendable {
     /// その1枚で読めた店の鍵（`MerchantKey.make`）。
@@ -118,6 +142,8 @@ struct MerchantObservation: Equatable, Sendable {
     /// 読み取りが出した種類（覚えた店を当てはめる前）と、それが品の値段の重さで決まったか。
     var readCategory: ExpenseCategory?
     var readCategoryByItems = false
+    /// 人が読み取った品の一覧で直した品。
+    var itemNotes: [ItemNote] = []
 }
 
 /// レシートから「同じ店かどうか」を見分ける鍵を作る。
@@ -246,6 +272,10 @@ enum MerchantMemory {
     static let confirmationsToTrust = 2
     /// 1つの店で覚えておく見分けの鍵の数。
     static let identifierLimit = 6
+    /// 1つの店で覚えておく品の数。
+    static let itemNoteLimit = 20
+    /// 全部の店で覚えておく品の数。覚えた店は家計簿の1件（CloudKit の1レコード）に入るので、大きくしない。
+    static let totalItemNoteLimit = 600
 
     /// 覚えている店なら、店名と種類をそちらに差し替える。
     ///
@@ -388,12 +418,15 @@ enum MerchantMemory {
         memo.identifiers = mergedIdentifiers(existing: existing, observation: observation, key: memo.key)
         memo.format = learnedFormat(existing?.format, from: observation)
         memo.categoryCorrections = learnedCategoryCorrections(existing?.categoryCorrections, from: observation)
+        memo.itemNotes = mergedItemNotes(existing?.itemNotes, observation.itemNotes)
 
         var updated = memos.filter { $0.key != memo.key && $0.key != existing?.key }
         updated.append(memo)
         // 上限を超えたら、長く使っていないものから捨てる。
-        guard updated.count > MerchantKey.limit else { return updated }
-        return Array(updated.sorted { $0.updatedAt > $1.updatedAt }.prefix(MerchantKey.limit))
+        if updated.count > MerchantKey.limit {
+            updated = Array(updated.sorted { $0.updatedAt > $1.updatedAt }.prefix(MerchantKey.limit))
+        }
+        return trimmedItemNotes(updated)
     }
 
     /// 人が確かめた店名と種類で覚える（`MerchantObservation.corrected` が立った形）。
@@ -436,6 +469,48 @@ enum MerchantMemory {
         updated[index].corrected = true
         updated[index].updatedAt = now
         return updated
+    }
+
+    /// 覚えている店の一覧から、覚えた品の1件を忘れる（間違って直した品を消せるように）。
+    static func forgettingItemNote(_ memos: [MerchantMemo], shopKey: String, noteKey: String) -> [MerchantMemo] {
+        guard let index = memos.firstIndex(where: { $0.key == shopKey }),
+              let notes = memos[index].itemNotes, notes.contains(where: { $0.key == noteKey })
+        else { return memos }
+        var updated = memos
+        let kept = notes.filter { $0.key != noteKey }
+        updated[index].itemNotes = kept.isEmpty ? nil : kept
+        return updated
+    }
+
+    /// 品の直しを足す。同じ書き方の品は新しい直しで置き換え、新しいものを先に `itemNoteLimit` 件まで。
+    private static func mergedItemNotes(_ existing: [ItemNote]?, _ added: [ItemNote]) -> [ItemNote]? {
+        let fresh = added.filter { !$0.key.isEmpty && ($0.name != nil || $0.category != nil) }
+        var merged: [ItemNote] = []
+        for note in fresh + (existing ?? []) where !merged.contains(where: { $0.key == note.key }) {
+            merged.append(note)
+        }
+        let kept = Array(merged.prefix(itemNoteLimit))
+        return kept.isEmpty ? nil : kept
+    }
+
+    /// 全部の店の品の直しが `totalItemNoteLimit` 件を超えたら、古いものから捨てる。
+    private static func trimmedItemNotes(_ memos: [MerchantMemo]) -> [MerchantMemo] {
+        let all = memos.flatMap { $0.itemNotes ?? [] }
+        guard all.count > totalItemNoteLimit else { return memos }
+        let cutoff = all.map(\.updatedAt).sorted(by: >)[totalItemNoteLimit - 1]
+        var budget = totalItemNoteLimit
+        return memos.map { memo in
+            guard let notes = memo.itemNotes else { return memo }
+            var trimmed = memo
+            let kept = notes.filter { note in
+                // 境目と同じ時刻のものは、数の上限に収まるぶんだけ残す。
+                guard note.updatedAt >= cutoff, budget > 0 else { return false }
+                budget -= 1
+                return true
+            }
+            trimmed.itemNotes = kept.isEmpty ? nil : kept
+            return trimmed
+        }
     }
 
     /// 前に読めた鍵と、この1枚で読めた鍵。新しいものを先に、`identifierLimit` 個まで。

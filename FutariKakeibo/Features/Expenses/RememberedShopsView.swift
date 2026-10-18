@@ -7,7 +7,8 @@ import SwiftUI
 /// 一度ずれた名前を直す道が無かった（T-008）。
 ///
 /// - 押す: その店を使う
-/// - 横に払う: 忘れる
+/// - 左へ払う: 忘れる
+/// - 右へ払う: その店で覚えた品を見る・消す
 /// - 長押し: 名前を直す
 struct RememberedShopsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -19,6 +20,8 @@ struct RememberedShopsView: View {
     /// 名前を直している最中の1件。
     @State private var renaming: MerchantMemo?
     @State private var newName = ""
+    /// 覚えた品を見ている店。
+    @State private var itemsShop: MerchantMemo?
 
     var body: some View {
         NavigationStack {
@@ -56,6 +59,9 @@ struct RememberedShopsView: View {
         } message: {
             Text("この店を次に読み取ったとき、この名前で入ります。")
         }
+        .sheet(item: $itemsShop) { shop in
+            RememberedItemsView(shopKey: shop.key, shopName: shop.merchant)
+        }
     }
 
     private var list: some View {
@@ -71,9 +77,20 @@ struct RememberedShopsView: View {
                                 Label("忘れる", systemImage: "trash")
                             }
                         }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            if !(shop.itemNotes ?? []).isEmpty {
+                                Button {
+                                    itemsShop = shop
+                                } label: {
+                                    Label("覚えた品", systemImage: "list.bullet")
+                                }
+                                .tint(AppTheme.accent)
+                            }
+                        }
                 }
             } footer: {
-                Text("押すと使います。横に払うと忘れ、長押しで名前を直せます。\n"
+                Text("押すと使います。左へ払うと忘れ、長押しで名前を直せます。"
+                    + "品を覚えている店は、右へ払うと覚えた品を見て消せます。\n"
                     + "直して保存した店と、同じ内容で2回保存した店は、次から読み取りより優先します。"
                     + "「1回だけ」の店は、読み取れなかったところだけを埋めます。")
                     .font(.footnote)
@@ -96,7 +113,7 @@ struct RememberedShopsView: View {
                     .font(.body)
                     .foregroundStyle(AppTheme.ink)
                 // 直さずに1回保存しただけの店は、まだ読み取りより優先しない。そのことを添える。
-                Text(shop.isTrusted ? shop.category.displayName : "\(shop.category.displayName) · 1回だけ")
+                Text(caption(for: shop))
                     .font(.caption)
                     .foregroundStyle(AppTheme.secondaryText)
             }
@@ -124,5 +141,16 @@ struct RememberedShopsView: View {
         .accessibilityAction(named: "忘れる") {
             Task { await store.forgetMerchant(key: shop.key) }
         }
+        .accessibilityAction(named: "覚えた品") {
+            itemsShop = shop
+        }
+    }
+
+    /// 種類と、まだ確かでないこと、覚えた品の数。
+    private func caption(for shop: MerchantMemo) -> String {
+        var parts = [shop.category.displayName]
+        if !shop.isTrusted { parts.append("1回だけ") }
+        if let count = shop.itemNotes?.count, count > 0 { parts.append("品 \(count)件") }
+        return parts.joined(separator: " · ")
     }
 }

@@ -160,7 +160,9 @@ enum ReceiptParser {
         calendar: Calendar = .current,
         dictionary: ReceiptDictionary = .bundled,
         // 同じ店のレシートで覚えた書き方（`MerchantMemo.format`）。確かなものだけ使う。
-        format: ReceiptFormat? = nil
+        format: ReceiptFormat? = nil,
+        // この店で人が直した品（`MerchantMemo.itemNotes`）。
+        itemNotes: [ItemNote] = []
     ) -> ReceiptDraft {
         let rows = rows(from: lines)
         // 辞書のチェーンが見つかれば、店名を「チェーン名 支店名」に組み立て直す（`ReceiptChains.swift`）。
@@ -170,7 +172,7 @@ enum ReceiptParser {
         let totalIndex = totalRowIndex(in: rows, learnedTotalLabel: learnedTotalLabel)
         let recognizedText = rows.map(\.text).joined(separator: "\n")
         // 品ごとに、辞書から種類と正式な名前を付ける（`ReceiptCategories.swift`）。
-        let found = annotated(items(from: rows, before: totalIndex), dictionary: dictionary)
+        let found = annotated(items(from: rows, before: totalIndex), dictionary: dictionary, notes: itemNotes)
         // 明細が読めていれば、合計の候補が妥当かどうかの手がかりになる。
         // 値引きは差し引いた和で見る（イオンは半額の品が多く、引く前の和は合計より大きい）。
         let itemsTotal = found.isEmpty ? nil : found.reduce(0) { $0 + $1.netAmount }

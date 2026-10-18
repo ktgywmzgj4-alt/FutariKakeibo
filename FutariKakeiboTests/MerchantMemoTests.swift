@@ -514,6 +514,148 @@ final class MerchantMemoTests: XCTestCase {
         XCTAssertNil(memos.first?.categoryCorrections)
     }
 
+    // MARK: - 人が直した品（2026-10-18 利用者が決定: 店ごとに覚えて共有）
+
+    private func note(_ text: String, name: String? = nil, category: ExpenseCategory?, at date: Date? = nil) -> ItemNote {
+        ItemNote(
+            key: ReceiptParser.dictionaryKey(text),
+            text: text,
+            name: name,
+            category: category,
+            updatedAt: date ?? now
+        )
+    }
+
+    private var unknownItemReceipt: [RecognizedLine] {
+        RecognizedLine.lines(fromPlainText: [
+            "あおぞら商店", "TEL 03-0000-0000", "2026/10/18 12:00",
+            "ナゾノシナ ¥600", "ボールドJ ¥198", "合計 ¥798"
+        ].joined(separator: "\n"))
+    }
+
+    /// 人が直した品は、次に同じ店のレシートを読むと、最初から直した名前と種類になる。
+    /// 品の種類が変われば、レシート全体の種類も品の重さで決め直す。
+    func testACorrectedItemIsUsedOnTheNextReceiptFromThatShop() {
+        let memos = MerchantMemory.remembering(
+            [],
+            MerchantObservation(
+                key: "tel:0300000000",
+                merchant: "あおぞら商店",
+                category: .groceries,
+                corrected: true,
+                itemNotes: [note("ナゾノシナ", name: "なぞの品", category: .groceries)]
+            ),
+            now: now
+        )
+        XCTAssertEqual(memos.first?.itemNotes?.map(\.text), ["ナゾノシナ"])
+
+        let calendar = ReceiptCorpus.calendar
+        let before = ReceiptParser.parse(lines: unknownItemReceipt, now: now, calendar: calendar)
+        XCTAssertNil(before.items.first?.category, "覚える前は分からない品")
+
+        let draft = ReceiptInterpreter.ruleDraft(lines: unknownItemReceipt, now: now, calendar: calendar, memos: memos)
+        XCTAssertEqual(draft.items.map(\.name), ["ナゾノシナ", "ボールドJ"], "読み取った書き方は残す")
+        XCTAssertEqual(draft.items.first?.normalizedName, "なぞの品")
+        XCTAssertEqual(draft.items.first?.category, .groceries)
+        XCTAssertEqual(draft.suggestedCategory, .groceries)
+        XCTAssertTrue(draft.categoryDecidedByItems)
+    }
+
+    /// 別の店のレシートには、直した品を当てない（店ごとに覚える）。
+    func testACorrectedItemIsNotUsedAtAnotherShop() {
+        let memos = MerchantMemory.remembering(
+            [],
+            MerchantObservation(
+                key: "tel:0311111111",
+                merchant: "べつの店",
+                category: .groceries,
+                corrected: true,
+                itemNotes: [note("ナゾノシナ", category: .groceries)]
+            ),
+            now: now
+        )
+        let draft = ReceiptInterpreter.ruleDraft(
+            lines: unknownItemReceipt, now: now, calendar: ReceiptCorpus.calendar, memos: memos
+        )
+        XCTAssertNil(draft.items.first?.category)
+    }
+
+    /// 直さずに保存し直しても、覚えた品は消えない。同じ書き方の品を直し直したら新しいほうにする。
+    func testItemNotesSurviveLaterSavesAndCanBeRedone() {
+        var memos = MerchantMemory.remembering(
+            [],
+            MerchantObservation(
+                key: shop, merchant: "あおぞら商店", category: .groceries, corrected: true,
+                itemNotes: [note("ナゾノシナ", category: .groceries)]
+            ),
+            now: now
+        )
+        memos = MerchantMemory.remembering(
+            memos,
+            MerchantObservation(key: shop, merchant: "あおぞら商店", category: .groceries, corrected: false),
+            now: now.addingTimeInterval(60)
+        )
+        XCTAssertEqual(memos.first?.itemNotes?.count, 1)
+
+        memos = MerchantMemory.remembering(
+            memos,
+            MerchantObservation(
+                key: shop, merchant: "あおぞら商店", category: .household, corrected: true,
+                itemNotes: [note("ナゾノシナ", category: .household, at: now.addingTimeInterval(120))]
+            ),
+            now: now.addingTimeInterval(120)
+        )
+        XCTAssertEqual(memos.first?.itemNotes?.map(\.category), [.household])
+    }
+
+    /// 間違って直した品は、覚えている店の一覧から忘れられる。
+    func testAnItemNoteCanBeForgotten() {
+        let memos = MerchantMemory.remembering(
+            [],
+            MerchantObservation(
+                key: shop, merchant: "あおぞら商店", category: .groceries, corrected: true,
+                itemNotes: [note("ナゾノシナ", category: .groceries), note("ボールドJ", category: .household)]
+            ),
+            now: now
+        )
+        let once = MerchantMemory.forgettingItemNote(memos, shopKey: shop, noteKey: ReceiptParser.dictionaryKey("ナゾノシナ"))
+        XCTAssertEqual(once.first?.itemNotes?.map(\.text), ["ボールドJ"])
+        let twice = MerchantMemory.forgettingItemNote(once, shopKey: shop, noteKey: ReceiptParser.dictionaryKey("ボールドJ"))
+        XCTAssertNil(twice.first?.itemNotes)
+    }
+
+    /// 覚える品の数には上限がある。1つの店で20件、全部の店で600件。新しいものを残す。
+    func testItemNotesAreCappedPerShopAndInTotal() {
+        let many = (0..<25).map { note("品\($0)ばん", category: .groceries, at: now.addingTimeInterval(Double($0))) }
+        let one = MerchantMemory.remembering(
+            [],
+            MerchantObservation(key: shop, merchant: "あおぞら商店", category: .groceries, corrected: true, itemNotes: many),
+            now: now
+        )
+        XCTAssertEqual(one.first?.itemNotes?.count, MerchantMemory.itemNoteLimit)
+
+        var memos: [MerchantMemo] = []
+        for index in 0..<31 {
+            let notes = (0..<MerchantMemory.itemNoteLimit).map {
+                note("店\(index)の品\($0)", category: .groceries, at: now.addingTimeInterval(Double(index * 100 + $0)))
+            }
+            memos = MerchantMemory.remembering(
+                memos,
+                MerchantObservation(
+                    key: "tel:03\(10_000_000 + index)",
+                    merchant: "店\(index)",
+                    category: .groceries,
+                    corrected: true,
+                    itemNotes: notes
+                ),
+                now: now.addingTimeInterval(Double(index * 100))
+            )
+        }
+        let total = memos.reduce(0) { $0 + ($1.itemNotes?.count ?? 0) }
+        XCTAssertEqual(total, MerchantMemory.totalItemNoteLimit)
+        XCTAssertEqual(memos.first { $0.key == "tel:0310000030" }?.itemNotes?.count, MerchantMemory.itemNoteLimit, "新しい店の品は残る")
+    }
+
     /// 2026-10 より前に覚えた店（増えた項目が無い）は、今までどおり確かな店として使う。
     func testMemosFromBeforeTheTrustLevelsAreStillTrusted() throws {
         let json = """
@@ -523,6 +665,7 @@ final class MerchantMemoTests: XCTestCase {
         XCTAssertEqual(memos.first?.isTrusted, true)
         XCTAssertNil(memos.first?.identifiers)
         XCTAssertNil(memos.first?.format)
+        XCTAssertNil(memos.first?.itemNotes)
 
         let draft = ReceiptDraft(
             merchant: "読み取った名前",
