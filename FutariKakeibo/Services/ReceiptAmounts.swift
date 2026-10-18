@@ -140,9 +140,12 @@ extension ReceiptParser {
     }
 
     /// 金額と、点数のような短い添え書きだけの行（「¥5,302」「4点 ¥884」）。
+    ///
+    /// 文字があるかを先に見る。品の行のほとんどは文字があるので、正規表現（金額を拾う）まで行かずに済む。
+    /// 品の行ごとに何度も呼ばれるので、この順番で解析の時間が変わる。
     static func isAmountOnlyRow(_ text: String) -> Bool {
-        guard !currencyAmounts(in: text).isEmpty || !amounts(in: text).isEmpty else { return false }
-        return !text.contains { $0.isLetter && $0 != "点" && $0 != "円" }
+        guard !text.contains(where: { $0.isLetter && $0 != "点" && $0 != "円" }) else { return false }
+        return !currencyAmounts(in: text).isEmpty || !amounts(in: text).isEmpty
     }
 
     // MARK: - 確かめる
