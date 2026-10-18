@@ -304,7 +304,7 @@
       "status": "review",
       "owner": "実行役 + 人間",
       "passes": "待機中・保存中・引っ張って更新のお財布が、まわりの白い四角なしに回ること。引っ張って更新では、更新中だけ回り、終われば止まること。通信が詰まっても回りっぱなしにならないこと（15秒で止まる）。スクロールの邪魔をしないこと",
-      "evidence": "2026-10-15 実装。外側の白だけを抜いた WalletGlyph（scripts/make_wallet_glyph.py）を TimelineView で回す。引っ張って更新は walletRefreshable（.refreshable に任せ、標準のくるくるを透明にしてお財布を出す）。WalletSpinnerTests 6件。2026-10-15 CI 187件中187件成功（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/38677414155）、PR #36 を main へ（5ecd9ae）。TestFlight 0.2.1 / 2026.1015.0405 を配信（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/38678734766）: UPLOAD SUCCEEDED（Delivery UUID d06b62c9-6e2d-4783-a0d1-c50b311c1359）、Apple側 VALID、内部テスト IN_BETA_TESTING（13:12 JST、testflight-status）。**実機はこれから。** 2026-10-18 利用者の希望で、回転の中心を「¥」にした（make_wallet_glyph.py で「¥」の中心を画像の中心に合わせる。回したときにお財布が描く円は枠の幅の0.96倍に収まる）。**CIと実機はこれから。**",
+      "evidence": "2026-10-15 実装。外側の白だけを抜いた WalletGlyph（scripts/make_wallet_glyph.py）を TimelineView で回す。引っ張って更新は walletRefreshable（.refreshable に任せ、標準のくるくるを透明にしてお財布を出す）。WalletSpinnerTests 6件。2026-10-15 CI 187件中187件成功（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/38677414155）、PR #36 を main へ（5ecd9ae）。TestFlight 0.2.1 / 2026.1015.0405 を配信（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/38678734766）: UPLOAD SUCCEEDED（Delivery UUID d06b62c9-6e2d-4783-a0d1-c50b311c1359）、Apple側 VALID、内部テスト IN_BETA_TESTING（13:12 JST、testflight-status）。**実機はこれから。** 2026-10-18 利用者の希望で、回転の中心を「¥」にした（make_wallet_glyph.py で「¥」の中心を画像の中心に合わせる。回したときにお財布が描く円は枠の幅の0.96倍に収まる）。2026-10-18 CI 187件中187件成功（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/39103543980）、PR #38 を main へ（9f1bd9e）。TestFlight 2.0.0 / 2026.1018.629 を配信（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/39103921147）: UPLOAD SUCCEEDED（Delivery UUID 40da0744-a38e-462f-ba1d-1d64d732e9e3）、Apple側 VALID、内部テスト IN_BETA_TESTING（15:33 JST、testflight-status）。**実機はこれから。**",
       "dependencies": ["T-026"],
       "notes": "「¥」も白なので白を一律に抜かない。囲まれた白は「¥」だけ残す。青い保存ボタンの上では左の青い玉が地と同じ色で見えなくなる（透明にした以上、避けられない）。標準のくるくるを消すのは UIRefreshControl.appearance().tintColor = .clear（アプリ全体）。もし消えない iOS があっても、両方が出るだけで壊れはしない"
     },
@@ -324,7 +324,7 @@
       "status": "review",
       "owner": "実行役 + 人間（文面の承認）",
       "passes": "TestFlight（App Store Connect）に出るビルド番号と、設定画面の版の行のビルド番号が同じ字面になること",
-      "evidence": "2026-10-18 利用者が承認（「T-032もOKです、一緒に配信して」）。ワークフローの Choose a build number を、date の結果を 10# で数にしてから並べる形にした（read -r YEAR MONTHDAY HOURMIN …）。手元で YAML から手順を抜き出して bash で実行し 2026.1018.616 を確認。AppVersion.swift と release スキルの注記も合わせた。**CIと配信はこれから。**",
+      "evidence": "2026-10-18 利用者が承認（「T-032もOKです、一緒に配信して」）。ワークフローの Choose a build number を、date の結果を 10# で数にしてから並べる形にした（read -r YEAR MONTHDAY HOURMIN …）。手元で YAML から手順を抜き出して bash で実行し 2026.1018.616 を確認。AppVersion.swift と release スキルの注記も合わせた。2026-10-18 CI 187件中187件成功（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/39103543980）、PR #38 を main へ（9f1bd9e）。TestFlight 2.0.0 / 2026.1018.629 を配信（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/39103921147）: UPLOAD SUCCEEDED（Delivery UUID 40da0744-a38e-462f-ba1d-1d64d732e9e3）、Apple側 VALID、内部テスト IN_BETA_TESTING（15:33 JST、testflight-status）。ビルド番号は 2026.1018.629（06:29 UTC の先頭の0なし）で、App Store Connect の表示も同じ字面。**設定画面の表示は実機でこれから。**",
       "dependencies": ["T-024"],
       "notes": "2026-10-15 に分かった。Apple側は各要素の先頭の0を落とす（2026.1015.0405 → 2026.1015.405）。並び順は数として比べるので変わらない。直し方はワークフローの1行（date の結果を 10# で数にしてから並べる）。**配信ワークフローの変更なので、先に利用者に文面の承認を取る**（CLAUDE.md）。日本時間の9時〜19時（UTC 0〜9時）に作ったビルドで必ず起きる"
     },
@@ -334,9 +334,29 @@
       "status": "review",
       "owner": "実行役 + 人間",
       "passes": "TestFlightの版の一覧で 2.0.0 が一番上に並ぶこと。testflight-status に TESTFLIGHT WARNING が出ないこと。実機の自動アップデートで 2.0.0 が入り、1.0 に戻らないこと",
-      "evidence": "2026-10-18 実装。MARKETING_VERSION を 0.2.1 → 2.0.0（利用者の提案）。testflight-status に版ごとのまとめと、より大きい有効な版の警告を足した（自己点検27項目）。**CIと配信はこれから。**",
+      "evidence": "2026-10-18 実装。MARKETING_VERSION を 0.2.1 → 2.0.0（利用者の提案）。testflight-status に版ごとのまとめと、より大きい有効な版の警告を足した（自己点検27項目）。2026-10-18 CI 187件中187件成功（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/39103543980）、PR #38 を main へ（9f1bd9e）。TestFlight 2.0.0 / 2026.1018.629 を配信（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/39103921147）: UPLOAD SUCCEEDED（Delivery UUID 40da0744-a38e-462f-ba1d-1d64d732e9e3）、Apple側 VALID、内部テスト IN_BETA_TESTING（15:33 JST、testflight-status）。版ごとのまとめ: 2.0.0 → 1.0 → 0.2.1 → 0.2.0 → 0.1.0 の順で 2.0.0 が一番上、TESTFLIGHT WARNING は出なかった。**実機の自動アップデートはこれから。**",
       "dependencies": ["T-031"],
       "notes": "原因: 2026-09-01 の事故で XcodeGen が Info.plist を作り直し、版 1.0・ビルド 1 のビルドが1回受理された。TestFlightは版の大きい順に並べ、自動アップデートは一番上の版を入れるので、0.x の新しいビルドを入れても 1.0 に戻っていた。**2.0.0 より下に版を戻さないこと。** 1.0 のビルドはアップロードから90日で期限切れになる（App Store Connect で手で期限切れにもできるが、取り消せない操作なので利用者が決める）"
+    },
+    {
+      "id": "T-034",
+      "task": "レシート読み取りの精度を数える仕組みを入れ、改善の前の基準値を測る",
+      "status": "review",
+      "owner": "実行役",
+      "passes": "CIの記録に、実物のレシートでの店名・合計・日付・種類・明細の抽出率・品名と値段の対応・解析時間が出ること。基準値が progress.md に残っていること",
+      "evidence": "2026-10-18 ReceiptScoreboardTests（[OCR評価] の行）と ReceiptCorpus（実物13枚、個人情報は伏せた）を足した。PR #39、CI 190件中190件成功（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/39105048244）。基準値: 店名（支店名まで）7/13、（チェーン名まで）11/13、合計 12/13、日付 13/13、種類 12/13、明細の抽出 47/67、品名と値段の対応 45/47、余分 4、解析 1枚あたり平均 23.56ms・最大 43.47ms（CIのシミュレータ）。",
+      "dependencies": [],
+      "notes": "実物は13枚で、依頼の30〜50枚に足りない。写真は公開リポジトリに入れない。「写真から組み直し」の11枚は1文字ずつの写しではない"
+    },
+    {
+      "id": "T-035",
+      "task": "レシートOCR改善 第1段階: OCRの候補・金額のつじつま・明細の上限・店の見分け",
+      "status": "doing",
+      "owner": "実行役 + 人間",
+      "passes": "OCRの上位3候補を持ち、足し算の裏づけがあるときだけ選び直すこと。小計・外税・内税・値引き・お預り・お釣り・支払額から合計を確かめ、確かめられないときは利用者に確認を求めること。品の値段を変えないこと。明細の上限を見直すこと。登録番号だけで支店を決めないこと。[OCR評価] の数字が基準値（T-034）より下がらないこと",
+      "evidence": "",
+      "dependencies": ["T-034"],
+      "notes": "依頼「ふたり家計簿：レシートOCR精度の抜本的改善」（2026-10-18）の第1段階。第2段階は辞書と明細の対応づけ、第3段階は直した内容からの学習"
     }
   ]
 }

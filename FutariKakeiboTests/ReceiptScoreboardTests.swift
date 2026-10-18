@@ -160,6 +160,18 @@ struct ReceiptScoreboard {
             "日付\(mark(result.dateCorrect))",
             "種類\(mark(result.categoryCorrect)) \(draft.suggestedCategory.rawValue)"
         ]
+        if !result.totalCorrect {
+            // 外したときは、何点で何に負けたかを出す。CIの記録だけで原因を追えるように。
+            let items = draft.items
+            let candidates = ReceiptParser.totalCandidates(
+                in: ReceiptParser.rows(from: result.sample.lines),
+                itemsTotal: items.isEmpty ? nil : items.reduce(0) { $0 + $1.amount },
+                itemsCount: items.count,
+                itemsCapped: items.count >= 12
+            )
+            let top = candidates.sorted { ($0.score, $0.amount) > ($1.score, $1.amount) }.prefix(3)
+            parts.append("合計の候補: " + top.map { "\($0.amount)(\($0.score)点 \($0.reason))" }.joined(separator: "、"))
+        }
         if let items = result.items {
             parts.append("明細 \(items.named)/\(items.expected)（値段も合う \(items.priced)・余分 \(items.extra.count)）")
             if !items.missed.isEmpty {
