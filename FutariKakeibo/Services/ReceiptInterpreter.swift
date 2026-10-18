@@ -14,13 +14,29 @@ enum ReceiptInterpreter {
     static func interpret(
         lines: [RecognizedLine],
         now: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        memos: [MerchantMemo] = []
     ) async -> ReceiptDraft {
-        let base = ReceiptParser.parse(lines: lines, now: now, calendar: calendar)
+        let base = ruleDraft(lines: lines, now: now, calendar: calendar, memos: memos)
         guard let answer = await OnDeviceReceiptReader.read(text: base.recognizedText) else {
             return base
         }
         return merged(base: base, answer: answer, now: now, calendar: calendar)
+    }
+
+    /// ルールだけで読んだ結果。
+    ///
+    /// 同じ店のレシートの書き方を覚えていれば（`MerchantMemo.format`）、それを使って読み直す。
+    /// 書式は店ごとに同じなので、前に合計だった行の書き方の行を、合計の語と同じに扱う。
+    static func ruleDraft(
+        lines: [RecognizedLine],
+        now: Date = .now,
+        calendar: Calendar = .current,
+        memos: [MerchantMemo] = []
+    ) -> ReceiptDraft {
+        let draft = ReceiptParser.parse(lines: lines, now: now, calendar: calendar)
+        guard let format = MerchantMemory.format(for: draft, in: memos) else { return draft }
+        return ReceiptParser.parse(lines: lines, now: now, calendar: calendar, format: format)
     }
 
     /// AIの答えでルールの結果を上書きする。

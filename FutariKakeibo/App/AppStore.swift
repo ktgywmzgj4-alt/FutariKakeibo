@@ -506,20 +506,11 @@ final class AppStore: ObservableObject {
     ///
     /// 読み取りが「写北名古屋」と出しても、人が「Selfix北名古屋」に直して保存すれば、
     /// 次から同じ店のレシートは最初から正しく出る。相手の端末にも同期される。
-    func rememberMerchant(
-        key: String,
-        merchant: String,
-        category: ExpenseCategory,
-        businessKey: String? = nil
-    ) async {
+    /// 直さずに保存された店は、同じ内容で2回保存されるまで読み取りより優先しない
+    /// （`MerchantMemory.remembering`）。
+    func rememberMerchant(_ observation: MerchantObservation) async {
         guard var household = snapshot.household else { return }
-        let updated = MerchantMemory.remembering(
-            household.merchantMemos,
-            key: key,
-            merchant: merchant,
-            category: category,
-            businessKey: businessKey
-        )
+        let updated = MerchantMemory.remembering(household.merchantMemos, observation)
         guard updated != household.merchantMemos else { return }
         household.merchantMemos = updated
         await saveHousehold(household)
@@ -545,14 +536,11 @@ final class AppStore: ObservableObject {
     /// **鍵（`key`）は変えない。** 鍵は登録番号や電話番号から作られていて、
     /// 同じ店かどうかを見分けているのはそちら。名前だけが人の読むもの。
     func renameMerchant(key: String, to merchant: String) async {
-        let trimmed = merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, var household = snapshot.household else { return }
-        guard let index = household.merchantMemos.firstIndex(where: { $0.key == key }),
-              household.merchantMemos[index].merchant != trimmed
-        else { return }
-
-        household.merchantMemos[index].merchant = trimmed
-        household.merchantMemos[index].updatedAt = .now
+        guard var household = snapshot.household else { return }
+        // 人が直した名前なので、確かな店になる（`MerchantMemory.renaming`）。
+        let updated = MerchantMemory.renaming(household.merchantMemos, key: key, to: merchant)
+        guard updated != household.merchantMemos else { return }
+        household.merchantMemos = updated
         await saveHousehold(household)
     }
 

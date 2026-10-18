@@ -27,6 +27,12 @@ struct ExpenseEditorView: View {
     @State private var shopKey: String?
     /// 同じ事業者の鍵（登録番号）。支店の違いは見分けない。店と一緒に覚える。
     @State private var businessKey: String?
+    /// 店を見分けられるほかの鍵（電話番号、登録番号＋店名）。店と一緒に覚える。
+    @State private var shopIdentifiers: [String] = []
+    /// 読み取りのあとに画面へ出した店名・種類・金額。保存のときに、人が直したかどうかを見るのに使う。
+    @State private var proposedMerchant = ""
+    @State private var proposedCategory: ExpenseCategory?
+    @State private var proposedAmount: Int?
     /// 読み取りのあとに残す、保存用の小さな画像。原寸はここには入らない。
     @State private var capturedReceipt: ReceiptImageData?
     /// レシート画像を保存するかどうか。基本はON。人が外せる。
@@ -618,7 +624,11 @@ struct ExpenseEditorView: View {
                 }
                 // 端末の中のAIが使えるならAIに、使えなければルールに読ませる。
                 // どちらの場合も、文字は端末の外へ出ない。
-                let draft = await ReceiptInterpreter.interpret(lines: lines)
+                // 同じ店のレシートの書き方を覚えていれば、それも使う（`MerchantMemo.format`）。
+                let draft = await ReceiptInterpreter.interpret(
+                    lines: lines,
+                    memos: store.household?.merchantMemos ?? []
+                )
                 // 覚えている店なら、読み取りの推測より人が直した結果を優先する。
                 let remembered = MerchantMemory.applying(
                     store.household?.merchantMemos ?? [], to: draft
@@ -627,10 +637,14 @@ struct ExpenseEditorView: View {
                 detectedItems = remembered.items
                 shopKey = remembered.shopKey
                 businessKey = remembered.businessKey
+                shopIdentifiers = remembered.shopIdentifiers
                 if !remembered.merchant.isEmpty { merchant = remembered.merchant }
                 if let amount = remembered.amount { amountText = String(amount) }
                 if let receiptDate = remembered.date { date = receiptDate }
                 category = remembered.suggestedCategory
+                proposedMerchant = remembered.merchant
+                proposedCategory = remembered.suggestedCategory
+                proposedAmount = remembered.amount
                 validationMessage = readBackMessage(for: remembered)
             } catch {
                 validationMessage = error.localizedDescription
@@ -692,14 +706,29 @@ struct ExpenseEditorView: View {
             }
 
             // レシートから読み取った支出なら、保存できた形でこの店を覚える。
-            // 人が直したあとの値なので、次に同じ店を読んだときはこれが出る。
+            // 店名か種類を直していれば、次に同じ店を読んだときは最初からこれが出る。
+            // 直さずに保存しただけなら、同じ内容で2回保存されるまでは読み取りを優先する
+            // （読み違いに気づかずに保存されたのかもしれないので）。
             if let shopKey {
-                await store.rememberMerchant(
+                let savedMerchant = expense.merchant ?? expense.title
+                let corrected = MerchantKey.comparable(savedMerchant) != MerchantKey.comparable(proposedMerchant)
+                    || expense.category != proposedCategory
+                // 合計の行の書き方（店ごとの書式）。読み取りと同じく、画面の処理とは別に調べる。
+                let text = recognizedText
+                let total = expense.amount
+                let totalLabel = await Task.detached(priority: .utility) {
+                    ReceiptParser.totalLabel(forTotal: total, inReceiptText: text)
+                }.value
+                await store.rememberMerchant(MerchantObservation(
                     key: shopKey,
-                    merchant: expense.merchant ?? expense.title,
+                    identifiers: shopIdentifiers,
+                    merchant: savedMerchant,
                     category: expense.category,
-                    businessKey: businessKey
-                )
+                    corrected: corrected,
+                    businessKey: businessKey,
+                    totalLabel: totalLabel,
+                    totalCorrected: proposedAmount != expense.amount
+                ))
             }
 
             // レシート画像は支出とは別に保存する。支出データに入るのは参照だけ。
@@ -743,6 +772,10 @@ struct ExpenseEditorView: View {
         detectedItems = []
         shopKey = nil
         businessKey = nil
+        shopIdentifiers = []
+        proposedMerchant = ""
+        proposedCategory = nil
+        proposedAmount = nil
         capturedReceipt = nil
         shouldSaveReceipt = true
     }

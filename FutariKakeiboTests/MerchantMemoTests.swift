@@ -266,4 +266,291 @@ final class MerchantMemoTests: XCTestCase {
         XCTAssertEqual(applied.merchant, "読み取った名前")
         XCTAssertFalse(applied.usedMemo)
     }
+
+    // MARK: - 直したことから覚える（レシート読み取りの第3段階）
+
+    private let shop = "tel:0525065600"
+
+    private func observation(
+        key: String = "tel:0525065600",
+        identifiers: [String] = [],
+        merchant: String,
+        category: ExpenseCategory,
+        corrected: Bool,
+        totalLabel: String? = nil,
+        totalCorrected: Bool = false
+    ) -> MerchantObservation {
+        MerchantObservation(
+            key: key,
+            identifiers: identifiers,
+            merchant: merchant,
+            category: category,
+            corrected: corrected,
+            totalLabel: totalLabel,
+            totalCorrected: totalCorrected
+        )
+    }
+
+    /// **一度の読み違いを、そのまま正解として覚えない。** 直さずに1回保存されただけの店は、
+    /// 辞書で確かめられた店名と、品や店から決まった種類を上書きしない。
+    func testAShopSavedOnceWithoutChangesDoesNotOverrideAWellEvidencedReading() {
+        let memos = MerchantMemory.remembering(
+            [], observation(merchant: "AEON STYLE", category: .other, corrected: false), now: now
+        )
+        XCTAssertEqual(memos.first?.isTrusted, false)
+
+        let draft = ReceiptDraft(
+            merchant: "イオンスタイルワンダーシティ",
+            suggestedCategory: .groceries,
+            shopKey: shop,
+            merchantIsWellEvidenced: true,
+            categoryIsWellEvidenced: true
+        )
+        let applied = MerchantMemory.applying(memos, to: draft)
+        XCTAssertEqual(applied.merchant, "イオンスタイルワンダーシティ")
+        XCTAssertEqual(applied.suggestedCategory, .groceries)
+    }
+
+    /// 1回保存されただけの店でも、読み取りに手がかりが無いところは埋める（何も出ないよりよい）。
+    func testAShopSavedOnceFillsAReadingWithoutEvidence() {
+        let memos = MerchantMemory.remembering(
+            [], observation(merchant: "Selfix北名古屋", category: .transportation, corrected: false), now: now
+        )
+        let draft = ReceiptDraft(merchant: "写北名古屋", suggestedCategory: .other, shopKey: shop)
+
+        let applied = MerchantMemory.applying(memos, to: draft)
+        XCTAssertEqual(applied.merchant, "Selfix北名古屋")
+        XCTAssertEqual(applied.suggestedCategory, .transportation)
+    }
+
+    /// 同じ店名と種類で2回保存されたら確かな店にする。空白の違いは同じ内容とみなす。
+    func testTwoSavesWithTheSameContentMakeTheShopTrusted() {
+        var memos = MerchantMemory.remembering(
+            [], observation(merchant: "テンホウ岡谷長地店", category: .dining, corrected: false), now: now
+        )
+        memos = MerchantMemory.remembering(
+            memos,
+            observation(merchant: "テンホウ 岡谷長地店", category: .dining, corrected: false),
+            now: now.addingTimeInterval(60)
+        )
+        XCTAssertEqual(memos.count, 1)
+        XCTAssertEqual(memos.first?.confirmations, 2)
+        XCTAssertEqual(memos.first?.isTrusted, true)
+
+        let draft = ReceiptDraft(
+            merchant: "テンホウ",
+            suggestedCategory: .dining,
+            shopKey: shop,
+            merchantIsWellEvidenced: true,
+            categoryIsWellEvidenced: true
+        )
+        XCTAssertEqual(MerchantMemory.applying(memos, to: draft).merchant, "テンホウ岡谷長地店")
+    }
+
+    /// 人が直して保存した店は、その1回で確かな店にする（スタンプの店名が読めなかった富士サファリ）。
+    func testACorrectedShopIsTrustedAtOnce() {
+        let memos = MerchantMemory.remembering(
+            [], observation(merchant: "富士サファリパーク", category: .entertainment, corrected: true), now: now
+        )
+        let draft = ReceiptDraft(
+            merchant: "漬汁算素",
+            suggestedCategory: .dining,
+            shopKey: shop,
+            categoryIsWellEvidenced: true
+        )
+
+        let applied = MerchantMemory.applying(memos, to: draft)
+        XCTAssertEqual(applied.merchant, "富士サファリパーク")
+        XCTAssertEqual(applied.suggestedCategory, .entertainment)
+    }
+
+    /// 確かな店は、確かめていない読み取りで上書きしない。
+    func testAnUnverifiedReadingDoesNotOverwriteATrustedShop() {
+        var memos = MerchantMemory.remembering(
+            [], observation(merchant: "富士サファリパーク", category: .entertainment, corrected: true), now: now
+        )
+        memos = MerchantMemory.remembering(
+            memos,
+            observation(merchant: "漬汁算素", category: .dining, corrected: false),
+            now: now.addingTimeInterval(60)
+        )
+        XCTAssertEqual(memos.map(\.merchant), ["富士サファリパーク"])
+        XCTAssertEqual(memos.first?.category, .entertainment)
+    }
+
+    /// 間違って覚えた店も、直して保存すれば覚え直す。
+    func testACorrectionReplacesATrustedShop() {
+        var memos = MerchantMemory.remembering(
+            [], observation(merchant: "まちがった名前", category: .other, corrected: true), now: now
+        )
+        memos = MerchantMemory.remembering(
+            memos,
+            observation(merchant: "ただしい名前", category: .groceries, corrected: true),
+            now: now.addingTimeInterval(60)
+        )
+        XCTAssertEqual(memos.map(\.merchant), ["ただしい名前"])
+        XCTAssertEqual(memos.first?.category, .groceries)
+    }
+
+    /// 覚えている店の一覧で名前を直したら、人が直したので確かな店になる。
+    func testRenamingMakesTheShopTrusted() {
+        let memos = MerchantMemory.remembering(
+            [], observation(merchant: "写北名古屋", category: .transportation, corrected: false), now: now
+        )
+        let renamed = MerchantMemory.renaming(memos, key: shop, to: " Selfix北名古屋 ", now: now)
+        XCTAssertEqual(renamed.first?.merchant, "Selfix北名古屋")
+        XCTAssertEqual(renamed.first?.isTrusted, true)
+    }
+
+    /// 電話番号が読めなかった日でも、前に同じ店で読めた「登録番号＋店名」で同じ店と分かる。
+    func testTheShopIsFoundByAnIdentifierReadOnAnEarlierReceipt() {
+        let invoiceAndName = "invoice:7010001034871|イオンスタイルワンダーシティ"
+        let memos = MerchantMemory.remembering(
+            [],
+            observation(
+                identifiers: [shop, invoiceAndName],
+                merchant: "イオン ワンダーシティ",
+                category: .groceries,
+                corrected: true
+            ),
+            now: now
+        )
+        XCTAssertEqual(memos.first?.identifiers, [invoiceAndName])
+
+        let draft = ReceiptDraft(
+            merchant: "イオンスタイルワンダーシティ",
+            suggestedCategory: .groceries,
+            shopKey: invoiceAndName,
+            shopIdentifiers: [invoiceAndName],
+            merchantIsWellEvidenced: true
+        )
+        XCTAssertEqual(MerchantMemory.applying(memos, to: draft).merchant, "イオン ワンダーシティ")
+    }
+
+    /// 店名と登録番号が同じでも、電話番号が違えば別の支店。覚えた支店の名前を入れない。
+    func testADifferentPhoneIsAnotherBranchEvenWithTheSameName() {
+        let invoiceAndName = "invoice:7010001034871|マクドナルド"
+        let memos = MerchantMemory.remembering(
+            [],
+            observation(
+                identifiers: [shop, invoiceAndName],
+                merchant: "マクドナルド 城町店",
+                category: .dining,
+                corrected: true
+            ),
+            now: now
+        )
+        let draft = ReceiptDraft(
+            merchant: "マクドナルド",
+            suggestedCategory: .dining,
+            shopKey: "tel:0529999999",
+            shopIdentifiers: ["tel:0529999999", invoiceAndName]
+        )
+        XCTAssertEqual(MerchantMemory.applying(memos, to: draft).merchant, "マクドナルド")
+    }
+
+    /// **品から決まった種類は、覚えた店の種類でも上書きしない。** スーパーで洗剤だけ買った日は日用品。
+    func testACategoryDecidedByTheItemsIsKept() {
+        let memos = [MerchantMemo(key: shop, merchant: "イオンスタイルワンダーシティ", category: .groceries, updatedAt: now)]
+        let draft = ReceiptDraft(
+            merchant: "イオンスタイルワンダーシティ",
+            suggestedCategory: .household,
+            shopKey: shop,
+            categoryIsWellEvidenced: true,
+            categoryDecidedByItems: true
+        )
+        XCTAssertEqual(MerchantMemory.applying(memos, to: draft).suggestedCategory, .household)
+    }
+
+    /// 2026-10 より前に覚えた店（増えた項目が無い）は、今までどおり確かな店として使う。
+    func testMemosFromBeforeTheTrustLevelsAreStillTrusted() throws {
+        let json = """
+        [{"key": "tel:0525065600", "merchant": "覚えた店", "category": "groceries", "updatedAt": 0}]
+        """
+        let memos = try JSONDecoder().decode([MerchantMemo].self, from: Data(json.utf8))
+        XCTAssertEqual(memos.first?.isTrusted, true)
+        XCTAssertNil(memos.first?.identifiers)
+        XCTAssertNil(memos.first?.format)
+
+        let draft = ReceiptDraft(
+            merchant: "読み取った名前",
+            suggestedCategory: .other,
+            shopKey: shop,
+            merchantIsWellEvidenced: true
+        )
+        XCTAssertEqual(MerchantMemory.applying(memos, to: draft).merchant, "覚えた店")
+    }
+
+    /// 増えた項目も、保存して読み戻せる。
+    func testTheNewFieldsSurviveEncodingAndDecoding() throws {
+        let memos = MerchantMemory.remembering(
+            [],
+            observation(
+                identifiers: [shop, "invoice:7010001034871|あおぞら"],
+                merchant: "あおぞら商店",
+                category: .groceries,
+                corrected: false,
+                totalLabel: "オ買物額",
+                totalCorrected: true
+            ),
+            now: now
+        )
+        let decoded = try JSONDecoder().decode([MerchantMemo].self, from: JSONEncoder().encode(memos))
+        XCTAssertEqual(decoded, memos)
+        XCTAssertEqual(decoded.first?.format, ReceiptFormat(totalLabel: "オ買物額", corrected: true, seen: 1))
+    }
+
+    // MARK: - 店ごとのレシートの書き方
+
+    /// 保存された合計が刷られていた行の書き方。点数や金額の数字は入れない。
+    func testTheTotalLabelIsTheRowOfTheSavedTotal() {
+        let text = [
+            "あおぞら商店", "TEL 03-0000-0000", "りんご ¥198", "食パン ¥248",
+            "お買物額 2点 ¥446", "現金 ¥500", "お釣り ¥54"
+        ].joined(separator: "\n")
+        XCTAssertEqual(ReceiptParser.totalLabel(forTotal: 446, inReceiptText: text), "オ買物額点")
+        XCTAssertNil(ReceiptParser.totalLabel(forTotal: 999, inReceiptText: text), "どこにも無い金額からは覚えない")
+    }
+
+    private var unusualLabelReceipt: [RecognizedLine] {
+        RecognizedLine.lines(fromPlainText: [
+            "あおぞら商店", "TEL 03-0000-0000", "2026/10/18 12:00", "お買物額 ¥1,234", "ご優待券 ¥2,000"
+        ].joined(separator: "\n"))
+    }
+
+    /// 語の一覧に無い書き方（「お買物額」）の店でも、覚えた書き方の行を合計にする。
+    func testALearnedTotalLabelFindsTheTotalOnTheNextReceipt() {
+        let calendar = ReceiptCorpus.calendar
+        let before = ReceiptParser.parse(lines: unusualLabelReceipt, now: now, calendar: calendar)
+        XCTAssertTrue(before.amountNeedsConfirmation, "覚える前は、合計の行が分からないので確かめてもらう")
+
+        let format = ReceiptFormat(totalLabel: ReceiptParser.rowLabel("お買物額"), corrected: true, seen: 1)
+        let after = ReceiptParser.parse(lines: unusualLabelReceipt, now: now, calendar: calendar, format: format)
+        XCTAssertEqual(after.amount, 1_234)
+        XCTAssertFalse(after.amountNeedsConfirmation)
+    }
+
+    /// 直さずに1回保存されただけの書き方は使わない。2回同じ書き方で保存されたら使う。
+    func testAnUnconfirmedTotalLabelIsNotUsedUntilSeenTwice() {
+        let label = ReceiptParser.rowLabel("お買物額")
+        var memos = MerchantMemory.remembering(
+            [],
+            observation(key: "tel:0300000000", merchant: "あおぞら商店", category: .groceries,
+                        corrected: false, totalLabel: label),
+            now: now
+        )
+        let calendar = ReceiptCorpus.calendar
+        XCTAssertNil(MerchantMemory.format(
+            for: ReceiptParser.parse(lines: unusualLabelReceipt, now: now, calendar: calendar), in: memos
+        ))
+
+        memos = MerchantMemory.remembering(
+            memos,
+            observation(key: "tel:0300000000", merchant: "あおぞら商店", category: .groceries,
+                        corrected: false, totalLabel: label),
+            now: now.addingTimeInterval(60)
+        )
+        let draft = ReceiptInterpreter.ruleDraft(lines: unusualLabelReceipt, now: now, calendar: calendar, memos: memos)
+        XCTAssertEqual(draft.amount, 1_234)
+    }
 }

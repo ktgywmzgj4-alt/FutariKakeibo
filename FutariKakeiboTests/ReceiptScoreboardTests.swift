@@ -42,6 +42,53 @@ final class ZReceiptScoreboardTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(scored.reduce(0) { $0 + $1.priced }, floors.itemsPriced, "明細の値段")
     }
 
+    /// 1回保存したあとに、同じ店のレシートを読んだときの当たり方（第3段階: 直したことから覚える）。
+    ///
+    /// 保存は正解の店名・種類・合計で行い、読み取りと違えば「人が直した」とする。
+    /// 実物のレシートには同じ店の2枚目がほとんど無い（EQVo! と イオンの2組だけ）ので、
+    /// - 同じ1枚をもう一度読む（覚えたことが効くかどうかの上限。2枚目の実物ではない）
+    /// - 同じ店の2枚目（EQVo! 8月→9月、イオン 9月→10月）
+    /// を分けて数える。**覚えたことで、覚える前より悪くなった1枚があれば落とす。**
+    func testLearningFromOneSave() {
+        ReceiptParser.$logsDecisions.withValue(false) {
+            let samples = ReceiptCorpus.all
+            let before = samples.map { ReceiptScoreboard.read($0, memos: []) }
+            let again = samples.map { sample in
+                ReceiptScoreboard.read(sample, memos: ReceiptScoreboard.remembered(after: sample, memos: []))
+            }
+            let pairs = [
+                (ReceiptCorpus.eqvoAugust, ReceiptCorpus.eqvoSeptember),
+                (ReceiptCorpus.aeonSeptember, ReceiptCorpus.aeonOctober)
+            ]
+            let second = pairs.map { first, next in
+                ReceiptScoreboard.read(next, memos: ReceiptScoreboard.remembered(after: first, memos: []))
+            }
+            let secondBefore = pairs.map { ReceiptScoreboard.read($0.1, memos: []) }
+
+            print("[OCR評価] 1回保存したあと（同じ1枚をもう一度。上限の目安） "
+                + ReceiptScoreboard.hits(again, samples: samples))
+            print("[OCR評価] 覚える前（同じ13枚） " + ReceiptScoreboard.hits(before, samples: samples))
+            print("[OCR評価] 同じ店の2枚目（EQVo! 8月→9月・イオン 9月→10月） "
+                + ReceiptScoreboard.hits(second, samples: pairs.map { $0.1 })
+                + "（覚える前 " + ReceiptScoreboard.hits(secondBefore, samples: pairs.map { $0.1 }) + "）")
+
+            for (index, sample) in samples.enumerated() {
+                let old = ReceiptScoreboard.correctness(before[index], sample: sample)
+                let new = ReceiptScoreboard.correctness(again[index], sample: sample)
+                XCTAssertTrue(!old.merchant || new.merchant, "\(sample.name): 覚えたあとに店名が外れた")
+                XCTAssertTrue(!old.category || new.category, "\(sample.name): 覚えたあとに種類が外れた")
+                XCTAssertTrue(!old.total || new.total, "\(sample.name): 覚えたあとに合計が外れた")
+            }
+            for (index, pair) in pairs.enumerated() {
+                let old = ReceiptScoreboard.correctness(secondBefore[index], sample: pair.1)
+                let new = ReceiptScoreboard.correctness(second[index], sample: pair.1)
+                XCTAssertTrue(!old.merchant || new.merchant, "\(pair.1.name): 2枚目の店名が外れた")
+                XCTAssertTrue(!old.category || new.category, "\(pair.1.name): 2枚目の種類が外れた")
+                XCTAssertTrue(!old.total || new.total, "\(pair.1.name): 2枚目の合計が外れた")
+            }
+        }
+    }
+
     /// 全部を1回ずつ読む時間と、そのあいだに増えたメモリ。
     func testParsingCost() {
         let samples = ReceiptCorpus.all
@@ -182,7 +229,9 @@ struct ReceiptScoreboard {
             "合計\(mark(result.totalCorrect)) \(draft.amount.map(String.init) ?? "なし")"
                 + (draft.amountNeedsConfirmation ? "（確認を求める）" : ""),
             "日付\(mark(result.dateCorrect))",
-            "種類\(mark(result.categoryCorrect)) \(draft.suggestedCategory.rawValue)"
+            "種類\(mark(result.categoryCorrect)) \(draft.suggestedCategory.rawValue)",
+            // どの1枚が遅いかを見るため。
+            String(format: "%.1fms", result.milliseconds)
         ]
         if !result.totalCorrect {
             // 外したときは、何点で何に負けたかを出す。CIの記録だけで原因を追えるように。
@@ -212,6 +261,63 @@ struct ReceiptScoreboard {
             parts.append("明細は数えない（拾った \(draft.items.count)件）")
         }
         return parts.joined(separator: " ")
+    }
+
+    // MARK: - 覚えたことを使う
+
+    /// 覚えた店を使って読む。画面と同じ順番（書き方を使って読み直し → 覚えた店名と種類）。
+    static func read(_ sample: ReceiptCorpus.Sample, memos: [MerchantMemo]) -> ReceiptDraft {
+        let draft = ReceiptInterpreter.ruleDraft(
+            lines: sample.lines,
+            now: sample.now,
+            calendar: ReceiptCorpus.calendar,
+            memos: memos
+        )
+        return MerchantMemory.applying(memos, to: draft)
+    }
+
+    /// 1枚を読んで、正解の店名・種類・合計で保存したことにする。読み取りと違えば「人が直した」。
+    static func remembered(after sample: ReceiptCorpus.Sample, memos: [MerchantMemo]) -> [MerchantMemo] {
+        let shown = read(sample, memos: memos)
+        guard let key = shown.shopKey else { return memos }
+        let expected = sample.expected
+        let merchantRight = expected.merchants.contains { folded($0) == folded(shown.merchant) }
+        let merchant = merchantRight ? shown.merchant : (expected.merchants.first ?? shown.merchant)
+        return MerchantMemory.remembering(
+            memos,
+            MerchantObservation(
+                key: key,
+                identifiers: shown.shopIdentifiers,
+                merchant: merchant,
+                category: expected.category,
+                corrected: !merchantRight || shown.suggestedCategory != expected.category,
+                businessKey: shown.businessKey,
+                totalLabel: ReceiptParser.totalLabel(forTotal: expected.total, inReceiptText: shown.recognizedText),
+                totalCorrected: shown.amount != expected.total
+            ),
+            now: sample.now
+        )
+    }
+
+    static func correctness(
+        _ draft: ReceiptDraft,
+        sample: ReceiptCorpus.Sample
+    ) -> (merchant: Bool, category: Bool, total: Bool) {
+        let merchant = folded(draft.merchant)
+        return (
+            !merchant.isEmpty && sample.expected.merchants.contains { folded($0) == merchant },
+            draft.suggestedCategory == sample.expected.category,
+            draft.amount == sample.expected.total
+        )
+    }
+
+    static func hits(_ drafts: [ReceiptDraft], samples: [ReceiptCorpus.Sample]) -> String {
+        let marks = zip(drafts, samples).map { correctness($0, sample: $1) }
+        let count = samples.count
+        let merchants = marks.filter { $0.merchant }.count
+        let categories = marks.filter { $0.category }.count
+        let totals = marks.filter { $0.total }.count
+        return "店名 \(merchants)/\(count)・種類 \(categories)/\(count)・合計 \(totals)/\(count)"
     }
 
     // MARK: - 比べ方

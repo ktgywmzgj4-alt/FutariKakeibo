@@ -158,13 +158,16 @@ enum ReceiptParser {
         lines: [RecognizedLine],
         now: Date = .now,
         calendar: Calendar = .current,
-        dictionary: ReceiptDictionary = .bundled
+        dictionary: ReceiptDictionary = .bundled,
+        // 同じ店のレシートで覚えた書き方（`MerchantMemo.format`）。確かなものだけ使う。
+        format: ReceiptFormat? = nil
     ) -> ReceiptDraft {
         let rows = rows(from: lines)
         // 辞書のチェーンが見つかれば、店名を「チェーン名 支店名」に組み立て直す（`ReceiptChains.swift`）。
         let chained = chainMerchant(in: rows, dictionary: dictionary)
         let shopName = chained?.name ?? merchant(from: rows)
-        let totalIndex = totalRowIndex(in: rows)
+        let learnedTotalLabel = format.flatMap { $0.isTrusted ? $0.totalLabel : nil }
+        let totalIndex = totalRowIndex(in: rows, learnedTotalLabel: learnedTotalLabel)
         let recognizedText = rows.map(\.text).joined(separator: "\n")
         // 品ごとに、辞書から種類と正式な名前を付ける（`ReceiptCategories.swift`）。
         let found = annotated(items(from: rows, before: totalIndex), dictionary: dictionary)
@@ -180,7 +183,8 @@ enum ReceiptParser {
             itemsTotal: itemsTotal,
             itemsCount: found.count,
             itemsCapped: itemsCapped,
-            summary: summary
+            summary: summary,
+            learnedTotalLabel: learnedTotalLabel
         ))
         let check = amountCheck(best: best, summary: summary)
         // 店で決まる種類（外食など）は店、それ以外は品の種類を値段の重さで。
@@ -199,6 +203,7 @@ enum ReceiptParser {
             suggestedCategory: decided.category,
             recognizedText: recognizedText,
             shopKey: MerchantKey.make(fromReceiptText: recognizedText, merchant: shopName),
+            shopIdentifiers: MerchantKey.identifiers(fromReceiptText: recognizedText, merchant: shopName),
             businessKey: MerchantKey.businessKey(fromReceiptText: recognizedText),
             // 足し算と食い違う合計は、語を手がかりに選んでいても確かとは言わない。
             amountIsWellEvidenced: (best.map(isWellEvidenced) ?? false) && !check.conflicts,
@@ -206,7 +211,8 @@ enum ReceiptParser {
             amountNote: check.note,
             reconciledTotals: check.reconciledTotals,
             merchantIsWellEvidenced: chained != nil,
-            categoryIsWellEvidenced: decided.wellEvidenced
+            categoryIsWellEvidenced: decided.wellEvidenced,
+            categoryDecidedByItems: decided.byItems
         )
     }
 
@@ -351,9 +357,10 @@ enum ReceiptParser {
     // MARK: - いくら
 
     /// 明細を探す範囲の終わり。ここより下は支払いの内訳なので品名は無い。
-    private static func totalRowIndex(in rows: [Row]) -> Int? {
+    private static func totalRowIndex(in rows: [Row], learnedTotalLabel: String? = nil) -> Int? {
         rows.lastIndex { row in
-            hasStrongTotalKeyword(row.text)
+            // この店で覚えた合計の行の書き方（`ReceiptFormat`）も、合計の語と同じに扱う。
+            (hasStrongTotalKeyword(row.text) || learnedTotalLabel.map { rowLabel(row.text) == $0 } == true)
                 && !isNeverTotalRow(row.text)
                 && !isSideAmountRow(row.text)
                 // クレジット売上票の「取引内容 お買上」も合計の語を持つ。
@@ -451,12 +458,18 @@ enum ReceiptParser {
         itemsCount: Int = .max,
         itemsCapped: Bool = false,
         // 小計・外税・お預り・お釣り。渡されたときだけ、足し算で確かめた候補に点を足す。
-        summary: Summary? = nil
+        summary: Summary? = nil,
+        // この店の合計の行の書き方（`ReceiptFormat.totalLabel`）。その行は合計の語と同じに扱う。
+        learnedTotalLabel: String? = nil
     ) -> [TotalCandidate] {
+        let isLearnedTotalRow: (Int) -> Bool = { index in
+            guard let learnedTotalLabel else { return false }
+            return Self.rowLabel(rows[index].text) == learnedTotalLabel
+        }
         // 「合計」の語と金額が別の行に分かれて読まれることがある。
         // 語の下で最初に金額が出てくる行にも、少し低い点を渡す。
         var lookahead: Set<Int> = []
-        for index in rows.indices where hasStrongTotalKeyword(rows[index].text) {
+        for index in rows.indices where hasStrongTotalKeyword(rows[index].text) || isLearnedTotalRow(index) {
             guard amounts(in: rows[index].text).isEmpty else { continue }
             var next = index + 1
             while next < rows.count, next <= index + totalLookaheadRows {
@@ -497,10 +510,14 @@ enum ReceiptParser {
         return found.map { entry in
             var score = 0
             var reasons: [String] = []
-            let belowKeyword = !entry.keyword && lookahead.contains(entry.index)
+            let learned = !entry.keyword && isLearnedTotalRow(entry.index)
+            let belowKeyword = !entry.keyword && !learned && lookahead.contains(entry.index)
             if entry.keyword {
                 score += 200
                 reasons.append("合計の語")
+            } else if learned {
+                score += 200
+                reasons.append("この店の合計の行")
             } else if belowKeyword {
                 score += 170
                 reasons.append("合計の語の直下")
@@ -557,7 +574,7 @@ enum ReceiptParser {
                 rowIndex: entry.index,
                 score: score,
                 reason: reasons.joined(separator: " / "),
-                hasKeyword: entry.keyword || belowKeyword,
+                hasKeyword: entry.keyword || learned || belowKeyword,
                 evidence: evidence
             )
         }

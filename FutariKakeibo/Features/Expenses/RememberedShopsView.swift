@@ -27,7 +27,7 @@ struct RememberedShopsView: View {
                     ContentUnavailableView(
                         "覚えている店はありません",
                         systemImage: "storefront",
-                        description: Text("レシートから保存するときに店名を直すと、次から覚えます。")
+                        description: Text("レシートから保存すると、その店を覚えます。店名や種類を直して保存した店は、次から最初にその内容が出ます。")
                     )
                 } else {
                     list
@@ -73,7 +73,9 @@ struct RememberedShopsView: View {
                         }
                 }
             } footer: {
-                Text("押すと使います。横に払うと忘れ、長押しで名前を直せます。")
+                Text("押すと使います。横に払うと忘れ、長押しで名前を直せます。\n"
+                    + "直して保存した店と、同じ内容で2回保存した店は、次から読み取りより優先します。"
+                    + "「1回だけ」の店は、読み取れなかったところだけを埋めます。")
                     .font(.footnote)
                     .foregroundStyle(AppTheme.secondaryText)
             }
@@ -93,7 +95,8 @@ struct RememberedShopsView: View {
                 Text(shop.merchant)
                     .font(.body)
                     .foregroundStyle(AppTheme.ink)
-                Text(shop.category.displayName)
+                // 直さずに1回保存しただけの店は、まだ読み取りより優先しない。そのことを添える。
+                Text(shop.isTrusted ? shop.category.displayName : "\(shop.category.displayName) · 1回だけ")
                     .font(.caption)
                     .foregroundStyle(AppTheme.secondaryText)
             }

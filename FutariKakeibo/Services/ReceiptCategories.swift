@@ -62,7 +62,7 @@ extension ReceiptParser {
         return best?.category
     }
 
-    /// レシート全体の種類と、それが確かな手がかりで決まったか。
+    /// レシート全体の種類と、それが確かな手がかりで決まったか、品の値段の重さで決まったか。
     ///
     /// 1. 店で決まる種類（外食・交通など）は店を優先する
     /// 2. 品の種類を値段の重さで足し上げて決まれば、それ
@@ -73,17 +73,17 @@ extension ReceiptParser {
         merchant: String,
         items: [ReceiptItem],
         chain: ReceiptDictionary.Chain?
-    ) -> (category: ExpenseCategory, wellEvidenced: Bool) {
+    ) -> (category: ExpenseCategory, wellEvidenced: Bool, byItems: Bool) {
         let fromShop = chain?.category ?? bestMatch(in: merchant)
         if let fromShop, shopDecidedCategories.contains(fromShop) {
-            return (fromShop, true)
+            return (fromShop, true, false)
         }
         if let weighted = weightedCategory(of: items) {
-            return (weighted, true)
+            return (weighted, true, true)
         }
         if let chain {
-            return (chain.category, true)
+            return (chain.category, true, false)
         }
-        return (category(from: text, merchant: merchant, items: items), false)
+        return (category(from: text, merchant: merchant, items: items), false, false)
     }
 }
