@@ -204,55 +204,12 @@ final class ReceiptParserTests: XCTestCase {
 
     /// ラーメン店のレシート。ロゴが大きく、本文に正式な店名が刷られている。
     private func ramenShopReceipt() -> [RecognizedLine] {
-        [
-            line("みんなの テンホウ", y: 0.03, height: 0.05),
-            RecognizedLine(text: "WEL COME", minX: 0.62, maxX: 0.92, midY: 0.03, height: 0.03),
-            line("岡谷長地店", y: 0.08, height: 0.03),
-            line("<レシート 兼 領収書>", y: 0.11),
-            line("テンホウ岡谷長地店", y: 0.14),
-            line("登録番号:T2100001018500", y: 0.16),
-            line("TEL:0266-27-2972", y: 0.18),
-            line("長野県岡谷市長地梨久保1-6-21", y: 0.20),
-            line("株式会社テンホウ・フーズ", y: 0.22),
-            line("2026/08/29 18:54", y: 0.24), price("担:00", y: 0.24),
-            line("肉揚味噌ラーメン", y: 0.28), price("¥930", y: 0.28),
-            line("テンホウメン", y: 0.31), price("¥830", y: 0.31),
-            line("ぎょうざ", y: 0.34), price("¥320", y: 0.34),
-            line("小計 3点", y: 0.38), price("¥2,080", y: 0.38),
-            line("合計", y: 0.42, height: 0.03), price("¥2,080", y: 0.42),
-            line("(内消費税等", y: 0.45), price("¥189)", y: 0.45),
-            line("(10%対象税込計", y: 0.47), price("¥2,080)", y: 0.47),
-            line("クレジット支払", y: 0.50), price("¥2,080", y: 0.50),
-            line("お釣", y: 0.52), price("¥0", y: 0.52)
-        ]
+        ReceiptCorpus.tenhou.lines
     }
 
     /// スーパーのレシート。ロゴが店名で、上部にレジや会計機の記録が並ぶ。
     private func supermarketWithRegisterNumbers() -> [RecognizedLine] {
-        [
-            line("領収証", y: 0.02, height: 0.025),
-            line("EQVo! エクボスタイル ファミリーテーブル", y: 0.05, height: 0.045),
-            line("052-503-2116", y: 0.08),
-            line("登録番号", y: 0.11), price("T2180001109424", y: 0.11),
-            line("2026年08月30日(日)16:45", y: 0.13), price("レジ0103", y: 0.13),
-            line("責No00000103会計機103", y: 0.15),
-            line("スNo00000072小林", y: 0.17),
-            line("スキャンレジ0004", y: 0.19), price("スキャンNo6539", y: 0.19),
-            line("*天然水きりっと果実 ピン", y: 0.23), price("¥108", y: 0.23),
-            line("*えくぼちゃんたまご", y: 0.27), price("¥248", y: 0.27),
-            line("*豚小間切れ肉(中パック)", y: 0.29), price("¥396", y: 0.29),
-            line("割引 10%", y: 0.31), price("-40", y: 0.31),
-            line("*サンキスト パイン", y: 0.33), price("¥98", y: 0.33),
-            line("*ホクト カットブナシメジ", y: 0.41), price("¥99", y: 0.41),
-            line("小計", y: 0.45), price("¥1,361", y: 0.45),
-            line("(外8% タイショウ", y: 0.47), price("¥1,361)", y: 0.47),
-            line("外税計", y: 0.51), price("¥108", y: 0.51),
-            line("(税合計", y: 0.53), price("¥108)", y: 0.53),
-            line("合計", y: 0.55, height: 0.028), price("¥1,469", y: 0.55),
-            line("クレジット", y: 0.58), price("¥1,469", y: 0.58),
-            line("お釣り", y: 0.60), price("¥0", y: 0.60),
-            line("お買上点数", y: 0.62), price("9点", y: 0.62)
-        ]
+        ReceiptCorpus.eqvoAugust.lines
     }
 
     func testRamenShopReceiptPrefersThePrintedShopNameOverTheLogo() {
@@ -375,24 +332,7 @@ final class ReceiptParserTests: XCTestCase {
     /// Selfix北名古屋のガソリンのレシート。実機で合計を¥38,125と読み違えていた。
     /// 店番号 SS-38125 を金額として拾ってしまうのが原因だった。
     func testStationCodeIsNotMistakenForTheTotal() {
-        let lines = [
-            line("Selfix北名古屋", y: 0.06, height: 0.035),
-            line("愛知県北名古屋市鹿田東村79", y: 0.12),
-            line("SS-38125", x: 0.62, width: 0.24, y: 0.12),
-            line("TEL:0568-54-1790", y: 0.15),
-            line("登録番号：T2170001007389", y: 0.18),
-            line("2026年08月30日 11:46", y: 0.22),
-            line("伝票No.0596", x: 0.62, width: 0.24, y: 0.22),
-            line("0200", y: 0.32), price("¥2964", y: 0.32),
-            line("レギュラーガソリン P19", y: 0.35),
-            line("19.12(L)", x: 0.58, width: 0.2, y: 0.35),
-            line("数量", y: 0.38),
-            line("@155", x: 0.66, width: 0.14, y: 0.38),
-            line("単価", y: 0.41),
-            line("合計", y: 0.48, height: 0.03), price("¥2,964", y: 0.48),
-            line("(内税分消費税", y: 0.52), price("¥269)", y: 0.52),
-            line("端末番号:0804839738125", y: 0.62)
-        ]
+        let lines = ReceiptCorpus.selfix.lines
 
         let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
         XCTAssertEqual(draft.amount, 2_964)
@@ -418,7 +358,7 @@ final class ReceiptParserTests: XCTestCase {
     /// 商品コード、単価、給油量、カード番号の末尾。どれも金額ではない。
     func testCodesAndUnitPricesAreNotAmounts() {
         let lines = [
-            line("XXXXXXXXXXXX6941", y: 0.26),
+            line("XXXXXXXXXXXX0000", y: 0.26),
             line("ATC:004B", y: 0.28),
             line("8620-8623 07", y: 0.30),
             line("合計", y: 0.50), price("¥1,180", y: 0.50)
@@ -433,27 +373,7 @@ final class ReceiptParserTests: XCTestCase {
     /// 白馬のカフェ。1行目の `[領収書]` が `[領収害]` と読まれ、それを店名にしていた。
     /// 「領収書」で弾いていたので、1文字違うだけで素通りした。
     private func cafeReceiptWithReceiptHeading() -> [RecognizedLine] {
-        [
-            line("[領収害]", y: 0.05, height: 0.022),
-            line("CHAVATY HAKUBA", y: 0.08, height: 0.022),
-            line("長野県 北安曇郡", y: 0.11),
-            line("白馬村 北城 12056", y: 0.14),
-            line("TEL:0261-72-2474", y: 0.17),
-            line("登録番号:T9100001017140", y: 0.20),
-            line("2026/08/28 10:25:21", y: 0.25),
-            line("レジ:0007 担当:0001", y: 0.28),
-            line("伝票名:伝票00078069", y: 0.31),
-            line("サマーリリカル中井ラテ", y: 0.37),
-            line("¥780 1点", y: 0.40), price("¥780", y: 0.40),
-            line("単)C 抹茶ラテ", y: 0.44),
-            line("オリジナル", y: 0.47),
-            line("¥780 1点", y: 0.50), price("¥780", y: 0.50),
-            line("小計 2点", y: 0.55), price("¥1,560", y: 0.55),
-            line("合計", y: 0.60, height: 0.03), price("¥1,560", y: 0.60),
-            line("(10%標準対象", y: 0.63), price("¥1,560)", y: 0.63),
-            line("お預り", y: 0.69), price("¥1,560", y: 0.69),
-            line("お釣り", y: 0.72), price("¥0", y: 0.72)
-        ]
+        ReceiptCorpus.chavaty.lines
     }
 
     func testReceiptHeadingIsNotTheShopNameEvenWhenMisread() {
@@ -472,28 +392,7 @@ final class ReceiptParserTests: XCTestCase {
     /// さらに合計が ¥8 になった。「合計」の語は読めたが金額が離れた行として読まれ、
     /// あいだに `(税率 8%対象額` が入ったため、そこから 8 を拾っていた。
     private func bakeryReceiptWithLabelledName() -> [RecognizedLine] {
-        [
-            line("登録番号 T6180001124618", y: 0.06),
-            line("登録名称 株式会社マナの森", y: 0.09),
-            line("北名古屋市熊之庄八幡213", y: 0.12),
-            line("TEL/FAX 0568-23-0533", y: 0.15),
-            line("www.mana-mori.com", y: 0.18),
-            line("2026年 8月 1日(土)12:04 #000002", y: 0.23),
-            line("000001 000001 0641", y: 0.26),
-            line("内8 バケットピッツァ", y: 0.33), price("¥388", y: 0.33),
-            line("内8 ねぎ味噌ベーコンタルテ", y: 0.36), price("¥388", y: 0.36),
-            line("内8 エビカツサンド", y: 0.39), price("¥540", y: 0.39),
-            line("内8 塩パンスモークチキン", y: 0.42), price("¥583", y: 0.42),
-            line("内8 オサツデニッシュ", y: 0.45), price("¥302", y: 0.45),
-            line("小計", y: 0.52), price("¥2,201", y: 0.52),
-            line("(内税対象額", y: 0.55), price("¥2,201)", y: 0.55),
-            line("買上点数", y: 0.58), price("5点", y: 0.58),
-            line("合計", y: 0.64, height: 0.032),
-            line("(税率 8%対象額", y: 0.67),
-            price("¥2,201", y: 0.70),
-            line("(内消費税等 8%", y: 0.73), price("¥163)", y: 0.73),
-            line("クレジット", y: 0.77), price("¥2,201", y: 0.77)
-        ]
+        ReceiptCorpus.manaNoMori.lines
     }
 
     func testBakeryReceiptReadsTheTotalPastTheTaxRateRow() {
@@ -649,29 +548,7 @@ final class ReceiptParserTests: XCTestCase {
     /// 店名に **「営業時間 24時間営業」** が入ってしまい、種類も「その他」になった。
     /// 金額 2,230円 と日付だけが正しく読めていた。
     private func mcdonaldsReceipt() -> [RecognizedLine] {
-        [
-            line("マクドナルド城町店", y: 0.04, height: 0.030),
-            line("名古屋市西区平中町352", y: 0.055),
-            line("052-501-5031", y: 0.070),
-            line("営業時間 24時間営業", y: 0.085),
-            line("登録番号: T5011101033783", y: 0.100),
-            line("84 レジNO 14", x: 0.08, width: 0.25, y: 0.125),
-            line("2026年9月4日 (金)19:54", x: 0.50, width: 0.42, y: 0.125),
-            line("(ツキミバーガーセット)", y: 0.16), price("800", y: 0.16),
-            line("ツキミバーガー", y: 0.175),
-            line("チキンマックナゲット5ピース", y: 0.190),
-            line("Qoo シロブドウ M", y: 0.205),
-            line("(チーズツキミセット)", y: 0.220), price("830", y: 0.220),
-            line("マックフライポテトM", y: 0.235),
-            line("(ポテナゲ ダイ)", y: 0.250), price("600", y: 0.250),
-            line("マックフライポテトL", y: 0.265),
-            line("小計", y: 0.40), price("¥2,230", y: 0.40),
-            line("(内消費税", y: 0.42), price("¥165)", y: 0.42),
-            line("8%対象", y: 0.44), price("¥2,230", y: 0.44),
-            line("合計", y: 0.47), price("¥2,230", y: 0.47),
-            line("クレジット支払", y: 0.49), price("¥2,230", y: 0.49),
-            line("おつり", y: 0.51), price("¥0", y: 0.51)
-        ]
+        ReceiptCorpus.mcdonalds.lines
     }
 
     /// 金額・店名・種類の3つがそろうこと。レシート読み取りでいちばん大事な3項目。
@@ -757,47 +634,7 @@ final class ReceiptParserTests: XCTestCase {
     /// - 桁区切りのカンマが **ピリオド** として読まれている（`¥3. 374`）
     /// - 店名は上部では「城西店」だけで、チェーン名は**下の広告**にしか出てこない
     private func konomiyaReceipt() -> [RecognizedLine] {
-        [
-            line("城西店", y: 0.020, height: 0.024),
-            line("052-938-5776", y: 0.033),
-            line("事業者番号：T5120001001831", y: 0.046),
-            line("**** 領収証 ****", y: 0.059),
-            line("2026年8月 2日（日）20:25 #000023", y: 0.072),
-            line("009903精算機3 6476", y: 0.085),
-            line("お会計券 #000002 R7797 20:25", y: 0.098),
-            line("129037 129037", y: 0.111),
-            line("ぶなしめじ", y: 0.140), price("¥98", y: 0.140),
-            line("まうれん車", y: 0.153), price("¥258", y: 0.153),
-            line("フィリピ ンバナナ", y: 0.166), price("¥158", y: 0.166),
-            line("パッと使える魚切りベーコン", y: 0.179), price("¥398", y: 0.179),
-            line("ブルーバリー", y: 0.192), price("¥298", y: 0.192),
-            line("バター10gに切れてる", y: 0.205), price("¥378", y: 0.205),
-            line("北海道純生クリーム35％", y: 0.218), price("¥418", y: 0.218),
-            line("株水おいしい牛乳", y: 0.231), price("¥188", y: 0.231),
-            line("備長炭火焼旨焼鳥もも3本", y: 0.244), price("¥474", y: 0.244),
-            line("値引", y: 0.257), price("-250", y: 0.257),
-            line("※ えびマヨ細巻", y: 0.270), price("¥498", y: 0.270),
-            line("値引", y: 0.283), price("-200", y: 0.283),
-            line("※ポテトサラダ（大）", y: 0.296), price("¥328", y: 0.296),
-            line("値引", y: 0.309), price("-100", y: 0.309),
-            line("氷結無糖GF7%", y: 0.322), price("¥178", y: 0.322),
-            line("小計", y: 0.350), price("¥3,122", y: 0.350),
-            line("（外税 8%対象額", y: 0.363), price("¥2,944)", y: 0.363),
-            line("外税額 8%", y: 0.376), price("¥235", y: 0.376),
-            line("（外税 10%対象額", y: 0.389), price("¥178)", y: 0.389),
-            line("外税額 10%", y: 0.402), price("¥17", y: 0.402),
-            line("買上点数", y: 0.415), price("12点", y: 0.415),
-            line("¥3. 374", x: 0.60, width: 0.30, y: 0.440),
-            line("(税率 8%対象額", y: 0.453), price("¥3,179)", y: 0.453),
-            line("(内消費税等 8%", y: 0.466), price("¥235)", y: 0.466),
-            line("税率10%対象額", y: 0.479), price("¥195", y: 0.479),
-            line("(内消費寺10%", y: 0.492), price("¥17)", y: 0.492),
-            line("クレシ ット", y: 0.505), price("¥3.374", y: 0.505),
-            line("(内消費税等", y: 0.518), price("¥252)", y: 0.518),
-            line("※マークは軽減税率対象です。", y: 0.540),
-            line("コノミヤ 城西店", y: 0.570, height: 0.030),
-            line("スタッフ募集中！", y: 0.600, height: 0.030)
-        ]
+        ReceiptCorpus.konomiya.lines
     }
 
     func testKonomiyaReceiptReadsTheShopTheAmountAndTheKind() {
@@ -902,59 +739,7 @@ final class ReceiptParserTests: XCTestCase {
     /// 1. 合計が **「合　計」** と字の間を空けて刷られていて、`contains("合計")` が外れる
     /// 2. 明細に通貨の印が無く（`398※`）、下半分が売上票の数字だらけ
     private func aeonReceipt() -> [RecognizedLine] {
-        [
-            line("AEON STYLE", y: 0.03, height: 0.032),
-            line("イオンスタイルワンダーシティ", y: 0.050),
-            line("TEL052-506-5600 FAX052-506-5601", y: 0.064),
-            line("領収証", y: 0.078),
-            line("イオンリテール株式会社", y: 0.090),
-            line("登録番号 T2040001000456", y: 0.102),
-            line("レジ0058 2026/ 9/21(月) 19:41", y: 0.114),
-            line("取5647 責:05", y: 0.126),
-
-            line("オサシミ", y: 0.16), price("398※", y: 0.16),
-            line("割引 50%", y: 0.175), price("-199", y: 0.175),
-            line("焼魚屋 揚げ物", y: 0.190), price("598※", y: 0.190),
-            line("割引 50%", y: 0.205), price("-299", y: 0.205),
-            line("ミートソースラザニア風", y: 0.220), price("498※", y: 0.220),
-            line("割引 10%", y: 0.235), price("-50", y: 0.235),
-            line("ふわふわ長芋焼", y: 0.250), price("458※", y: 0.250),
-            line("まぐろたたき中巻10巻", y: 0.265), price("568※", y: 0.265),
-            line("割引 10%", y: 0.280), price("-57", y: 0.280),
-            line("中華セット", y: 0.295), price("550※", y: 0.295),
-            line("島根県産 生本まぐろ (", y: 0.310), price("1,380※", y: 0.310),
-            line("割引 50%", y: 0.325), price("-690", y: 0.325),
-            line("ＢＰホロットパインマン", y: 0.340), price("98 A", y: 0.340),
-            line("１９６巨峰R", y: 0.355), price("115 B", y: 0.355),
-            line("氷結無糖シークヮーサL", y: 0.370), price("168 C", y: 0.370),
-
-            line("小　計", y: 0.41), price("¥3,536", y: 0.41),
-            line("外税 8%対象額", y: 0.425), price("¥3,155", y: 0.425),
-            line("外税 8%", y: 0.440), price("¥252", y: 0.440),
-            line("外税10%対象額", y: 0.455), price("¥381", y: 0.455),
-            line("外税10%", y: 0.470), price("¥38", y: 0.470),
-
-            // 「合　計」。イオンは字の間を空けて刷る。
-            line("合　計", y: 0.50), price("¥3,826", y: 0.50),
-            line("クレジット", y: 0.515), price("¥3,826", y: 0.515),
-            line("お釣り", y: 0.530), price("¥0", y: 0.530),
-            line("お買上商品数:10", y: 0.545),
-            line("※印は軽減税率8%対象商品", y: 0.560),
-
-            line("[クレジットカード売上票]", y: 0.60),
-            line("(お客様控え)", y: 0.615),
-            line("本人確認省略", y: 0.635),
-            line("カード会社 VISA JAPAN 47088", y: 0.650),
-            line("会員番号 XXXX-XXXX-XXXX-6941", y: 0.665),
-            line("お取扱日", y: 0.680), price("2026年09月21日", y: 0.680),
-            line("取引内容 お買上 (CL)", y: 0.695),
-            line("伝票番号", y: 0.710), price("058177", y: 0.710),
-            line("取扱区分", y: 0.725), price("1回", y: 0.725),
-            line("金　額", y: 0.740), price("¥3,826", y: 0.740),
-            line("承認番号", y: 0.755), price("0711101", y: 0.755),
-            line("AID", y: 0.770), price("A0000000031010", y: 0.770),
-            line("APL", y: 0.785), price("Visa", y: 0.785)
-        ]
+        ReceiptCorpus.aeonSeptember.lines
     }
 
     /// 実機で 47088 になった1枚。合計 3,826円 が出ること。
@@ -1053,50 +838,7 @@ final class ReceiptParserTests: XCTestCase {
     /// 同じ日に撮ったもう1枚。こちらは 6,088円 と正しく読めていた。
     /// イオンの直しで**壊れていないこと**を確かめるために置く。
     private func eqvoReceipt() -> [RecognizedLine] {
-        [
-            line("領収証", y: 0.03),
-            line("EQVo! エクポスタイル", y: 0.050, height: 0.030),
-            line("ファミリーテーブル", y: 0.068),
-            line("052-503-2116", y: 0.082),
-            line("登録番号 T2180001109424", y: 0.100),
-            line("2026年09月23日(水)19:56 レジ0102", y: 0.114),
-            line("責No00000102会計機102", y: 0.128),
-            line("スNo00000086 酒井田", y: 0.140),
-            line("スキャンレジ0003 スキャンNo1269", y: 0.152),
-
-            line("＊お～いお茶濃い茶ケース", y: 0.19), price("¥948", y: 0.19),
-            line("#!濃いめのレモンサワー", y: 0.205), price("¥105", y: 0.205),
-            line("＊豚小間切れ肉(小パック)", y: 0.220), price("¥264", y: 0.220),
-            line("割引 10%", y: 0.235), price("-27", y: 0.235),
-            line("＊雪国まいたけ 極 Mパッ", y: 0.250), price("¥159", y: 0.250),
-            line("#!氷結 無糖グレープフル", y: 0.265), price("¥168", y: 0.265),
-            line("＊真いかの唐揚げ", y: 0.280), price("¥266", y: 0.280),
-            line("割引 50%", y: 0.295), price("-133", y: 0.295),
-            line("＊明治おいしい牛乳", y: 0.310), price("¥138", y: 0.310),
-            line("＊ご飯がススムキムチ", y: 0.325), price("¥199", y: 0.325),
-            line("＊若鶏モモ肉(1枚入)", y: 0.340), price("¥385", y: 0.340),
-            line("＊愛知コシヒカリ 2kg", y: 0.400), price("¥1,480", y: 0.400),
-            line("＊キャベツ", y: 0.415), price("¥59", y: 0.415),
-
-            line("小計", y: 0.50), price("¥5,633", y: 0.50),
-            line("(外8% タイショウ", y: 0.515), price("¥5,360)", y: 0.515),
-            line("外8%", y: 0.530), price("¥428", y: 0.530),
-            line("外税計", y: 0.560), price("¥455", y: 0.560),
-            line("(税合計", y: 0.575), price("¥455)", y: 0.575),
-            line("合計", y: 0.595), price("¥6,088", y: 0.595),
-            line("クレジット", y: 0.620), price("¥6,088", y: 0.620),
-            line("お釣り", y: 0.635), price("¥0", y: 0.635),
-            line("お買上点数 21点", y: 0.650),
-
-            line("クレジット売上票", y: 0.69),
-            line("お客様控え", y: 0.705),
-            line("カード会社 739", y: 0.730),
-            line("CL VISA", y: 0.745),
-            line("会員番号 CL ****-****-****-6941", y: 0.760),
-            line("有効期限 XXXX年XX月", y: 0.775),
-            line("処理通番 2812 金額", y: 0.820), price("¥6,088", y: 0.820),
-            line("承認番号 0419665 合計", y: 0.840), price("¥6,088", y: 0.840)
-        ]
+        ReceiptCorpus.eqvoSeptember.lines
     }
 
     /// すでに正しく読めている1枚。イオンの直しで壊していないこと。
@@ -1153,7 +895,7 @@ final class ReceiptParserTests: XCTestCase {
 
             line("EGGS' N THINGS JAPAN株式会社", y: 0.430),
             line("登録番号 T6011001062650", y: 0.444),
-            line("会計担当 Yu-a", y: 0.458),
+            line("会計担当 A", y: 0.458),
             line("No0109531", y: 0.470)
         ]
     }
