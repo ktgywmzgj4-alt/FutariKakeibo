@@ -37,6 +37,12 @@ struct MerchantMemo: Identifiable, Codable, Hashable, Sendable {
     var identifiers: [String]?
     /// この店のレシートの書き方（合計の行の書き方）。
     var format: ReceiptFormat?
+    /// 品から決まった種類を、この店で人が直した先（読み取りの種類の `rawValue` → 保存した種類）。
+    ///
+    /// 品から決まった種類は、覚えた店の種類では上書きしない。ただし人が直したことは覚える
+    /// （ドラッグストアの食べ物も「医療・健康」に付ける、のような家ごとの付け方）。
+    /// **品の名前は残さない。** 種類の組だけ。
+    var categoryCorrections: [String: ExpenseCategory]?
 
     var id: String { key }
 
@@ -49,7 +55,8 @@ struct MerchantMemo: Identifiable, Codable, Hashable, Sendable {
         corrected: Bool? = nil,
         confirmations: Int? = nil,
         identifiers: [String]? = nil,
-        format: ReceiptFormat? = nil
+        format: ReceiptFormat? = nil,
+        categoryCorrections: [String: ExpenseCategory]? = nil
     ) {
         self.key = key
         self.merchant = merchant
@@ -60,6 +67,7 @@ struct MerchantMemo: Identifiable, Codable, Hashable, Sendable {
         self.confirmations = confirmations
         self.identifiers = identifiers
         self.format = format
+        self.categoryCorrections = categoryCorrections
     }
 
     /// 読み取りの推測より優先してよい店か。人が直したか、直さずに同じ内容で2回保存されたか。
@@ -107,6 +115,9 @@ struct MerchantObservation: Equatable, Sendable {
     var totalLabel: String?
     /// 人が合計を、読み取った金額から直して保存したか。
     var totalCorrected = false
+    /// 読み取りが出した種類（覚えた店を当てはめる前）と、それが品の値段の重さで決まったか。
+    var readCategory: ExpenseCategory?
+    var readCategoryByItems = false
 }
 
 /// レシートから「同じ店かどうか」を見分ける鍵を作る。
@@ -254,7 +265,11 @@ enum MerchantMemory {
             if memo.isTrusted || !draft.merchantIsWellEvidenced || draft.merchant.isEmpty {
                 updated.merchant = memo.merchant
             }
-            if takesCategory(from: memo, for: draft) {
+            if draft.categoryDecidedByItems,
+               let corrected = memo.categoryCorrections?[draft.suggestedCategory.rawValue] {
+                // 品から決まった種類を、この店で人が直した先。
+                updated.suggestedCategory = corrected
+            } else if takesCategory(from: memo, for: draft) {
                 updated.suggestedCategory = memo.category
             }
             updated.usedMemo = true
@@ -372,6 +387,7 @@ enum MerchantMemory {
         memo.businessKey = observation.businessKey ?? existing?.businessKey
         memo.identifiers = mergedIdentifiers(existing: existing, observation: observation, key: memo.key)
         memo.format = learnedFormat(existing?.format, from: observation)
+        memo.categoryCorrections = learnedCategoryCorrections(existing?.categoryCorrections, from: observation)
 
         var updated = memos.filter { $0.key != memo.key && $0.key != existing?.key }
         updated.append(memo)
@@ -437,6 +453,19 @@ enum MerchantMemory {
         }
         let kept = Array(merged.prefix(identifierLimit))
         return kept.isEmpty ? nil : kept
+    }
+
+    /// 品から決まった種類を、人が直した先を覚える。保存した種類が読み取りと違うときだけ
+    /// （違うのは、人が直したか、前に直した先を当てはめたとき）。読み取りどおりに保存されたら、
+    /// その種類の直し先は忘れる（人が元に戻した）。
+    private static func learnedCategoryCorrections(
+        _ existing: [String: ExpenseCategory]?,
+        from observation: MerchantObservation
+    ) -> [String: ExpenseCategory]? {
+        guard observation.readCategoryByItems, let read = observation.readCategory else { return existing }
+        var corrections = existing ?? [:]
+        corrections[read.rawValue] = observation.category == read ? nil : observation.category
+        return corrections.isEmpty ? nil : corrections
     }
 
     /// 合計の行の書き方を覚える。人が合計を直した1枚から覚えたものは、その1回で確かとする。

@@ -33,6 +33,9 @@ struct ExpenseEditorView: View {
     @State private var proposedMerchant = ""
     @State private var proposedCategory: ExpenseCategory?
     @State private var proposedAmount: Int?
+    /// 覚えた店を当てはめる前に、読み取りが出した種類と、それが品から決まったか。
+    @State private var readCategory: ExpenseCategory?
+    @State private var readCategoryByItems = false
     /// 読み取りのあとに残す、保存用の小さな画像。原寸はここには入らない。
     @State private var capturedReceipt: ReceiptImageData?
     /// レシート画像を保存するかどうか。基本はON。人が外せる。
@@ -645,6 +648,8 @@ struct ExpenseEditorView: View {
                 proposedMerchant = remembered.merchant
                 proposedCategory = remembered.suggestedCategory
                 proposedAmount = remembered.amount
+                readCategory = draft.suggestedCategory
+                readCategoryByItems = draft.categoryDecidedByItems
                 validationMessage = readBackMessage(for: remembered)
             } catch {
                 validationMessage = error.localizedDescription
@@ -727,7 +732,9 @@ struct ExpenseEditorView: View {
                     corrected: corrected,
                     businessKey: businessKey,
                     totalLabel: totalLabel,
-                    totalCorrected: proposedAmount != expense.amount
+                    totalCorrected: proposedAmount != expense.amount,
+                    readCategory: readCategory,
+                    readCategoryByItems: readCategoryByItems
                 ))
             }
 
@@ -776,6 +783,8 @@ struct ExpenseEditorView: View {
         proposedMerchant = ""
         proposedCategory = nil
         proposedAmount = nil
+        readCategory = nil
+        readCategoryByItems = false
         capturedReceipt = nil
         shouldSaveReceipt = true
     }

@@ -278,7 +278,13 @@ struct ReceiptScoreboard {
 
     /// 1枚を読んで、正解の店名・種類・合計で保存したことにする。読み取りと違えば「人が直した」。
     static func remembered(after sample: ReceiptCorpus.Sample, memos: [MerchantMemo]) -> [MerchantMemo] {
-        let shown = read(sample, memos: memos)
+        let draft = ReceiptInterpreter.ruleDraft(
+            lines: sample.lines,
+            now: sample.now,
+            calendar: ReceiptCorpus.calendar,
+            memos: memos
+        )
+        let shown = MerchantMemory.applying(memos, to: draft)
         guard let key = shown.shopKey else { return memos }
         let expected = sample.expected
         let merchantRight = expected.merchants.contains { folded($0) == folded(shown.merchant) }
@@ -293,7 +299,9 @@ struct ReceiptScoreboard {
                 corrected: !merchantRight || shown.suggestedCategory != expected.category,
                 businessKey: shown.businessKey,
                 totalLabel: ReceiptParser.totalLabel(forTotal: expected.total, inReceiptText: shown.recognizedText),
-                totalCorrected: shown.amount != expected.total
+                totalCorrected: shown.amount != expected.total,
+                readCategory: draft.suggestedCategory,
+                readCategoryByItems: draft.categoryDecidedByItems
             ),
             now: sample.now
         )

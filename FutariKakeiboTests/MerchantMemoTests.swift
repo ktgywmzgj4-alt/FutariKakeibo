@@ -462,6 +462,58 @@ final class MerchantMemoTests: XCTestCase {
         XCTAssertEqual(MerchantMemory.applying(memos, to: draft).suggestedCategory, .household)
     }
 
+    /// 品から決まった種類でも、この店で人が直したら、次から直した先にする（家ごとの付け方）。
+    /// ほかの種類のときは品から決まった種類のまま。**品の名前は覚えない。**
+    func testACorrectedItemsCategoryIsRememberedForThatShop() {
+        let memos = MerchantMemory.remembering(
+            [],
+            MerchantObservation(
+                key: shop,
+                merchant: "スギ薬局 どこか店",
+                category: .health,
+                corrected: true,
+                readCategory: .groceries,
+                readCategoryByItems: true
+            ),
+            now: now
+        )
+        XCTAssertEqual(memos.first?.categoryCorrections, ["groceries": .health])
+
+        let food = ReceiptDraft(
+            merchant: "スギ薬局 どこか店",
+            suggestedCategory: .groceries,
+            shopKey: shop,
+            categoryIsWellEvidenced: true,
+            categoryDecidedByItems: true
+        )
+        XCTAssertEqual(MerchantMemory.applying(memos, to: food).suggestedCategory, .health)
+
+        var detergent = food
+        detergent.suggestedCategory = .household
+        XCTAssertEqual(MerchantMemory.applying(memos, to: detergent).suggestedCategory, .household)
+    }
+
+    /// 品から決まった種類どおりに保存し直したら、直し先は忘れる（人が元に戻した）。
+    func testSavingTheItemsCategoryAgainForgetsTheCorrection() {
+        var memos = MerchantMemory.remembering(
+            [],
+            MerchantObservation(
+                key: shop, merchant: "スギ薬局 どこか店", category: .health, corrected: true,
+                readCategory: .groceries, readCategoryByItems: true
+            ),
+            now: now
+        )
+        memos = MerchantMemory.remembering(
+            memos,
+            MerchantObservation(
+                key: shop, merchant: "スギ薬局 どこか店", category: .groceries, corrected: true,
+                readCategory: .groceries, readCategoryByItems: true
+            ),
+            now: now.addingTimeInterval(60)
+        )
+        XCTAssertNil(memos.first?.categoryCorrections)
+    }
+
     /// 2026-10 より前に覚えた店（増えた項目が無い）は、今までどおり確かな店として使う。
     func testMemosFromBeforeTheTrustLevelsAreStillTrusted() throws {
         let json = """
