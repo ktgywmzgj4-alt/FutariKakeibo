@@ -46,6 +46,8 @@ enum ReceiptParser {
         "レジ", "スキャン", "会計機", "精算機", "伝票", "承認", "処理", "取扱", "商品区分", "取引",
         "カード", "会員", "有効期限", "対象", "タイショウ", "テーブル", "人数", "メンテナンス",
         "no.", "no ", "＃", "#", "税率",
+        // 「取5647 責:05」のような、取引と責任者の番号の行（イオン）。
+        "責:",
         // 給油機やはかりの表示。品名の位置に来るが買ったものではない。
         "数量", "単価", "給油", "リットル"
     ]
@@ -310,17 +312,14 @@ enum ReceiptParser {
 
     /// 「1点※」「2個」のような、数量だけの文字。
     static func looksLikeQuantity(_ text: String) -> Bool {
-        normalizedDigits(text).trimmingCharacters(in: .whitespaces).range(
-            of: #"^[(（]?\s*[0-9]{1,3}\s*[点個コ本枚]\s*[※*＊軽]?\s*[)）]?$"#,
-            options: .regularExpression
-        ) != nil
+        matches(
+            #"^[(（]?\s*[0-9]{1,3}\s*[点個コ本枚]\s*[※*＊軽]?\s*[)）]?$"#,
+            in: normalizedDigits(text).trimmingCharacters(in: .whitespaces)
+        )
     }
 
     private static func endsWithPrice(_ text: String) -> Bool {
-        normalizedDigits(text).range(
-            of: #"[0-9]{1,7}\s*円?\s*[*※＊軽外内)）]?\s*$"#,
-            options: .regularExpression
-        ) != nil
+        matches(#"[0-9]{1,7}\s*円?\s*[*※＊軽外内)）]?\s*$"#, in: normalizedDigits(text))
     }
 
     private static func cleanedMerchant(_ text: String) -> String {
@@ -533,6 +532,7 @@ enum ReceiptParser {
                     for: entry.amount,
                     summary: summary,
                     itemsTotal: itemsTotal,
+                    itemsCount: itemsCount,
                     itemsCapped: itemsCapped
                 )
                 score += checked.score
@@ -797,7 +797,7 @@ enum ReceiptParser {
         if looksLikeDate(row.text) || looksLikePhoneNumber(row.text) { return nil }
         if isTaxOrRateRow(row.text) { return nil }
         // 「2コX単118」のような数量と単価の行。品名ではない。
-        if row.text.range(of: #"[0-9]\s*[コ個][x×X]\s*単"#, options: .regularExpression) != nil { return nil }
+        if matches(#"[0-9]\s*[コ個][x×X]\s*単"#, in: row.text) { return nil }
 
         let fragments = row.sortedFragments
         guard fragments.count >= 2 else {
@@ -833,10 +833,7 @@ enum ReceiptParser {
 
     /// 通貨の印の付いた金額で終わる文字（「肉揚味噌ラーメン ¥930」「牛乳 198円」）。
     private static func endsWithCurrencyAmount(_ text: String) -> Bool {
-        text.range(
-            of: #"([¥￥]\s*[0-9０-９,，]{1,9}|[0-9０-９,，]{1,9}\s*円)\s*[*※＊軽外内]?\s*$"#,
-            options: .regularExpression
-        ) != nil
+        matches(#"([¥￥]\s*[0-9０-９,，]{1,9}|[0-9０-９,，]{1,9}\s*円)\s*[*※＊軽外内]?\s*$"#, in: text)
     }
 
     /// 税率・割引率の行（「外8%」「8%税」「割引 10%」「(10%標準対象」）。
@@ -848,17 +845,14 @@ enum ReceiptParser {
         if containsKeyword(text, from: ["税", "消費", "対象", "タイショウ", "割", "引", "off", "オフ"]) {
             return true
         }
-        return normalizedDigits(text).range(
-            of: #"^[(（]?\s*[外内]\s*[0-9]{1,2}\s*[%％]"#,
-            options: .regularExpression
-        ) != nil
+        return matches(#"^[(（]?\s*[外内]\s*[0-9]{1,2}\s*[%％]"#, in: normalizedDigits(text))
     }
 
     /// 品名と金額が地続きに読まれた場合。末尾の数字を金額として切り出す。
     private static func itemFromText(_ source: String) -> ReceiptItem? {
         let text = normalizedDigits(source)
         guard
-            let match = text.range(of: #"([0-9]{1,6})\s*円?\s*[*※＊軽外内]?\s*$"#, options: .regularExpression)
+            let match = firstRange(#"([0-9]{1,6})\s*円?\s*[*※＊軽外内]?\s*$"#, in: text)
         else { return nil }
         let priceText = text[match].filter(\.isNumber)
         guard let price = Int(priceText), isPlausibleAmount(price), price <= 999_999 else { return nil }
@@ -874,7 +868,7 @@ enum ReceiptParser {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         // 「外8 1501 鮮魚」のように、税区分と商品コードが品名の前につく。
         // 品名だけ残したいので、先頭に並ぶ数字とその区切りを落とす。
-        while let range = name.range(of: #"^[0-9]{1,6}\s*"#, options: .regularExpression) {
+        while let range = firstRange(#"^[0-9]{1,6}\s*"#, in: name) {
             let stripped = String(name[range.upperBound...])
             if stripped.isEmpty { break }
             name = stripped
@@ -895,7 +889,7 @@ enum ReceiptParser {
     /// 正規表現の括弧ごとの一致。括弧が一致しなかったところは nil。
     private static func captures(_ pattern: String, in text: String) -> [String?]? {
         guard
-            let regex = try? NSRegularExpression(pattern: pattern),
+            let regex = regex(pattern),
             let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text))
         else { return nil }
         return (1..<match.numberOfRanges).map { group in
@@ -1190,9 +1184,9 @@ enum ReceiptParser {
     /// どれも桁数だけでは金額と見分けがつかないので、前後に何が付いているかで落とす。
     static func amounts(in line: String) -> [Int] {
         let normalized = normalizedDigits(line)
-        guard let regex = try? NSRegularExpression(
+        guard let regex = regex(
             // 末尾に % を足したのは、「(税率 8%対象額」の 8 を合計として拾ったため。
-            pattern: #"(?<![-0-9A-Za-z@－])(?<![0-9]\.)([0-9]{1,7})(?![-0-9A-Za-z－%％])(?!\.[0-9])"#
+            #"(?<![-0-9A-Za-z@－])(?<![0-9]\.)([0-9]{1,7})(?![-0-9A-Za-z－%％])(?!\.[0-9])"#
         ) else {
             return []
         }
@@ -1213,7 +1207,7 @@ enum ReceiptParser {
         let patterns = [#"[¥￥]\s*([0-9,０-９，]{1,11})"#, #"([0-9,０-９，]{1,11})\s*円"#]
         var found: [Int] = []
         for pattern in patterns {
-            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            guard let regex = regex(pattern) else { continue }
             let range = NSRange(line.startIndex..., in: line)
             for match in regex.matches(in: line, range: range) {
                 guard let swiftRange = Range(match.range(at: 1), in: line) else { continue }
@@ -1226,7 +1220,7 @@ enum ReceiptParser {
     }
 
     static func firstMatch(_ pattern: String, in text: String) -> [String]? {
-        guard let regex = try? NSRegularExpression(pattern: pattern),
+        guard let regex = regex(pattern),
               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text))
         else { return nil }
         return (1..<match.numberOfRanges).compactMap { group in
@@ -1236,21 +1230,18 @@ enum ReceiptParser {
     }
 
     static func containsLetters(_ text: String) -> Bool {
-        text.range(of: "[A-Za-zぁ-んァ-ヶ一-龠]", options: .regularExpression) != nil
+        matches("[A-Za-zぁ-んァ-ヶ一-龠]", in: text)
     }
 
     static func looksLikeDate(_ text: String) -> Bool {
-        normalizedDigits(text).range(
-            of: #"\d{1,4}\s*[年./-]\s*\d{1,2}\s*[月./-]\s*\d{1,2}"#,
-            options: .regularExpression
-        ) != nil
+        matches(#"\d{1,4}\s*[年./-]\s*\d{1,2}\s*[月./-]\s*\d{1,2}"#, in: normalizedDigits(text))
     }
 
     static func looksLikePhoneNumber(_ text: String) -> Bool {
         let value = normalizedDigits(text)
-        if value.range(of: #"(tel|TEL|電話)"#, options: .regularExpression) != nil { return true }
-        return value.range(of: #"(?<!\d)0\d{1,4}[-‐－]\d{1,4}[-‐－]\d{3,4}(?!\d)"#, options: .regularExpression) != nil
-            || value.range(of: #"(?<!\d)\d{10,11}(?!\d)"#, options: .regularExpression) != nil
+        if matches(#"(tel|TEL|電話)"#, in: value) { return true }
+        return matches(#"(?<!\d)0\d{1,4}[-‐－]\d{1,4}[-‐－]\d{3,4}(?!\d)"#, in: value)
+            || matches(#"(?<!\d)\d{10,11}(?!\d)"#, in: value)
     }
 
     /// 住所の行かどうか。
@@ -1268,13 +1259,48 @@ enum ReceiptParser {
         // 番地が別の行に折り返されていても、ここで住所と分かる。
         // **都道府県の名前だけでは決めない。** 「TV北海道牛乳」「島根県産 生本まぐろ」のように
         // 品名にも入り、明細が落ちていた（イオン 2026-09-21・10-04）。
-        if text.range(
-            of: #"(東京都|北海道|大阪府|京都府|[一-龠]{2,3}県)\s*\S*?[市区町村郡]"#,
-            options: .regularExpression
-        ) != nil {
+        if matches(#"(東京都|北海道|大阪府|京都府|[一-龠]{2,3}県)\s*\S*?[市区町村郡]"#, in: text) {
             return true
         }
         // 市区町村・郡のあとに番地の数字が続く形。店名に番地は付かない。
-        return text.range(of: "[市区町村郡].*[0-9]", options: .regularExpression) != nil
+        return matches("[市区町村郡].*[0-9]", in: text)
+    }
+
+    // MARK: - 正規表現の作り置き
+
+    /// 正規表現は作るほうが読むより何倍も遅い。レシート1枚で同じ形を何百回も使うので、
+    /// 1回だけ作って使い回す（2026-10-18、第1段階で解析が2倍遅くなったのを戻した）。
+    final class RegexCache: @unchecked Sendable {
+        private var store: [String: NSRegularExpression] = [:]
+        private let lock = NSLock()
+
+        func regex(_ pattern: String) -> NSRegularExpression? {
+            lock.lock()
+            defer { lock.unlock() }
+            if let cached = store[pattern] { return cached }
+            guard let made = try? NSRegularExpression(pattern: pattern) else { return nil }
+            store[pattern] = made
+            return made
+        }
+    }
+
+    private static let regexCache = RegexCache()
+
+    static func regex(_ pattern: String) -> NSRegularExpression? {
+        regexCache.regex(pattern)
+    }
+
+    /// 最初に一致したところ。
+    static func firstRange(_ pattern: String, in text: String) -> Range<String.Index>? {
+        guard
+            let regex = regex(pattern),
+            let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text))
+        else { return nil }
+        return Range(match.range, in: text)
+    }
+
+    /// 一致するところがあるか。
+    static func matches(_ pattern: String, in text: String) -> Bool {
+        firstRange(pattern, in: text) != nil
     }
 }

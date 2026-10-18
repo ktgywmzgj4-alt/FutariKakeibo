@@ -118,10 +118,7 @@ extension ReceiptParser {
     /// 外税の行（「外税 8%」「外税額 10%」「外8%」）。対象額の行も含む。
     private static func isOuterTaxRateRow(_ text: String) -> Bool {
         if containsKeyword(text, from: ["外税"]) { return true }
-        return normalizedDigits(text).range(
-            of: #"外\s*[0-9]{1,2}\s*[%％]"#,
-            options: .regularExpression
-        ) != nil
+        return matches(#"外\s*[0-9]{1,2}\s*[%％]"#, in: normalizedDigits(text))
     }
 
     /// その行の金額。行に無ければ、すぐ下が金額だけの行ならそれを使う
@@ -158,6 +155,7 @@ extension ReceiptParser {
         for amount: Int,
         summary: Summary,
         itemsTotal: Int?,
+        itemsCount: Int,
         itemsCapped: Bool
     ) -> (score: Int, reasons: [String]) {
         var score = 0
@@ -174,7 +172,9 @@ extension ReceiptParser {
             reasons.append("お預り−お釣りと合う")
         }
         // 明細の和は、上限で打ち切っていないときだけ。ぴったり合うのは偶然ではまず起きない。
-        if let itemsTotal, itemsTotal > 0, !itemsCapped, itemsTotal + outerTax == amount {
+        // **品が1つだけのときは見ない。** 和がその品の値段そのものなので、品の行が
+        // 「明細の和と合う」ことになり、合計の行に勝ってしまう。
+        if let itemsTotal, itemsTotal > 0, itemsCount >= 2, !itemsCapped, itemsTotal + outerTax == amount {
             score += strongEvidence
             reasons.append(outerTax > 0 ? "明細の和＋外税とぴったり合う" : "明細の和とぴったり合う")
         }

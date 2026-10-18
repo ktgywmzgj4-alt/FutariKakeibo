@@ -12,11 +12,13 @@ import XCTest
 /// 名前の先頭を Z にしてあるのは、テストが名前順に走るため。CIの記録の**最後のほう**に
 /// 数字が出るので、記録の末尾を読むだけで見つかる。
 final class ZReceiptScoreboardTests: XCTestCase {
-    /// これより下がったら落とす。値は測った結果そのもの（基準値は 2026-10-18 の改善の前、
-    /// 4fd0422）。改善が入ったら、その値に上げる。
+    /// これより下がったら落とす。値は測った結果そのもの。改善が入ったら、その値に上げる。
+    ///
+    /// - 基準値（改善の前、4fd0422）: 店名 7・11、合計 12、日付 13、種類 12、明細 47・45
+    /// - 第1段階（6c98f0f）: 合計 13、明細 64・64
     private let floors = (
-        merchantExact: 7, merchantChain: 11, total: 12, date: 13, category: 12,
-        itemsNamed: 47, itemsPriced: 45
+        merchantExact: 7, merchantChain: 11, total: 13, date: 13, category: 12,
+        itemsNamed: 64, itemsPriced: 64
     )
 
     func testScoreboard() {
