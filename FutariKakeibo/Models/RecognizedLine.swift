@@ -18,6 +18,14 @@ struct RecognizedLine: Equatable, Sendable {
     /// 読み取りは文字の四隅を返すので、行の傾きをここに直接測って入れられる。
     /// 正面から撮った写真と、位置の分からない文字列では 0。
     var slope: Double
+    /// 読み取りが2番目、3番目に考えた読み方。いちばん確からしいものが `text`。
+    ///
+    /// 「¥3,374」を「¥3,874」と読んだとき、正しい読み方がここに残っていることがある。
+    /// **ここから選び直すのは、金額の足し算が合うといった、より強い根拠があるときだけ**
+    /// （`ReceiptParser.totalCandidates`）。
+    var alternatives: [String]
+    /// `text` の確からしさ（0〜1）。位置の分からない文字列やテストでは 1。
+    var confidence: Double
 
     /// 断片の中央の横位置。傾きぶんを戻すときの基準になる。
     var midX: Double { (minX + maxX) / 2 }
@@ -28,7 +36,9 @@ struct RecognizedLine: Equatable, Sendable {
         maxX: Double = 1,
         midY: Double = 0,
         height: Double = 0.02,
-        slope: Double = 0
+        slope: Double = 0,
+        alternatives: [String] = [],
+        confidence: Double = 1
     ) {
         self.text = text
         self.minX = minX
@@ -36,6 +46,8 @@ struct RecognizedLine: Equatable, Sendable {
         self.midY = midY
         self.height = height
         self.slope = slope
+        self.alternatives = alternatives
+        self.confidence = confidence
     }
 
     /// 位置の分からない文字列（貼り付けたテキストやテスト）から作る。
@@ -52,9 +64,29 @@ struct RecognizedLine: Equatable, Sendable {
 }
 
 /// レシートから読み取った明細の1行。
+///
+/// **記録はしない。** 種類を推し量る手がかりと、合計のつじつまを確かめるためだけに使う。
 struct ReceiptItem: Equatable, Identifiable, Sendable {
     var name: String
+    /// その行に刷られた値段。値引きの前。
     var amount: Int
+    /// 数量。「(2個 X 単58)」のような行があったときだけ入る。
+    var quantity: Int?
+    /// 単価。数量と一緒に入る。
+    var unitPrice: Int?
+    /// この品に付いた値引き（正の数）。「割引 20% -56」なら 56。
+    var discount: Int
+
+    init(name: String, amount: Int, quantity: Int? = nil, unitPrice: Int? = nil, discount: Int = 0) {
+        self.name = name
+        self.amount = amount
+        self.quantity = quantity
+        self.unitPrice = unitPrice
+        self.discount = discount
+    }
+
+    /// 値引きのあとの値段。
+    var netAmount: Int { amount - discount }
 
     var id: String { "\(name)-\(amount)" }
 }

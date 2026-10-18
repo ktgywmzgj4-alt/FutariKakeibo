@@ -25,6 +25,8 @@ struct ExpenseEditorView: View {
     @State private var detectedItems: [ReceiptItem] = []
     /// レシートから読み取ったときの店の鍵。保存できたらこの店を覚える。
     @State private var shopKey: String?
+    /// 同じ事業者の鍵（登録番号）。支店の違いは見分けない。店と一緒に覚える。
+    @State private var businessKey: String?
     /// 読み取りのあとに残す、保存用の小さな画像。原寸はここには入らない。
     @State private var capturedReceipt: ReceiptImageData?
     /// レシート画像を保存するかどうか。基本はON。人が外せる。
@@ -450,7 +452,7 @@ struct ExpenseEditorView: View {
 
                 // 明細は記録しない。何を買ったかから支出の種類を推測するためだけに使う。
                 // 金額を並べると「これも記録される」と読めてしまうので出さない。
-                Text(detectedItems.map(\.name).joined(separator: "・"))
+                Text(detectedItemNames)
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.ink)
                     .fixedSize(horizontal: false, vertical: true)
@@ -462,6 +464,15 @@ struct ExpenseEditorView: View {
             .appCard()
         }
     }
+
+    /// 種類の手がかりとして見せる品名。長いレシートでは先頭の一部だけにする。
+    private var detectedItemNames: String {
+        let shown = detectedItems.prefix(Self.shownItemCount).map(\.name).joined(separator: "・")
+        let rest = detectedItems.count - Self.shownItemCount
+        return rest > 0 ? "\(shown) ほか\(rest)品" : shown
+    }
+
+    private static let shownItemCount = 20
 
     private var expenseFields: some View {
         VStack(spacing: 17) {
@@ -592,6 +603,7 @@ struct ExpenseEditorView: View {
                 recognizedText = remembered.recognizedText
                 detectedItems = remembered.items
                 shopKey = remembered.shopKey
+                businessKey = remembered.businessKey
                 if !remembered.merchant.isEmpty { merchant = remembered.merchant }
                 if let amount = remembered.amount { amountText = String(amount) }
                 if let receiptDate = remembered.date { date = receiptDate }
@@ -611,6 +623,12 @@ struct ExpenseEditorView: View {
         if draft.amount == nil { missing.append("金額") } else { known.append("金額") }
         if draft.date == nil { missing.append("日付") } else { known.append("日付") }
 
+        // 合計が足し算と合わない、または合計の行が読めなかった。ほかの項目より先に伝える。
+        if draft.amount != nil, draft.amountNeedsConfirmation {
+            let note = draft.amountNote ?? "合計金額をレシートと見比べてください。"
+            guard !missing.isEmpty else { return note }
+            return "\(note)\(missing.joined(separator: "・"))は読み取れなかったので入力してください。"
+        }
         if missing.isEmpty {
             return "店名・日付・金額を読み取りました。保存前に内容を確認してください。"
         }
@@ -656,7 +674,8 @@ struct ExpenseEditorView: View {
                 await store.rememberMerchant(
                     key: shopKey,
                     merchant: expense.merchant ?? expense.title,
-                    category: expense.category
+                    category: expense.category,
+                    businessKey: businessKey
                 )
             }
 
@@ -700,6 +719,7 @@ struct ExpenseEditorView: View {
         recognizedText = ""
         detectedItems = []
         shopKey = nil
+        businessKey = nil
         capturedReceipt = nil
         shouldSaveReceipt = true
     }
