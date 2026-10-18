@@ -36,6 +36,10 @@ struct ReceiptDraft: Equatable, Sendable {
     ///
     /// 端末の中のAIが合計を答えたとき、ここにある金額と食い違う答えは受け取らない。
     var reconciledTotals: [Int]
+    /// 店名を辞書のチェーンから組み立てたか。立っているときは、端末の中のAIの店名で上書きしない。
+    var merchantIsWellEvidenced: Bool
+    /// 種類を、店（外食など）か品の値段の重さで決めたか。立っているときは、AIの種類で上書きしない。
+    var categoryIsWellEvidenced: Bool
 
     init(
         merchant: String,
@@ -50,7 +54,9 @@ struct ReceiptDraft: Equatable, Sendable {
         amountIsWellEvidenced: Bool = false,
         amountNeedsConfirmation: Bool = false,
         amountNote: String? = nil,
-        reconciledTotals: [Int] = []
+        reconciledTotals: [Int] = [],
+        merchantIsWellEvidenced: Bool = false,
+        categoryIsWellEvidenced: Bool = false
     ) {
         self.merchant = merchant
         self.amount = amount
@@ -65,6 +71,8 @@ struct ReceiptDraft: Equatable, Sendable {
         self.amountNeedsConfirmation = amountNeedsConfirmation
         self.amountNote = amountNote
         self.reconciledTotals = reconciledTotals
+        self.merchantIsWellEvidenced = merchantIsWellEvidenced
+        self.categoryIsWellEvidenced = categoryIsWellEvidenced
     }
 
     static let empty = ReceiptDraft(merchant: "")

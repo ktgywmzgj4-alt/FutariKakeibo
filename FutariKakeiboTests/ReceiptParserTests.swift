@@ -454,6 +454,11 @@ final class ReceiptParserTests: XCTestCase {
         }
     }
 
+    /// 品名と値段の組。品に付く種類や正式な名前は見ない（並びと値段の対応だけを確かめる）。
+    private func pricedNames(_ items: [ReceiptItem]) -> [String] {
+        items.map { "\($0.name) \($0.amount)" }
+    }
+
     /// 品名が左、金額が右に離れて並ぶ、ごく普通のレシート。
     private func cornerStoreReceipt() -> [RecognizedLine] {
         [
@@ -479,11 +484,9 @@ final class ReceiptParserTests: XCTestCase {
             calendar: calendar
         )
 
-        XCTAssertEqual(draft.items, [
-            ReceiptItem(name: "りんご", amount: 198),
-            ReceiptItem(name: "食パン", amount: 248),
-            ReceiptItem(name: "たまご", amount: 298)
-        ])
+        XCTAssertEqual(pricedNames(draft.items), ["りんご 198", "食パン 248", "たまご 298"])
+        // 品には辞書から種類が付く（第2段階）。名前と値段の組とは別に確かめる。
+        XCTAssertEqual(draft.items.map(\.category), [.groceries, .groceries, .groceries])
         XCTAssertEqual(draft.amount, 744)
         XCTAssertEqual(draft.merchant, "まちかどストア")
     }
@@ -519,11 +522,7 @@ final class ReceiptParserTests: XCTestCase {
 
         let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
 
-        XCTAssertEqual(draft.items, [
-            ReceiptItem(name: "りんご", amount: 198),
-            ReceiptItem(name: "食パン", amount: 248),
-            ReceiptItem(name: "たまご", amount: 298)
-        ])
+        XCTAssertEqual(pricedNames(draft.items), ["りんご 198", "食パン 248", "たまご 298"])
         XCTAssertEqual(draft.amount, 744)
     }
 
@@ -534,11 +533,7 @@ final class ReceiptParserTests: XCTestCase {
 
         let draft = ReceiptParser.parse(lines: lines, now: referenceNow, calendar: calendar)
 
-        XCTAssertEqual(draft.items, [
-            ReceiptItem(name: "りんご", amount: 198),
-            ReceiptItem(name: "食パン", amount: 248),
-            ReceiptItem(name: "たまご", amount: 298)
-        ])
+        XCTAssertEqual(pricedNames(draft.items), ["りんご 198", "食パン 248", "たまご 298"])
     }
 
     // MARK: - マクドナルドのレシート（実物）

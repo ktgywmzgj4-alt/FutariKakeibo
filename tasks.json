@@ -351,12 +351,22 @@
     {
       "id": "T-035",
       "task": "レシートOCR改善 第1段階: OCRの候補・金額のつじつま・明細の上限・店の見分け",
-      "status": "doing",
+      "status": "review",
       "owner": "実行役 + 人間",
       "passes": "OCRの上位3候補を持ち、足し算の裏づけがあるときだけ選び直すこと。小計・外税・内税・値引き・お預り・お釣り・支払額から合計を確かめ、確かめられないときは利用者に確認を求めること。品の値段を変えないこと。明細の上限を見直すこと。登録番号だけで支店を決めないこと。[OCR評価] の数字が基準値（T-034）より下がらないこと",
-      "evidence": "",
+      "evidence": "2026-10-18 PR #40（6c98f0f・61a4d51）。CI 215件中215件成功（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/39107749516）。[OCR評価] 基準値→第1段階: 合計 12→13/13、明細の抽出 47→64/67、品名と値段の対応 45/47→64/64、余分 4→0、店名 7/13・11/13 と日付 13/13・種類 12/13 は変わらず、解析 平均23.56→18.78ms・最大43.47→34.45ms。main へ（0c4bb90）。TestFlight 2.0.0 / 2026.1018.740 を配信（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/39108122536）: UPLOAD SUCCEEDED（Delivery UUID 55c98368-d4f7-4907-b1d9-d93fb6d25111、2,181,815 bytes）、VALID / IN_BETA_TESTING（16:44 JST）。**実機はこれから。**",
       "dependencies": ["T-034"],
       "notes": "依頼「ふたり家計簿：レシートOCR精度の抜本的改善」（2026-10-18）の第1段階。第2段階は辞書と明細の対応づけ、第3段階は直した内容からの学習"
+    },
+    {
+      "id": "T-036",
+      "task": "レシートOCR改善 第2段階: 店と品の辞書・品名と値段が別の行・品ごとの種類",
+      "status": "doing",
+      "owner": "実行役 + 人間",
+      "passes": "チェーンの辞書（別名・読み違い）で店名を「チェーン名 支店名」にし、登録番号だけで支店を決めないこと。品名の略し方は辞書にあるものだけ正式な名前を添え、分からない表記は作らないこと。値段だけの行・品名の上の値段を品と組にすること。品ごとの種類を値段の重さで足し上げて全体の種類を決め、データの形は変えないこと。[OCR評価] の数字が第1段階より下がらないこと",
+      "evidence": "",
+      "dependencies": ["T-035"],
+      "notes": "辞書は FutariKakeibo/Resources/ReceiptDictionary.json（約12KB）。書き間違いは scripts/check_receipt_dictionary.pl（check_all.sh から呼ぶ）で見つける"
     }
   ]
 }

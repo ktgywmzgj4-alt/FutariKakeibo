@@ -37,7 +37,8 @@ enum ReceiptInterpreter {
 
         let merchant = answer.merchant.trimmingCharacters(in: .whitespacesAndNewlines)
         // 「1点」のような数量、電話番号、日付は店名ではない。AIがそう答えても受け取らない。
-        if ReceiptParser.isPlausibleMerchantName(merchant) {
+        // 辞書のチェーンから組み立てた店名は動かさない（AIは支店名を落としたり崩したりする）。
+        if !base.merchantIsWellEvidenced, ReceiptParser.isPlausibleMerchantName(merchant) {
             draft.merchant = merchant
         }
 
@@ -73,7 +74,8 @@ enum ReceiptInterpreter {
             }
         }
 
-        if let category = ExpenseCategory(rawValue: answer.category) {
+        // 店（外食など）や品の値段の重さで決めた種類は動かさない。AIが埋めるのは決めきれなかったときだけ。
+        if !base.categoryIsWellEvidenced, let category = ExpenseCategory(rawValue: answer.category) {
             draft.suggestedCategory = category
         }
 

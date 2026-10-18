@@ -76,13 +76,28 @@ struct ReceiptItem: Equatable, Identifiable, Sendable {
     var unitPrice: Int?
     /// この品に付いた値引き（正の数）。「割引 20% -56」なら 56。
     var discount: Int
+    /// 略し方から分かる正式な名前（「キヌトウフ」→「絹ごし豆腐」）。辞書にある略し方だけ。
+    /// 分からなければ nil で、`name`（読み取った表記）がそのまま残る。
+    var normalizedName: String?
+    /// 品の種類。辞書の手がかりで分かったときだけ。
+    var category: ExpenseCategory?
 
-    init(name: String, amount: Int, quantity: Int? = nil, unitPrice: Int? = nil, discount: Int = 0) {
+    init(
+        name: String,
+        amount: Int,
+        quantity: Int? = nil,
+        unitPrice: Int? = nil,
+        discount: Int = 0,
+        normalizedName: String? = nil,
+        category: ExpenseCategory? = nil
+    ) {
         self.name = name
         self.amount = amount
         self.quantity = quantity
         self.unitPrice = unitPrice
         self.discount = discount
+        self.normalizedName = normalizedName
+        self.category = category
     }
 
     /// 値引きのあとの値段。

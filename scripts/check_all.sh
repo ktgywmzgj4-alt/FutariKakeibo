@@ -11,6 +11,7 @@ files=$(find FutariKakeibo FutariKakeiboTests -name '*.swift' | sort)
 perl scripts/check_swift_structure.pl $files
 perl scripts/check_swift_escapes.pl $files
 perl scripts/check_xcode_project.pl
+perl scripts/check_receipt_dictionary.pl
 
 # アプリのソースから外部への通信先が入り込んでいないか。
 if grep -rlE 'https?://' --include='*.swift' FutariKakeibo FutariKakeiboTests >/dev/null 2>&1; then

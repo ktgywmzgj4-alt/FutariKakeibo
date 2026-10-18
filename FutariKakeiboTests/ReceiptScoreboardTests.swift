@@ -16,9 +16,10 @@ final class ZReceiptScoreboardTests: XCTestCase {
     ///
     /// - 基準値（改善の前、4fd0422）: 店名 7・11、合計 12、日付 13、種類 12、明細 47・45
     /// - 第1段階（6c98f0f）: 合計 13、明細 64・64
+    /// - 第2段階（b3b192b、run 39127806426）: 店名 12・12、明細 67・67
     private let floors = (
-        merchantExact: 7, merchantChain: 11, total: 13, date: 13, category: 12,
-        itemsNamed: 64, itemsPriced: 64
+        merchantExact: 12, merchantChain: 12, total: 13, date: 13, category: 12,
+        itemsNamed: 67, itemsPriced: 67
     )
 
     func testScoreboard() {
