@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "レシートの読み取りで使う辞書。店（チェーン）の名前と別名、品名の略し方、品の種類の手がかり。端末の中だけで使い、通信はしない。足すときは scripts/check_receipt_dictionary.py を通す。",
+  "about": "レシートの読み取りで使う辞書。店（チェーン）の名前と別名、品名の略し方、品の種類の手がかり。端末の中だけで使い、通信はしない。足すときは scripts/check_receipt_dictionary.pl を通す。",
   "chains": [
     { "name": "イオンスタイル", "aliases": ["イオンスタイル", "AEON STYLE", "イオンフードスタイル"], "category": "groceries" },
     { "name": "イオン", "aliases": ["イオン", "AEON", "イオンリテール"], "category": "groceries" },
@@ -13,7 +13,7 @@
     { "name": "ドミー", "aliases": ["ドミー"], "category": "groceries" },
     { "name": "カネスエ", "aliases": ["カネスエ"], "category": "groceries" },
     { "name": "ヨシヅヤ", "aliases": ["ヨシヅヤ"], "category": "groceries" },
-    { "name": "EQVo!", "aliases": ["EQVo!", "エクボスタイル", "エクボ"], "category": "groceries" },
+    { "name": "EQVo! エクボスタイル", "aliases": ["EQVo!", "エクボスタイル", "エクボ"], "category": "groceries" },
     { "name": "西友", "aliases": ["西友", "SEIYU"], "category": "groceries" },
     { "name": "イトーヨーカドー", "aliases": ["イトーヨーカドー", "ヨーカドー", "Ito Yokado"], "category": "groceries" },
     { "name": "業務スーパー", "aliases": ["業務スーパー"], "category": "groceries" },
