@@ -61,7 +61,9 @@ enum ReceiptInterpreter {
         let merchant = answer.merchant.trimmingCharacters(in: .whitespacesAndNewlines)
         // 「1点」のような数量、電話番号、日付は店名ではない。AIがそう答えても受け取らない。
         // 辞書のチェーンから組み立てた店名は動かさない（AIは支店名を落としたり崩したりする）。
-        if !base.merchantIsWellEvidenced, ReceiptParser.isPlausibleMerchantName(merchant) {
+        // 読めた品の名前も店名ではない（「◇ソーセージ（季節）1本」のような品の行を店名と答えることがある）。
+        if !base.merchantIsWellEvidenced, ReceiptParser.isPlausibleMerchantName(merchant),
+           !Self.isItemName(merchant, in: base.items) {
             draft.merchant = merchant
         }
 
@@ -75,10 +77,13 @@ enum ReceiptInterpreter {
         // **ルールが合計の語を手がかりに選べているなら、そちらを動かさない。**
         //
         // 小計＋外税、お預り−お釣りから合計が分かっているときは、**それと違う答えは受け取らない。**
+        //
+        // 税・小計・対象額の行にしか刷られていない金額も受け取らない（PISOLAの「10%課税額 659」）。
         if let total = answer.total, total > 0, total <= 9_999_999,
            !base.amountIsWellEvidenced || base.amount == nil,
            ReceiptParser.isConsistentWithItems(total, items: base.items),
-           base.reconciledTotals.isEmpty || base.reconciledTotals.contains(total) {
+           base.reconciledTotals.isEmpty || base.reconciledTotals.contains(total),
+           !ReceiptParser.appearsOnlyOnSideRows(total, inReceiptText: base.recognizedText) {
             draft.amount = total
             // 足し算で確かめられた答えなら、確かめてもらう必要は無い。
             // それ以外は、AIの答えでも利用者に確かめてもらう（AIも外すので）。
@@ -103,6 +108,17 @@ enum ReceiptInterpreter {
         }
 
         return draft
+    }
+
+    /// 読めた品の名前と同じ（どちらかがもう一方を含む）か。照らし合わせる形で比べる。
+    /// 3文字に満たない名前は比べない（「珈琲」のような短い品名が店名に含まれるのはふつう）。
+    static func isItemName(_ text: String, in items: [ReceiptItem]) -> Bool {
+        let key = ReceiptParser.dictionaryKey(text)
+        guard key.count >= 3 else { return false }
+        return items.contains { item in
+            let itemKey = ReceiptParser.dictionaryKey(item.name)
+            return itemKey.count >= 3 && (key.contains(itemKey) || itemKey.contains(key))
+        }
     }
 }
 

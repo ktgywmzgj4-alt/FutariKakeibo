@@ -47,12 +47,15 @@ extension ReceiptParser {
 
     // MARK: - 拾う語
 
-    private static let subtotalKeywords = ["小計"]
+    /// 「小言十」は、大きな文字の「小計」の「計」が割れて読まれた形。
+    private static let subtotalKeywords = ["小計", "小言十"]
     /// 外税の合計。
     private static let outerTaxTotalKeywords = ["外税計", "外税合計"]
     /// 「税合計」は外税のレシートでだけ外税として使う。内税のレシートでは含まれる税の額のことがある。
     private static let taxTotalKeywords = ["税合計"]
     private static let innerTaxKeywords = ["内消費税", "内税", "うち消費税"]
+    /// 内・外の書いていない税の行（「10%課税額」「消費税等」）。外税かどうかは足し算で決める（`summary`）。
+    private static let plainTaxKeywords = ["消費税", "税額"]
     /// 税率ごとの「対象額」。税の額ではない。
     private static let taxableKeywords = ["対象", "タイショウ"]
     private static let tenderedKeywords = ["お預り", "お預かり", "預り", "預かり", "現金"]
@@ -72,6 +75,7 @@ extension ReceiptParser {
         var outerTaxTotal: Int?
         var taxTotal: Int?
         var sawOuterTax = false
+        var plainTax: Int?
 
         for index in rows.indices {
             let text = rows[index].text
@@ -89,6 +93,11 @@ extension ReceiptParser {
             } else if containsKeyword(text, from: innerTaxKeywords) {
                 if !taxable, summary.innerTax == nil {
                     summary.innerTax = labelledAmount(at: index, in: rows)
+                }
+            } else if containsKeyword(text, from: plainTaxKeywords) {
+                // 「非課税額」は税のかからない品の額。税の額ではない。
+                if !taxable, plainTax == nil, !containsKeyword(text, from: ["非課税"]) {
+                    plainTax = labelledAmount(at: index, in: rows)
                 }
             } else if containsKeyword(text, from: subtotalKeywords) {
                 if summary.subtotal == nil { summary.subtotal = labelledAmount(at: index, in: rows) }
@@ -111,6 +120,15 @@ extension ReceiptParser {
             summary.outerTax = taxTotal
         } else if !perRateOuterTax.isEmpty {
             summary.outerTax = perRateOuterTax.reduce(0, +)
+        }
+        // 「外税」と書かずに税を足すレシート（PISOLA: 小計額 6,598、10%課税額 659、合計 7,257）。
+        // 内税の額のこともあるので、**小計＋その額がレシートに刷られているときだけ**外税とみなす。
+        if summary.outerTax == nil, let tax = plainTax, let subtotal = summary.subtotal,
+           rows.contains(where: { row in
+               let text = row.text
+               return currencyAmounts(in: text).contains(subtotal + tax) || amounts(in: text).contains(subtotal + tax)
+           }) {
+            summary.outerTax = tax
         }
         return summary
     }
@@ -144,9 +162,34 @@ extension ReceiptParser {
     /// 文字があるかを先に見る。品の行のほとんどは文字があるので、正規表現（金額を拾う）まで行かずに済む。
     /// 品の行ごとに何度も呼ばれるので、この順番で解析の時間が変わる。
     static func isAmountOnlyRow(_ text: String) -> Bool {
-        guard !text.contains(where: { $0.isLetter && $0 != "点" && $0 != "円" }) else { return false }
+        guard !text.contains(where: { $0.isLetter && !amountOnlyLetters.contains($0) }) else { return false }
         return !currencyAmounts(in: text).isEmpty || !amounts(in: text).isEmpty
     }
+
+    /// その金額が、税・小計・対象額・預り・釣りの行にしか刷られていないか。
+    ///
+    /// 端末の中のAIの答えを受け取るかどうかに使う（`ReceiptInterpreter.merged`）。
+    /// 「10%課税額 659」を合計と答えられると、ルールが合計を決めきれなかった1枚ではそのまま通ってしまう。
+    /// 合計の語の行やほかの行にも同じ金額があれば（内税のレシートの小計と合計など）、落とさない。
+    /// 語と金額が別の行に分かれていれば（「10%課税額(」の下に「¥659」）、上の行の語で見る。
+    static func appearsOnlyOnSideRows(_ amount: Int, inReceiptText text: String) -> Bool {
+        let lines = text.components(separatedBy: .newlines)
+        var sawSide = false
+        for (index, line) in lines.enumerated() {
+            guard (currencyAmounts(in: line) + amounts(in: line)).contains(amount) else { continue }
+            var label = line
+            if isAmountOnlyRow(line), index > 0, amounts(in: lines[index - 1]).isEmpty {
+                label = lines[index - 1]
+            }
+            guard isSideAmountRow(label), !hasStrongTotalKeyword(label) else { return false }
+            sawSide = true
+        }
+        return sawSide
+    }
+
+    /// 金額だけの行に付いていてよい文字。点数と円、税の区分（「¥6,598外」「¥638内」「198軽」）。
+    /// 税の区分を文字として数えていたので、PISOLAの「@3,299x 2」と「¥6,598外」が組にならず、品が消えていた。
+    private static let amountOnlyLetters: Set<Character> = ["点", "円", "外", "内", "軽"]
 
     // MARK: - 確かめる
 

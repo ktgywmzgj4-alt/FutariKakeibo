@@ -80,6 +80,7 @@
     { "name": "鳥貴族", "aliases": ["鳥貴族"], "category": "dining" },
     { "name": "Eggs 'n Things", "aliases": ["Eggs 'n Things", "EGGS' N THINGS", "エッグスンシングス"], "category": "dining" },
     { "name": "テンホウ", "aliases": ["テンホウ"], "category": "dining" },
+    { "name": "PISOLA", "aliases": ["PISOLA", "ピソラ"], "category": "dining" },
     { "name": "ENEOS", "aliases": ["ENEOS", "エネオス"], "category": "transportation" },
     { "name": "出光", "aliases": ["出光", "apollostation", "アポロステーション"], "category": "transportation" },
     { "name": "コスモ石油", "aliases": ["コスモ石油"], "category": "transportation" },

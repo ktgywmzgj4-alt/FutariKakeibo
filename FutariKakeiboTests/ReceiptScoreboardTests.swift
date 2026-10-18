@@ -67,7 +67,7 @@ final class ZReceiptScoreboardTests: XCTestCase {
 
             print("[OCR評価] 1回保存したあと（同じ1枚をもう一度。上限の目安） "
                 + ReceiptScoreboard.hits(again, samples: samples))
-            print("[OCR評価] 覚える前（同じ13枚） " + ReceiptScoreboard.hits(before, samples: samples))
+            print("[OCR評価] 覚える前（同じ\(samples.count)枚） " + ReceiptScoreboard.hits(before, samples: samples))
             print("[OCR評価] 同じ店の2枚目（EQVo! 8月→9月・イオン 9月→10月） "
                 + ReceiptScoreboard.hits(second, samples: pairs.map { $0.1 })
                 + "（覚える前 " + ReceiptScoreboard.hits(secondBefore, samples: pairs.map { $0.1 }) + "）")

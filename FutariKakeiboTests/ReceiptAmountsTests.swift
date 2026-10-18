@@ -87,7 +87,8 @@ final class ReceiptAmountsTests: XCTestCase {
             line("外税 8%", y: 0.44), price("¥16", y: 0.44),
             line("外税10%対象額", y: 0.48), price("¥300", y: 0.48),
             line("外税10%", y: 0.52), price("¥30", y: 0.52),
-            line("合言十", y: 0.58), price("¥546", y: 0.58)
+            // 「合言十」は合計の語として読むようになった（2026-10-19）。読めない崩れ方の例に替える。
+            line("台言十", y: 0.58), price("¥546", y: 0.58)
         ])
 
         XCTAssertEqual(draft.amount, 546)
@@ -359,5 +360,112 @@ final class ReceiptAmountsTests: XCTestCase {
         let answer = ReceiptAnswer(date: "", merchant: "1点", total: nil, category: "")
         let merged = ReceiptInterpreter.merged(base: base, answer: answer, now: now, calendar: calendar)
         XCTAssertEqual(merged.merchant, "mister Donut")
+    }
+
+    // MARK: - 「外税」と書かない外税・税の区分の付いた金額（PISOLA、2026-10-19）
+
+    /// 「10%課税額」の行は、小計＋その額が刷られていれば外税。「合計」の「計」が割れて読まれても合計の行。
+    func testAnUnlabelledTaxIsOuterTaxWhenSubtotalPlusTaxIsPrinted() {
+        let draft = parse(header + [
+            line("ピザ", y: 0.24), price("¥1,000外", y: 0.24),
+            line("小計額", y: 0.32), price("¥1,000", y: 0.32),
+            line("(10%課税対象", y: 0.36), price("¥1,000)", y: 0.36),
+            line("10%課税額(", y: 0.40), price("¥100", y: 0.40),
+            line("合 言十", y: 0.46), price("¥1,100", y: 0.46)
+        ])
+
+        XCTAssertEqual(draft.amount, 1_100)
+        XCTAssertEqual(draft.reconciledTotals, [1_100])
+        XCTAssertEqual(draft.items.map(\.amount), [1_000])
+        XCTAssertFalse(draft.amountNeedsConfirmation)
+    }
+
+    /// 内税のレシートの「消費税等」は外税ではない（小計＋その額は、どこにも刷られていない）。
+    func testAnUnlabelledTaxOnATaxInclusiveReceiptIsNotOuterTax() {
+        let draft = parse(header + [
+            line("ラーメン", y: 0.24), price("¥930", y: 0.24),
+            line("ぎょうざ", y: 0.28), price("¥320", y: 0.28),
+            line("小計", y: 0.34), price("¥1,250", y: 0.34),
+            line("消費税等", y: 0.38), price("¥113", y: 0.38),
+            line("合計", y: 0.44), price("¥1,250", y: 0.44)
+        ])
+
+        XCTAssertEqual(draft.amount, 1_250)
+        XCTAssertTrue(draft.reconciledTotals.isEmpty)
+        XCTAssertFalse(draft.amountNeedsConfirmation)
+    }
+
+    /// 税の区分の付いた金額（「¥6,598外」）も、金額だけの行。
+    func testATaxMarkedAmountIsStillAnAmountOnlyRow() {
+        XCTAssertTrue(ReceiptParser.isAmountOnlyRow("¥6,598外"))
+        XCTAssertTrue(ReceiptParser.isAmountOnlyRow("¥638内"))
+        XCTAssertTrue(ReceiptParser.isAmountOnlyRow("198軽"))
+        XCTAssertFalse(ReceiptParser.isAmountOnlyRow("外税 ¥55"))
+        XCTAssertFalse(ReceiptParser.isAmountOnlyRow("外8%"))
+    }
+
+    /// 「@3,299x 2」と「¥6,598外」の行を、上の品名と組にして1品にする。
+    /// 「外」を文字として数えていたので組にならず、品が消えていた。
+    func testAQuantityLineWithATaxMarkedAmountPairsWithTheNameAbove() {
+        let draft = parse(header + [
+            line("食べ飲みスタン（Dバー）", y: 0.24),
+            line("@3,299x 2", x: 0.30, width: 0.20, y: 0.28), price("¥6,598外", y: 0.28),
+            line("小計額", y: 0.34), price("¥6,598", y: 0.34)
+        ])
+
+        XCTAssertEqual(draft.items.map(\.name), ["食べ飲みスタン（Dバー）"])
+        XCTAssertEqual(draft.items.first?.amount, 6_598)
+        XCTAssertEqual(draft.items.first?.quantity, 2)
+        XCTAssertEqual(draft.items.first?.unitPrice, 3_299)
+    }
+
+    /// 1つの断片に読まれた「@3,299x 2 ¥6,598外」も同じ。
+    func testAQuantityLineReadAsOneFragmentKeepsItsAmount() {
+        let draft = parse(header + [
+            line("食べ飲みスタン（Dバー）", y: 0.24),
+            line("@3,299x 2 ¥6,598外", x: 0.30, width: 0.62, y: 0.28),
+            line("小計額", y: 0.34), price("¥6,598", y: 0.34)
+        ])
+
+        XCTAssertEqual(draft.items.map(\.amount), [6_598])
+        XCTAssertEqual(draft.items.first?.unitPrice, 3_299)
+    }
+
+    // MARK: - 端末の中のAIの答え（2026-10-19）
+
+    /// 税・小計の行にしか無い金額（「10%課税額 659」）は、AIが合計と答えても受け取らない。
+    func testAnAIAnswerGivingTheTaxAsTheTotalIsRejected() {
+        let text = ["小 計 額 ¥6,598", "(10%課税対象 ¥6,598)", "10%課税額(", "¥659"].joined(separator: "\n")
+        XCTAssertTrue(ReceiptParser.appearsOnlyOnSideRows(659, inReceiptText: text))
+        XCTAssertTrue(ReceiptParser.appearsOnlyOnSideRows(6_598, inReceiptText: text))
+
+        let base = ReceiptDraft(merchant: "", recognizedText: text)
+        let answer = ReceiptAnswer(date: "", merchant: "", total: 659, category: "")
+        XCTAssertNil(ReceiptInterpreter.merged(base: base, answer: answer, now: now, calendar: calendar).amount)
+    }
+
+    /// 合計の行にも同じ金額があれば落とさない（内税のレシートは小計と合計が同じ）。
+    func testAnAmountAlsoPrintedOnTheTotalRowIsNotOnlyASideAmount() {
+        let text = ["小計 ¥1,250", "合計 ¥1,250", "(内消費税等 ¥113)"].joined(separator: "\n")
+        XCTAssertFalse(ReceiptParser.appearsOnlyOnSideRows(1_250, inReceiptText: text))
+        XCTAssertFalse(ReceiptParser.appearsOnlyOnSideRows(999, inReceiptText: text))
+    }
+
+    /// 読めた品の名前を、AIが店名と答えても受け取らない。品の行の印で始まる答えも同じ。
+    func testAnAIAnswerGivingAnItemAsTheShopNameIsRejected() {
+        let base = ReceiptDraft(merchant: "", items: [ReceiptItem(name: "食べ飲みスタン（Dバー）", amount: 6_598)])
+        for name in ["食べ飲みスタン", "•ソーセージ（季節）1本"] {
+            let answer = ReceiptAnswer(date: "", merchant: name, total: nil, category: "")
+            XCTAssertEqual(
+                ReceiptInterpreter.merged(base: base, answer: answer, now: now, calendar: calendar).merchant,
+                "",
+                name
+            )
+        }
+        let shop = ReceiptAnswer(date: "", merchant: "PISOLA 甚目寺店", total: nil, category: "")
+        XCTAssertEqual(
+            ReceiptInterpreter.merged(base: base, answer: shop, now: now, calendar: calendar).merchant,
+            "PISOLA 甚目寺店"
+        )
     }
 }

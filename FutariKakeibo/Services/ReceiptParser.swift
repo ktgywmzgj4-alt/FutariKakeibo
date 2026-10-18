@@ -32,8 +32,23 @@ enum ReceiptParser {
         // （マクドナルドのレシートで「営業時間 24時間営業」が店名になっていた）。
         "営業時間", "時間営業", "定休", "駐車場のご案内", "ご来店",
         // レシートの下に刷られる求人広告。文字が大きいので店名として拾われやすい。
-        "募集", "従業員割引", "副業", "応募", "求人", "アルバイト", "活躍中"
+        "募集", "従業員割引", "副業", "応募", "求人", "アルバイト", "活躍中",
+        // 税と合計の内訳。「合計」が「合 言十」と読まれることがある（大きな文字の「計」が2つに割れる）。
+        "合言十", "小言十", "消費税", "税額", "課税", "税込", "税抜", "税率", "対象", "点数", "個数",
+        // クレジットの売上票。レシートの下半分は、見出しも番号も店名ではない。
+        "売上票", "有効期限", "会員", "支払方法", "承認", "通番", "コード", "ｺｰﾄﾞ", "fax",
+        // アプリの「レシート」画面のボタン。画面を撮った1枚を読むと、いちばん上に出る。
+        "閉じる"
     ]
+    /// 行の頭にあれば店名ではない印。明細の頭につく（「◇ソーセージ（季節）1本」「♪タコと明太子の和風」）。
+    private static let itemMarks: Set<Character> = [
+        "*", "＊", "◇", "◆", "・", "•", "♪", "♫", "☆", "★", "○", "●", "◎", "□", "■", "△", "▲", "▽", "▼"
+    ]
+    /// かっこで始まっても店名になりうる、会社の種類の略（「(株)」「(有)」）。
+    private static let companyAbbreviations: Set<Character> = ["株", "有", "合", "資", "名", "医", "社", "財"]
+    /// 1語だけで行の頭にあれば店名ではない語。売上票の欄の名前（「AID」「APL Visa」）。
+    /// 語の途中に入る文字（「apl」は「apple」）なので、ほかの語と同じには探さない。
+    private static let notMerchantLeadingWords: Set<String> = ["aid", "apl"]
     /// 店名の前に付いて一緒に読まれるラベル。店名ではないので落とす。
     /// 長いものから先に並べる（「登録名称」を「名称」より先に外す）。
     private static let merchantLabels = ["登録名称", "登録名", "屋号", "店名", "名称"]
@@ -46,6 +61,8 @@ enum ReceiptParser {
         "レジ", "スキャン", "会計機", "精算機", "伝票", "承認", "処理", "取扱", "商品区分", "取引",
         "カード", "会員", "有効期限", "対象", "タイショウ", "テーブル", "人数", "メンテナンス",
         "no.", "no ", "＃", "#", "税率",
+        // 大きな文字の「合計」「小計」の「計」が2つに割れて読まれた形。
+        "合言十", "小言十",
         // 「取5647 責:05」のような、取引と責任者の番号の行（イオン）。
         "責:",
         // 給油機やはかりの表示。品名の位置に来るが買ったものではない。
@@ -263,20 +280,22 @@ enum ReceiptParser {
     static func merchantCandidates(in rows: [Row]) -> [MerchantCandidate] {
         let heights = rows.map(\.height).sorted()
         let medianHeight = heights.isEmpty ? 0.02 : max(heights[heights.count / 2], 0.001)
+        let texts = rows.map(merchantText(of:))
         var seen: [String: Int] = [:]
-        for row in rows where isMerchantCandidate(row) {
-            seen[row.text, default: 0] += 1
+        for text in texts where isMerchantCandidate(text) {
+            seen[text, default: 0] += 1
         }
 
         return rows.enumerated().compactMap { index, row in
-            guard isMerchantCandidate(row) else { return nil }
+            let text = texts[index]
+            guard isMerchantCandidate(text) else { return nil }
             var score = 0
             var reasons: [String] = []
             if index < merchantSearchRows {
                 score += 60
                 reasons.append("レシートの上")
             }
-            if row.text.contains("店") {
+            if text.contains("店") {
                 score += 40
                 reasons.append("店が付く")
             }
@@ -284,12 +303,12 @@ enum ReceiptParser {
             let size = min(50, Int(30.0 * row.height / medianHeight))
             score += size
             reasons.append("文字の大きさ\(size)")
-            if (seen[row.text] ?? 0) >= 2 {
+            if (seen[text] ?? 0) >= 2 {
                 score += 30
                 reasons.append("2か所以上に出る")
             }
             return MerchantCandidate(
-                text: row.text,
+                text: text,
                 rowIndex: index,
                 score: score,
                 reason: reasons.joined(separator: " / ")
@@ -302,9 +321,37 @@ enum ReceiptParser {
     }
 
     static func isMerchantCandidate(_ row: Row) -> Bool {
+        isMerchantCandidate(merchantText(of: row))
+    }
+
+    /// 店名を探すときの、行の文字。
+    ///
+    /// 店名と電話番号が1行に刷られるレシートがある（「PISOLA甚目寺店 052-559-8311」）。
+    /// 電話の行として行ごと捨てると、店名がレシートから消えてしまう。電話番号を外した残りが
+    /// 「〜店」で終わるときだけ、その残りを使う。そうでなければ今までどおり電話の行のまま。
+    static func merchantText(of row: Row) -> String {
         let text = row.text
-        let lower = text.lowercased()
-        if notMerchantKeywords.contains(where: { lower.contains($0) }) { return false }
+        guard looksLikePhoneNumber(text) else { return text }
+        let rest = cleanedMerchant(strippingPhoneNumbers(from: text))
+        return endsWithShopWord(rest) && !looksLikePhoneNumber(rest) ? rest : text
+    }
+
+    /// 電話番号（「TEL:052-559-8311」「FAX052-506-5601」も）を取り除いた文字。
+    static func strippingPhoneNumbers(from text: String) -> String {
+        guard let pattern = regex(
+            #"(?:(?:tel|TEL|Tel|fax|FAX|Fax|電話|ＴＥＬ|ＦＡＸ)\s*[:：;；.．]?\s*)?(?<![0-9０-９])[0０][0-9０-９]{1,4}[-‐－][0-9０-９]{1,4}[-‐－][0-9０-９]{3,4}(?![0-9０-９])"#
+        ) else { return text }
+        return pattern.stringByReplacingMatches(
+            in: text,
+            range: NSRange(text.startIndex..., in: text),
+            withTemplate: " "
+        )
+        .trimmingCharacters(in: .whitespaces)
+    }
+
+    static func isMerchantCandidate(_ text: String) -> Bool {
+        // 語の途中の空き（「点　　数」「小 計 額」）があっても見つける。
+        if containsKeyword(text, from: notMerchantKeywords) { return false }
         if text.count > 30 || text.count < 2 { return false }
         if !containsLetters(text) { return false }
         if looksLikeDate(text) { return false }
@@ -312,8 +359,7 @@ enum ReceiptParser {
         if looksLikeAddress(text) { return false }
         // 末尾が金額の行は明細。店名の行に値段は付かない。
         if endsWithPrice(text) { return false }
-        // 明細の先頭につく印。
-        if text.hasPrefix("*") || text.hasPrefix("＊") { return false }
+        if startsLikeNonMerchant(text) { return false }
         // 「1点※」のような数量の行。ミスタードーナツで店名が「1点」になった
         // （同じ形が4回出るので「2か所以上に出る」の点まで付いていた）。
         if looksLikeQuantity(text) { return false }
@@ -322,13 +368,33 @@ enum ReceiptParser {
         return Double(digits) / Double(text.count) < 0.4
     }
 
+    /// 頭の形から、店名ではないと分かる行。
+    ///
+    /// - 明細の頭につく印（「◇ソーセージ（季節）1本」「♪タコと明太子の和風」）
+    /// - かっこで始まる内訳（「(内消費税等」「(10%対象」）。「(株)」のような会社の種類は店名に付くので残す
+    /// - 売上票の欄の名前（「AID」「APL Visa」）
+    ///
+    /// レシートの上が切れて読まれると、こうした行がいちばん上に来て店名に選ばれていた
+    /// （2026-10-19、PISOLAで「・ソーセージ（季節）1本」、ローソンで「(肉海費祝動 11090袋」）。
+    static func startsLikeNonMerchant(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard let first = trimmed.first else { return false }
+        if itemMarks.contains(first) { return true }
+        if first == "(" || first == "（" {
+            let next = trimmed.dropFirst().first
+            return !(next.map { companyAbbreviations.contains($0) } ?? false)
+        }
+        let leadingWord = trimmed.prefix { !$0.isWhitespace }.lowercased()
+        return notMerchantLeadingWords.contains(leadingWord)
+    }
+
     /// 店名としてありえる文字か。端末の中のAIの答えを受け取るかどうかにも使う。
     static func isPlausibleMerchantName(_ text: String) -> Bool {
         let name = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard name.count >= 2, name.count <= 40, containsLetters(name) else { return false }
         if looksLikeQuantity(name) || looksLikeDate(name) || looksLikePhoneNumber(name) { return false }
-        let lower = name.lowercased()
-        return !notMerchantKeywords.contains { lower.contains($0) }
+        if startsLikeNonMerchant(name) { return false }
+        return !containsKeyword(name, from: notMerchantKeywords)
     }
 
     /// 「1点※」「2個」のような、数量だけの文字。
@@ -405,17 +471,23 @@ enum ReceiptParser {
 
     /// 合計を示す語。いちばん強い手がかり。
     private static let strongTotalKeywords = [
-        "合計", "総計", "お会計", "お支払", "支払合計", "ご請求", "現計", "お買上", "クレジット"
+        "合計", "総計", "お会計", "お支払", "支払合計", "ご請求", "現計", "お買上", "クレジット",
+        // 大きな文字で刷った「合計」の「計」が、「言」と「十」に割れて読まれた形（ローソン・PISOLA）。
+        "合言十"
     ]
     /// 数字は載っているが支払額ではない行。**合計の語があっても**候補にしない。
     private static let neverTotalKeywords = [
-        "点数", "買上点", "単価", "数量", "ポイント", "残高", "前回", "有効期限", "会員", "枚数"
+        "点数", "買上点", "単価", "数量", "ポイント", "残高", "前回", "有効期限", "会員", "枚数",
+        // 「クレジット売上票」は売上票の見出し。合計の語（クレジット）を持つが、金額の行ではない。
+        "売上票"
     ]
     /// 税・値引き・預り金の行。合計の語が同じ行に無ければ候補にしない。
     /// 「税込合計」のように合計の語がある行は残す。
     private static let sideAmountKeywords = [
         "税率", "対象額", "対象計", "消費税", "内税", "外税", "税額", "小計",
-        "値引", "割引", "お預り", "お預かり", "預り", "お釣", "おつり", "釣銭"
+        "値引", "割引", "お預り", "お預かり", "預り", "お釣", "おつり", "釣銭",
+        // 「(10%課税対象 ¥6,598)」は税をかける前の額。「小計」の「計」が割れて読まれた形も。
+        "課税対象", "小言十"
     ]
 
     /// レシートは語の途中に空きを入れて刷る。イオンの「合　計」がそれで、
@@ -473,6 +545,8 @@ enum ReceiptParser {
         var lookahead: Set<Int> = []
         for index in rows.indices where hasStrongTotalKeyword(rows[index].text) || isLearnedTotalRow(index) {
             guard amounts(in: rows[index].text).isEmpty else { continue }
+            // 「クレジット売上票」のような見出しの下は品の行。合計の語の直下として点を渡さない。
+            guard !isNeverTotalRow(rows[index].text) else { continue }
             var next = index + 1
             while next < rows.count, next <= index + totalLookaheadRows {
                 let text = rows[next].text
@@ -675,7 +749,8 @@ enum ReceiptParser {
 
     /// 明細の終わりを示す語。品を読み始めたあとにこれが来たら、そこから下は支払いの内訳。
     private static let summaryKeywords = [
-        "小計", "外税", "内税", "消費税", "税額", "対象額", "お預り", "お預かり", "お釣", "おつり", "釣銭"
+        "小計", "外税", "内税", "消費税", "税額", "対象額", "お預り", "お預かり", "お釣", "おつり", "釣銭",
+        "小言十"
     ]
 
     /// 値引きの行の語。
@@ -805,6 +880,17 @@ enum ReceiptParser {
         if fragments.count >= 2, let last = fragments.last, isAmountOnlyRow(last.text) {
             lineAmount = (currencyAmounts(in: last.text) + amounts(in: last.text)).first(where: isPlausibleAmount)
             label = fragments.dropLast().map(\.text).joined(separator: " ")
+        }
+        // 1つの断片に読まれた行（「@3,299x 2 ¥6,598外」）。右端の通貨の印の付いた金額を、行の金額にする。
+        // 印の無い数字は取らない（「2個 X 単58」の 58 は単価）。
+        if lineAmount == nil, fragments.count == 1,
+           let range = firstRange(
+               #"\s([¥￥]\s*[0-9０-９,，]{1,9}|[0-9０-９,，]{1,9}\s*円)\s*[*※＊軽外内]?\s*$"#,
+               in: label
+           ),
+           let amount = currencyAmounts(in: String(label[range])).first(where: isPlausibleAmount) {
+            lineAmount = amount
+            label = String(label[..<range.lowerBound])
         }
         let text = normalizedDigits(label).trimmingCharacters(in: .whitespaces)
 
