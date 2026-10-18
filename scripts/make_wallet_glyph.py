@@ -12,13 +12,15 @@ BrandMark は白い正方形の上にがま口が載った1枚絵で、そのま
 - **輪郭のなめらかさは保つ。** 縁の画素は「黒・青・珊瑚のどれかと白の混ざり」なので、
   混ざり具合から透明度と元の色を逆算する。白との境をそのまま残すと、
   青い地の上で輪郭に白いふちが出る
-- 回転の中心がずれないよう、絵の外接矩形の中心を画像の中心に合わせる。
+- **回転の中心は「¥」。** 「¥」の中心を画像の中心に合わせる（回すと「¥」が止まって見え、
+  そのまわりをお財布が回る。2026-10-18 利用者の希望）。
   画像の大きさは BrandMark と同じにしておく（呼ぶ側の大きさ指定を変えなくて済む）
 
 使い方:
   python3 scripts/make_wallet_glyph.py
 """
 import json
+import math
 import os
 import sys
 from collections import deque
@@ -130,14 +132,19 @@ def make_glyph(source_path):
         else:
             rgba[i] = (*pixel, 255)
 
-    # 3. 絵の外接矩形の中心を、画像の中心に合わせる（回転がぶれないように）。
-    opaque = [i for i, p in enumerate(rgba) if p[3] > 0]
-    xs = [i % width for i in opaque]
-    ys = [i // width for i in opaque]
-    shift_x = round((width - 1) / 2 - (min(xs) + max(xs)) / 2)
-    shift_y = round((height - 1) / 2 - (min(ys) + max(ys)) / 2)
+    # 3. 「¥」の中心を、画像の中心に合わせる。回すと「¥」が止まって見え、
+    #    そのまわりをお財布が回る（2026-10-18 利用者の希望。以前は絵の外接矩形の中心で回していて、
+    #    「¥」ごと円を描いていた）。「¥」は 1 で残した、囲まれた白のうちいちばん大きいもの。
+    yen = enclosed[0]
+    yen_xs = [i % width for i in yen]
+    yen_ys = [i // width for i in yen]
+    shift_x = round((width - 1) / 2 - (min(yen_xs) + max(yen_xs)) / 2)
+    shift_y = round((height - 1) / 2 - (min(yen_ys) + max(yen_ys)) / 2)
 
+    centre_x, centre_y = (width - 1) / 2, (height - 1) / 2
     out = bytearray(width * height * 4)
+    dropped = 0
+    reach = 0.0
     for i, pixel in enumerate(rgba):
         if pixel[3] == 0:
             continue
@@ -145,19 +152,26 @@ def make_glyph(source_path):
         if 0 <= x < width and 0 <= y < height:
             j = (y * width + x) * 4
             out[j:j + 4] = bytes(pixel)
-    return width, height, out, (shift_x, shift_y), len(enclosed)
+            reach = max(reach, math.hypot(x - centre_x, y - centre_y))
+        else:
+            dropped += 1
+    # 動かした結果、絵の端が画像の外に出たら作り直しが要る（黙って欠けさせない）。
+    if dropped:
+        sys.exit(f'{source_path}: 「¥」を中心にすると {dropped} 画素がはみ出します。')
+    # 回したときにお財布が描く円の半径（画像の幅の半分を 1 とする）。1 以下なら枠に収まる。
+    return width, height, out, (shift_x, shift_y), len(enclosed), reach / (width / 2)
 
 
 def main():
     os.makedirs(TARGET, exist_ok=True)
     images = []
     for suffix, scale in SCALES:
-        width, height, out, shift, enclosed = make_glyph(
+        width, height, out, shift, enclosed, reach = make_glyph(
             os.path.join(SOURCE, f'BrandMark{suffix}.png'))
         name = f'WalletGlyph{suffix}.png'
         write_png_rgba(os.path.join(TARGET, name), width, height, out)
         images.append({'filename': name, 'idiom': 'universal', 'scale': scale})
-        print(f'{name}: {width}x{height}  中心合わせ {shift}  囲まれた白 {enclosed}個（「¥」だけ残した）')
+        print(f"{name}: {width}x{height}  「¥」を中心に {shift}  囲まれた白 {enclosed}個（「¥」だけ残した）  回る円の半径 {reach:.2f}")
 
     contents = {
         'images': images,
