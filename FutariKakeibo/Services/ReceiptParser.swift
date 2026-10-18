@@ -157,13 +157,17 @@ enum ReceiptParser {
     static func parse(
         lines: [RecognizedLine],
         now: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        dictionary: ReceiptDictionary = .bundled
     ) -> ReceiptDraft {
         let rows = rows(from: lines)
-        let shopName = merchant(from: rows)
+        // 辞書のチェーンが見つかれば、店名を「チェーン名 支店名」に組み立て直す（`ReceiptChains.swift`）。
+        let chained = chainMerchant(in: rows, dictionary: dictionary)
+        let shopName = chained?.name ?? merchant(from: rows)
         let totalIndex = totalRowIndex(in: rows)
         let recognizedText = rows.map(\.text).joined(separator: "\n")
-        let found = items(from: rows, before: totalIndex)
+        // 品ごとに、辞書から種類と正式な名前を付ける（`ReceiptCategories.swift`）。
+        let found = annotated(items(from: rows, before: totalIndex), dictionary: dictionary)
         // 明細が読めていれば、合計の候補が妥当かどうかの手がかりになる。
         // 値引きは差し引いた和で見る（イオンは半額の品が多く、引く前の和は合計より大きい）。
         let itemsTotal = found.isEmpty ? nil : found.reduce(0) { $0 + $1.netAmount }
@@ -179,13 +183,20 @@ enum ReceiptParser {
             summary: summary
         ))
         let check = amountCheck(best: best, summary: summary)
+        // 店で決まる種類（外食など）は店、それ以外は品の種類を値段の重さで。
+        let decided = receiptCategory(
+            text: recognizedText,
+            merchant: shopName,
+            items: found,
+            chain: chained?.chain
+        )
 
         return ReceiptDraft(
             merchant: shopName,
             amount: best?.amount,
             date: receiptDate(from: rows, now: now, calendar: calendar),
             items: found,
-            suggestedCategory: category(from: recognizedText, merchant: shopName, items: found),
+            suggestedCategory: decided.category,
             recognizedText: recognizedText,
             shopKey: MerchantKey.make(fromReceiptText: recognizedText, merchant: shopName),
             businessKey: MerchantKey.businessKey(fromReceiptText: recognizedText),
@@ -193,7 +204,9 @@ enum ReceiptParser {
             amountIsWellEvidenced: (best.map(isWellEvidenced) ?? false) && !check.conflicts,
             amountNeedsConfirmation: check.needsConfirmation,
             amountNote: check.note,
-            reconciledTotals: check.reconciledTotals
+            reconciledTotals: check.reconciledTotals,
+            merchantIsWellEvidenced: chained != nil,
+            categoryIsWellEvidenced: decided.wellEvidenced
         )
     }
 
@@ -280,7 +293,7 @@ enum ReceiptParser {
         merchant(from: rows(from: RecognizedLine.lines(fromPlainText: lines.joined(separator: "\n"))))
     }
 
-    private static func isMerchantCandidate(_ row: Row) -> Bool {
+    static func isMerchantCandidate(_ row: Row) -> Bool {
         let text = row.text
         let lower = text.lowercased()
         if notMerchantKeywords.contains(where: { lower.contains($0) }) { return false }
@@ -318,11 +331,11 @@ enum ReceiptParser {
         )
     }
 
-    private static func endsWithPrice(_ text: String) -> Bool {
+    static func endsWithPrice(_ text: String) -> Bool {
         matches(#"[0-9]{1,7}\s*円?\s*[*※＊軽外内)）]?\s*$"#, in: normalizedDigits(text))
     }
 
-    private static func cleanedMerchant(_ text: String) -> String {
+    static func cleanedMerchant(_ text: String) -> String {
         var value = text
         // 「登録名称 株式会社マナの森」のように、ラベルごと1行に読まれることがある。
         // 頭に付いているときだけ落とす。店名の途中に出てきたら触らない。
@@ -656,8 +669,10 @@ enum ReceiptParser {
         guard start < limit else { return [] }
         var results: [ReceiptItem] = []
         // 値段の付いていない品名の行。次の「1点※ ¥270」「¥780 1点 ¥780」のような
-        // 数量の行と組にする（ミスタードーナツ、白馬のカフェ）。
+        // 数量の行や、「¥638」だけの行と組にする（ミスタードーナツ、白馬のカフェ、Eggs 'n Things）。
         var pendingNames: [String] = []
+        // 品名の無い行に刷られた値段（「0200 ¥2964」）。次の品名の行と組にする（ガソリンスタンド）。
+        var pendingPrice: Int?
 
         for row in rows[start..<limit] {
             // 品を読み始めたあとに小計や税の行が来たら、明細はそこで終わり。
@@ -670,6 +685,7 @@ enum ReceiptParser {
                     results[last].discount += discount
                 }
                 pendingNames.removeAll()
+                pendingPrice = nil
                 continue
             }
 
@@ -693,19 +709,40 @@ enum ReceiptParser {
                     results[last].unitPrice = unitPrice
                 }
                 pendingNames.removeAll()
+                pendingPrice = nil
+                if results.count >= maximumItems { break }
+                continue
+            }
+
+            // 値段だけの行（「¥638」）。長い品名の値段が次の行に回ったもの。
+            // 組にするのは**すぐ上の1行**の品名だけ（その上の行は、値段の読めなかった別の品のことがある）。
+            if let amount = priceOnlyAmount(in: row), let name = pendingNames.last {
+                results.append(ReceiptItem(name: name, amount: amount))
+                pendingNames.removeAll()
+                pendingPrice = nil
                 if results.count >= maximumItems { break }
                 continue
             }
 
             guard let item = item(from: row) else {
                 if let name = pendingItemName(row) {
+                    if let amount = pendingPrice {
+                        // 上の行の値段（「0200 ¥2964」）と、この行の品名（「レギュラーガソリン」）。
+                        results.append(ReceiptItem(name: name, amount: amount))
+                        pendingPrice = nil
+                        pendingNames.removeAll()
+                        if results.count >= maximumItems { break }
+                        continue
+                    }
                     pendingNames.append(name)
                 } else {
                     pendingNames.removeAll()
+                    pendingPrice = codeOnlyPrice(in: row)
                 }
                 continue
             }
             pendingNames.removeAll()
+            pendingPrice = nil
             results.append(item)
             if results.count >= maximumItems { break }
         }
@@ -778,6 +815,22 @@ enum ReceiptParser {
             return QuantityLine(count: count, unitPrice: groups[0].flatMap { Int($0) }, lineAmount: lineAmount)
         }
         return nil
+    }
+
+    /// 通貨の印の付いた金額だけの行（「¥638」）。
+    private static func priceOnlyAmount(in row: Row) -> Int? {
+        let text = row.text
+        guard isAmountOnlyRow(text), !text.contains("点") else { return nil }
+        return currencyAmounts(in: text).first { isPlausibleAmount($0) && $0 <= 999_999 }
+    }
+
+    /// 商品コードと値段だけの行（「0200 ¥2964」）。品名は次の行に刷られている。
+    private static func codeOnlyPrice(in row: Row) -> Int? {
+        let fragments = row.sortedFragments
+        guard fragments.count >= 2, let last = fragments.last, isAmountOnlyRow(last.text) else { return nil }
+        let code = fragments.dropLast().map(\.text).joined().filter { !$0.isWhitespace }
+        guard !code.isEmpty, code.allSatisfy(\.isNumber) else { return nil }
+        return currencyAmounts(in: last.text).first { isPlausibleAmount($0) && $0 <= 999_999 }
     }
 
     /// 値段の付いていない品名の行。次の数量の行と組にするために覚えておく。
@@ -1065,7 +1118,7 @@ enum ReceiptParser {
     }
 
     /// 当てはまった語の多いカテゴリを選ぶ。同数なら定義順で先にあるものを選ぶ。
-    private static func bestMatch(in text: String) -> ExpenseCategory? {
+    static func bestMatch(in text: String) -> ExpenseCategory? {
         guard !text.isEmpty else { return nil }
         let value = text.lowercased()
         var best: (category: ExpenseCategory, hits: Int)?

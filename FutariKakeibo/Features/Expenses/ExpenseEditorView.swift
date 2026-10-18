@@ -457,6 +457,13 @@ struct ExpenseEditorView: View {
                     .foregroundStyle(AppTheme.ink)
                     .fixedSize(horizontal: false, vertical: true)
 
+                if let breakdown = detectedCategoryBreakdown {
+                    Text(breakdown)
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Text("レシートから読み取った品名です。記録されるのは日付・店名・合計金額・種類の4つだけです。")
                     .font(.caption)
                     .foregroundStyle(AppTheme.secondaryText)
@@ -466,10 +473,26 @@ struct ExpenseEditorView: View {
     }
 
     /// 種類の手がかりとして見せる品名。長いレシートでは先頭の一部だけにする。
+    /// 辞書で正式な名前が分かった品は、読み取った表記のあとに添える（「キヌトウフ（絹ごし豆腐）」）。
     private var detectedItemNames: String {
-        let shown = detectedItems.prefix(Self.shownItemCount).map(\.name).joined(separator: "・")
+        let shown = detectedItems.prefix(Self.shownItemCount).map { item in
+            item.normalizedName.map { "\(item.name)（\($0)）" } ?? item.name
+        }.joined(separator: "・")
         let rest = detectedItems.count - Self.shownItemCount
         return rest > 0 ? "\(shown) ほか\(rest)品" : shown
+    }
+
+    /// 品ごとの種類の内訳。**品の数だけを出し、金額は出さない**（明細は記録しないので）。
+    private var detectedCategoryBreakdown: String? {
+        var counts: [ExpenseCategory: Int] = [:]
+        for item in detectedItems {
+            if let category = item.category { counts[category, default: 0] += 1 }
+        }
+        guard !counts.isEmpty else { return nil }
+        let parts = ExpenseCategory.allCases.compactMap { category in
+            counts[category].map { "\(category.displayName) \($0)品" }
+        }
+        return "品の種類: " + parts.joined(separator: "・")
     }
 
     private static let shownItemCount = 20
