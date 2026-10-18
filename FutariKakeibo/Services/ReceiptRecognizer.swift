@@ -52,9 +52,15 @@ enum ReceiptRecognizer {
                     try handler.perform([request])
                     let observations = request.results ?? []
                     let lines = observations.compactMap { observation -> RecognizedLine? in
-                        guard let candidate = observation.topCandidates(1).first else { return nil }
-                        let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
+                        // 読み方の候補を3つまで受け取る。1つめがいちばん確からしいもの。
+                        // 読み取りは1回だけで、候補を増やしても時間はほとんど変わらない。
+                        let candidates = observation.topCandidates(3)
+                        guard let best = candidates.first else { return nil }
+                        let text = best.string.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !text.isEmpty else { return nil }
+                        let alternatives = candidates.dropFirst()
+                            .map { $0.string.trimmingCharacters(in: .whitespacesAndNewlines) }
+                            .filter { !$0.isEmpty && $0 != text }
                         let box = observation.boundingBox
                         return RecognizedLine(
                             text: text,
@@ -63,7 +69,9 @@ enum ReceiptRecognizer {
                             // Visionの原点は左下。上を0にして読み順に合わせる。
                             midY: Double(1 - box.midY),
                             height: Double(box.height),
-                            slope: baselineSlope(of: observation)
+                            slope: baselineSlope(of: observation),
+                            alternatives: alternatives,
+                            confidence: Double(best.confidence)
                         )
                     }
                     continuation.resume(returning: lines)

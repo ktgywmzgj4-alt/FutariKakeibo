@@ -7,8 +7,11 @@ final class MerchantMemoTests: XCTestCase {
 
     // MARK: - 同じ店だと見分ける鍵
 
-    /// 登録番号があれば、それを鍵にする。店名の読み違いに影響されない。
-    func testInvoiceNumberIsPreferredAsTheKey() {
+    /// 電話番号があれば、それを鍵にする。店ごとに違い、店名の読み違いに影響されない。
+    ///
+    /// 2026-10 までは登録番号を先にしていた。**登録番号は事業者ごとの番号で、支店を見分けない**
+    /// （イオンリテールは全国の店が同じ番号）。利用者の指示で順番を入れ替えた。
+    func testPhoneNumberIsPreferredBecauseTheInvoiceNumberIsPerCompany() {
         let key = MerchantKey.make(
             fromReceiptText: """
             写北名古屋
@@ -18,23 +21,39 @@ final class MerchantMemoTests: XCTestCase {
             """,
             merchant: "写北名古屋"
         )
-        XCTAssertEqual(key, "invoice:2170001007389")
+        XCTAssertEqual(key, "tel:0568541790")
     }
 
     /// 同じ店なら、店名の読み違いが違っても同じ鍵になる。ここが仕組みの要。
     func testSameShopGivesTheSameKeyDespiteMisreadName() {
         let first = MerchantKey.make(
-            fromReceiptText: "写北名古屋\n登録番号：T2170001007389",
+            fromReceiptText: "写北名古屋\nTEL:0568-54-1790\n登録番号：T2170001007389",
             merchant: "写北名古屋"
         )
         let second = MerchantKey.make(
-            fromReceiptText: "Selfix北名古屋\n登録番号:T2170001007389",
+            fromReceiptText: "Selfix北名古屋\nTEL:0568-54-1790\n登録番号:T2170001007389",
             merchant: "Selfix北名古屋"
         )
         XCTAssertEqual(first, second)
     }
 
-    /// 登録番号が読めなければ電話番号。
+    /// 電話が読めず登録番号だけのときは、事業者の鍵は同じでも、店の鍵には店名が入る。
+    /// 登録番号だけで「同じ店」と決めないため。
+    func testAnInvoiceNumberAloneOnlyIdentifiesTheCompany() {
+        let first = "写北名古屋\n登録番号：T2170001007389"
+        let second = "Selfix北名古屋\n登録番号:T2170001007389"
+        XCTAssertEqual(
+            MerchantKey.businessKey(fromReceiptText: first),
+            MerchantKey.businessKey(fromReceiptText: second)
+        )
+        XCTAssertEqual(MerchantKey.businessKey(fromReceiptText: first), "invoice:2170001007389")
+        XCTAssertEqual(
+            MerchantKey.make(fromReceiptText: first, merchant: "写北名古屋"),
+            "invoice:2170001007389|写北名古屋"
+        )
+    }
+
+    /// 登録番号が読めなくても電話番号があればよい。
     func testPhoneNumberIsTheSecondChoice() {
         let key = MerchantKey.make(
             fromReceiptText: "あおぞら商店\nTEL:0568-54-1790",

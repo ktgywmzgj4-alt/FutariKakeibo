@@ -36,7 +36,8 @@ enum ReceiptInterpreter {
         var draft = base
 
         let merchant = answer.merchant.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !merchant.isEmpty, merchant.count <= 40 {
+        // 「1点」のような数量、電話番号、日付は店名ではない。AIがそう答えても受け取らない。
+        if ReceiptParser.isPlausibleMerchantName(merchant) {
             draft.merchant = merchant
         }
 
@@ -48,10 +49,19 @@ enum ReceiptInterpreter {
         // さらに、明細が1件も読めないレシートでは照合する相手がいない。
         // イオンのレシートがそれで、カード会社の番号 47088 が素通りした。
         // **ルールが合計の語を手がかりに選べているなら、そちらを動かさない。**
+        //
+        // 小計＋外税、お預り−お釣りから合計が分かっているときは、**それと違う答えは受け取らない。**
         if let total = answer.total, total > 0, total <= 9_999_999,
            !base.amountIsWellEvidenced || base.amount == nil,
-           ReceiptParser.isConsistentWithItems(total, items: base.items) {
+           ReceiptParser.isConsistentWithItems(total, items: base.items),
+           base.reconciledTotals.isEmpty || base.reconciledTotals.contains(total) {
             draft.amount = total
+            // 足し算で確かめられた答えなら、確かめてもらう必要は無い。
+            // それ以外は、AIの答えでも利用者に確かめてもらう（AIも外すので）。
+            if base.reconciledTotals.contains(total) {
+                draft.amountNeedsConfirmation = false
+                draft.amountNote = nil
+            }
         }
 
         // 未来の日付と、10年より前の日付は読み違い。レシートは過去のもの。

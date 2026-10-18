@@ -4,11 +4,21 @@ import XCTest
 /// 実物のレシートで、読み取りがどれだけ当たるかを数える。
 ///
 /// 結果は CI の記録に `[OCR評価]` で始まる行として出る。読み取りを直すたびにこれを見比べ、
-/// **下がった変更は入れない。**
+/// **下がった変更は入れない。** 下限（`floors`）を下回るとテストが落ちる。
 ///
 /// 数えるのは `ReceiptCorpus` の実物のレシートだけ。作った例は混ぜない。
 /// 時間はCIのシミュレータで測るので、実機の値とは違う（比べるのは前後の差）。
-final class ReceiptScoreboardTests: XCTestCase {
+///
+/// 名前の先頭を Z にしてあるのは、テストが名前順に走るため。CIの記録の**最後のほう**に
+/// 数字が出るので、記録の末尾を読むだけで見つかる。
+final class ZReceiptScoreboardTests: XCTestCase {
+    /// これより下がったら落とす。値は測った結果そのもの（基準値は 2026-10-18 の改善の前、
+    /// 4fd0422）。改善が入ったら、その値に上げる。
+    private let floors = (
+        merchantExact: 7, merchantChain: 11, total: 12, date: 13, category: 12,
+        itemsNamed: 47, itemsPriced: 45
+    )
+
     func testScoreboard() {
         let board = ReceiptParser.$logsDecisions.withValue(false) {
             ReceiptScoreboard(samples: ReceiptCorpus.all)
@@ -17,6 +27,16 @@ final class ReceiptScoreboardTests: XCTestCase {
             print("[OCR評価] \(line)")
         }
         XCTAssertEqual(board.results.count, ReceiptCorpus.all.count)
+
+        let results = board.results
+        let scored = results.compactMap(\.items)
+        XCTAssertGreaterThanOrEqual(results.filter(\.merchantExact).count, floors.merchantExact, "店名（支店名まで）")
+        XCTAssertGreaterThanOrEqual(results.filter(\.merchantChain).count, floors.merchantChain, "店名（チェーン名まで）")
+        XCTAssertGreaterThanOrEqual(results.filter(\.totalCorrect).count, floors.total, "合計金額")
+        XCTAssertGreaterThanOrEqual(results.filter(\.dateCorrect).count, floors.date, "日付")
+        XCTAssertGreaterThanOrEqual(results.filter(\.categoryCorrect).count, floors.category, "種類")
+        XCTAssertGreaterThanOrEqual(scored.reduce(0) { $0 + $1.named }, floors.itemsNamed, "明細の抽出")
+        XCTAssertGreaterThanOrEqual(scored.reduce(0) { $0 + $1.priced }, floors.itemsPriced, "明細の値段")
     }
 
     /// 全部を1回ずつ読む時間と、そのあいだに増えたメモリ。
@@ -156,7 +176,8 @@ struct ReceiptScoreboard {
         var parts = [
             "・\(result.sample.name):",
             "店名\(merchantMark)「\(draft.merchant)」",
-            "合計\(mark(result.totalCorrect)) \(draft.amount.map(String.init) ?? "なし")",
+            "合計\(mark(result.totalCorrect)) \(draft.amount.map(String.init) ?? "なし")"
+                + (draft.amountNeedsConfirmation ? "（確認を求める）" : ""),
             "日付\(mark(result.dateCorrect))",
             "種類\(mark(result.categoryCorrect)) \(draft.suggestedCategory.rawValue)"
         ]
@@ -165,9 +186,10 @@ struct ReceiptScoreboard {
             let items = draft.items
             let candidates = ReceiptParser.totalCandidates(
                 in: ReceiptParser.rows(from: result.sample.lines),
-                itemsTotal: items.isEmpty ? nil : items.reduce(0) { $0 + $1.amount },
+                itemsTotal: items.isEmpty ? nil : items.reduce(0) { $0 + $1.netAmount },
                 itemsCount: items.count,
-                itemsCapped: items.count >= 12
+                itemsCapped: items.count >= ReceiptParser.maximumItems,
+                summary: ReceiptParser.summary(of: ReceiptParser.rows(from: result.sample.lines))
             )
             let top = candidates.sorted { ($0.score, $0.amount) > ($1.score, $1.amount) }.prefix(3)
             parts.append("合計の候補: " + top.map { "\($0.amount)(\($0.score)点 \($0.reason))" }.joined(separator: "、"))

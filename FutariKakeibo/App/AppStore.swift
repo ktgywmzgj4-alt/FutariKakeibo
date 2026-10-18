@@ -506,13 +506,19 @@ final class AppStore: ObservableObject {
     ///
     /// 読み取りが「写北名古屋」と出しても、人が「Selfix北名古屋」に直して保存すれば、
     /// 次から同じ店のレシートは最初から正しく出る。相手の端末にも同期される。
-    func rememberMerchant(key: String, merchant: String, category: ExpenseCategory) async {
+    func rememberMerchant(
+        key: String,
+        merchant: String,
+        category: ExpenseCategory,
+        businessKey: String? = nil
+    ) async {
         guard var household = snapshot.household else { return }
         let updated = MerchantMemory.remembering(
             household.merchantMemos,
             key: key,
             merchant: merchant,
-            category: category
+            category: category,
+            businessKey: businessKey
         )
         guard updated != household.merchantMemos else { return }
         household.merchantMemos = updated
