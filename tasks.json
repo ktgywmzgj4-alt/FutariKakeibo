@@ -321,10 +321,10 @@
     {
       "id": "T-032",
       "task": "ビルド番号の先頭の0をやめて、TestFlightとアプリの表示をそろえる",
-      "status": "todo",
+      "status": "review",
       "owner": "実行役 + 人間（文面の承認）",
       "passes": "TestFlight（App Store Connect）に出るビルド番号と、設定画面の版の行のビルド番号が同じ字面になること",
-      "evidence": "",
+      "evidence": "2026-10-18 利用者が承認（「T-032もOKです、一緒に配信して」）。ワークフローの Choose a build number を、date の結果を 10# で数にしてから並べる形にした（read -r YEAR MONTHDAY HOURMIN …）。手元で YAML から手順を抜き出して bash で実行し 2026.1018.616 を確認。AppVersion.swift と release スキルの注記も合わせた。**CIと配信はこれから。**",
       "dependencies": ["T-024"],
       "notes": "2026-10-15 に分かった。Apple側は各要素の先頭の0を落とす（2026.1015.0405 → 2026.1015.405）。並び順は数として比べるので変わらない。直し方はワークフローの1行（date の結果を 10# で数にしてから並べる）。**配信ワークフローの変更なので、先に利用者に文面の承認を取る**（CLAUDE.md）。日本時間の9時〜19時（UTC 0〜9時）に作ったビルドで必ず起きる"
     },

@@ -166,7 +166,10 @@ jobs:
           set -euo pipefail
           # App Store Connectは同じバージョン内でビルド番号が増えることを求める。
           # 撮影時刻から作れば必ず前より大きくなり、各要素も5桁に収まる。
-          BUILD_NUMBER="$(date -u '+%Y.%m%d.%H%M')"
+          # 各要素の先頭の0は落とす。Apple側は落として表示する（2026.1015.0405 → 2026.1015.405）ので、
+          # 落としておけば TestFlight と設定画面の表示が同じになる。数として比べるので並び順は変わらない（T-032）。
+          read -r YEAR MONTHDAY HOURMIN < <(date -u '+%Y %m%d %H%M')
+          BUILD_NUMBER="${YEAR}.$((10#$MONTHDAY)).$((10#$HOURMIN))"
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
           echo "value=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
           echo "build number: $BUILD_NUMBER"

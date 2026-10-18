@@ -16,7 +16,7 @@ struct AppVersion {
     let version: String
 
     /// `CFBundleVersion`。同じ版の中でビルドを並べる番号。
-    /// CIが `date -u '+%Y.%m%d.%H%M'` で作るので、配信ごとに必ず増える。
+    /// CIが時刻から作るので、配信ごとに必ず増える（例 2026.1018.616。各要素の先頭の0は落としてある — T-032）。
     let build: String
 
     /// 束から読む。読めなければ空にして、`displayText` の判断に任せる。
