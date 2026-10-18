@@ -175,8 +175,45 @@ def build_rows(response)
   end
 end
 
+# 版を数の並びとして比べる。文字列で比べると "0.10.0" が "0.9.0" より小さくなる。
+def compare_versions(left, right)
+  a = left.to_s.split('.').map(&:to_i)
+  b = right.to_s.split('.').map(&:to_i)
+  size = [a.size, b.size].max
+  (a + [0] * (size - a.size)) <=> (b + [0] * (size - b.size))
+end
+
+# 今回より大きい版のうち、期限切れでないもの（大きい順）。
+#
+# **TestFlightは版の大きい順に並べ、自動アップデートは一番上の版を入れる。**
+# 2026-09-01 の事故（XcodeGen が Info.plist を作り直し、版が 1.0 に戻った）で受理された
+# 1.0 のビルドが残っていて、0.x の新しいビルドより上に並び、自動アップデートで
+# そちらに戻っていた（2026-10-18 利用者のスクリーンショットで判明）。
+def higher_live_versions(rows, current)
+  rows.select { |row| row[:expiry] == '有効' && row[:version] != '-' }
+      .map { |row| row[:version] }
+      .uniq
+      .select { |version| compare_versions(version, current) == 1 }
+      .sort { |a, b| compare_versions(b, a) }
+end
+
+# 版ごとに、ビルドの数・有効な数・いちばん新しいビルドをまとめる（版の大きい順）。
+def version_summary(rows)
+  uploaded_at = lambda do |row|
+    Time.parse(row[:uploaded])
+  rescue ArgumentError, TypeError
+    Time.at(0)
+  end
+  rows.group_by { |row| row[:version] }
+      .map do |version, items|
+        { version: version, count: items.size,
+          live: items.count { |row| row[:expiry] == '有効' }, newest: items.max_by(&uploaded_at) }
+      end
+      .sort { |a, b| compare_versions(b[:version], a[:version]) }
+end
+
 # 読むだけ。ここで何が起きても、配信の判定（終わり方）は変えない。
-def report_distribution(client, app_id)
+def report_distribution(client, app_id, current_version)
   lines = ['', '### 配り方（読むだけの診断）', '']
 
   code, body = client.get('/v1/betaGroups', { 'filter[app]' => app_id, 'limit' => 50 })
@@ -197,22 +234,44 @@ def report_distribution(client, app_id)
     annotate('warning', "テストのグループを読めなかった（HTTP #{code}）")
   end
 
+  # 最近の数件だけを見ると、昔の大きい版を見落とす（2026-10-15 に見落とした）。全部取る。
   code, body = client.get('/v1/builds', {
                             'filter[app]' => app_id,
                             'sort' => '-uploadedDate',
                             'include' => 'preReleaseVersion,buildBetaDetail',
-                            'limit' => 5
+                            'limit' => 200
                           })
   if (200..299).cover?(code)
+    rows = build_rows(JSON.parse(body))
+
+    lines += ['', '| 版 | ビルド数 | 有効 | いちばん新しいビルド |', '| --- | --- | --- | --- |']
+    version_summary(rows).each do |entry|
+      newest = entry[:newest]
+      puts "版 #{entry[:version]}: #{entry[:count]}件（有効 #{entry[:live]}）" \
+           " いちばん新しい #{newest[:build]} / #{newest[:processing]} / #{newest[:internal]} / #{newest[:uploaded]}"
+      lines << "| #{entry[:version]} | #{entry[:count]} | #{entry[:live]} | #{newest[:build]}（#{newest[:uploaded]}） |"
+    end
+
     lines += ['', '| 版 | ビルド番号 | 処理 | 内部テスト | 期限 | 送った日時 |', '| --- | --- | --- | --- | --- | --- |']
-    build_rows(JSON.parse(body)).each do |row|
+    rows.first(5).each do |row|
       puts "最近のビルド: #{row[:version]} (#{row[:build]}) #{row[:processing]} / #{row[:internal]} / " \
            "#{row[:expiry]} / #{row[:uploaded]}"
       lines << "| #{row[:version]} | #{row[:build]} | #{row[:processing]} | #{row[:internal]} | " \
                "#{row[:expiry]} | #{row[:uploaded]} |"
     end
+
+    higher = current_version ? higher_live_versions(rows, current_version) : []
+    unless higher.empty?
+      # AIが grep で拾う行。
+      puts "TESTFLIGHT WARNING: 今回の #{current_version} より大きい版が残っている: #{higher.join(', ')}"
+      message = "今回（#{current_version}）より大きい版 #{higher.join('・')} が TestFlight に残っている。" \
+                '版は大きい順に並び、自動アップデートは一番上を入れるので、古いビルドに戻ってしまう。' \
+                "版を #{higher.first} より大きくするか、そのビルドを期限切れにする"
+      annotate('warning', message)
+      lines += ['', "**#{message}**"]
+    end
   else
-    annotate('warning', "最近のビルドを読めなかった（HTTP #{code}）")
+    annotate('warning', "ビルドの一覧を読めなかった（HTTP #{code}）")
   end
 
   write_summary(lines)
@@ -341,7 +400,7 @@ def main
                   "| 内部テスト | #{internal || '-'} |"
                 ])
 
-  report_distribution(client, app['id'])
+  report_distribution(client, app['id'], version)
 
   case verdict
   when :ready
@@ -453,6 +512,24 @@ def self_test
   check.call('最近のビルドを表の行にできる',
              !row.nil? && row[:version] == '0.2.1' && row[:build] == '2026.1015.0300' &&
              row[:internal] == 'IN_BETA_TESTING' && row[:expiry] == '有効')
+
+  check.call('版は数として比べる（1.0 は 0.2.1 より大きい）', compare_versions('1.0', '0.2.1') == 1)
+  check.call('版は数として比べる（2.0.0 は 1.0 より大きい）', compare_versions('2.0.0', '1.0') == 1)
+  check.call('版は数として比べる（0.10.0 は 0.9.0 より大きい）', compare_versions('0.10.0', '0.9.0') == 1)
+  check.call('同じ版は等しい（1.0 と 1.0.0）', compare_versions('1.0', '1.0.0').zero?)
+
+  # 2026-10-18 の実際の並び。1.0 が 0.2.1 より上に残っていた。
+  live = lambda do |version, build|
+    { version: version, build: build, processing: 'VALID', internal: 'IN_BETA_TESTING',
+      expiry: '有効', uploaded: '2026-10-15T04:07:00Z' }
+  end
+  actual = [live.call('0.2.1', '2026.1015.405'), live.call('0.2.0', '2026.1014.1016'),
+            live.call('0.1.0', '2026.1013.2229'), live.call('1.0', '1')]
+  check.call('今回より大きい版が残っていれば拾う（0.2.1 の上の 1.0）', higher_live_versions(actual, '0.2.1') == ['1.0'])
+  check.call('2.0.0 にすれば、より大きい版は無い', higher_live_versions(actual, '2.0.0').empty?)
+  expired = actual.map { |row| row[:version] == '1.0' ? row.merge(expiry: '期限切れ') : row }
+  check.call('期限切れの大きい版は数えない', higher_live_versions(expired, '0.2.1').empty?)
+  check.call('版ごとのまとめは大きい順', version_summary(actual).map { |entry| entry[:version] } == %w[1.0 0.2.1 0.2.0 0.1.0])
   if failures.empty?
     puts 'self-test: OK'
     0
