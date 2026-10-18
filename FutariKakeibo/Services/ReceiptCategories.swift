@@ -25,15 +25,18 @@ extension ReceiptParser {
     static func annotated(_ items: [ReceiptItem], dictionary: ReceiptDictionary) -> [ReceiptItem] {
         items.map { item in
             var annotated = item
-            let key = dictionaryKey(item.name)
+            let key = Array(dictionaryKey(item.name).unicodeScalars)
             if let product = dictionary.productNames.first(where: { entry in
-                entry.keys.contains { key.contains($0) }
+                entry.keyScalars.contains { exactSpan(of: $0, in: key) != nil }
             }) {
                 annotated.normalizedName = product.name
             }
-            let keys = [key] + (annotated.normalizedName.map { [dictionaryKey($0)] } ?? [])
+            var keys = [key]
+            if let normalized = annotated.normalizedName {
+                keys.append(Array(dictionaryKey(normalized).unicodeScalars))
+            }
             annotated.category = dictionary.productCategories.first { entry in
-                entry.keys.contains { word in keys.contains { $0.contains(word) } }
+                entry.keyScalars.contains { word in keys.contains { exactSpan(of: word, in: $0) != nil } }
             }?.category
             return annotated
         }

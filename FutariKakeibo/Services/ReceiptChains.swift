@@ -12,13 +12,49 @@ extension ReceiptParser {
     /// 辞書と照らし合わせる形。互換文字をそろえ（全角英数→半角、半角カナ→全角）、
     /// ひらがなをカタカナに、小文字にして、文字と数字以外を落とす。
     static func dictionaryKey(_ text: String) -> String {
-        let folded = text.precomposedStringWithCompatibilityMapping
-        let katakana = folded.applyingTransform(.hiraganaToKatakana, reverse: false) ?? folded
         var scalars = String.UnicodeScalarView()
-        for scalar in katakana.lowercased().unicodeScalars where CharacterSet.alphanumerics.contains(scalar) {
-            scalars.append(scalar)
+        for character in text {
+            forEachKeyScalar(of: character) { scalars.append($0) }
         }
         return String(scalars)
+    }
+
+    /// 1文字を照らし合わせる形にした文字（0個以上）を、順に `body` へ渡す。
+    ///
+    /// レシートの全部の行に使うので速さが要る。よく出る文字（半角英数・かな・漢字）はここで
+    /// 直接変換し、それ以外（全角英数・半角カナ・記号）だけ互換分解に通す。
+    /// 1文字ごとに文字の変換（ICU）を呼んでいたときは、長いレシートの解析が倍近く遅くなった。
+    private static func forEachKeyScalar(of character: Character, _ body: (Unicode.Scalar) -> Void) {
+        let units = character.unicodeScalars
+        if units.count == 1, let scalar = units.first {
+            switch scalar.value {
+            case 0x30...0x39, 0x61...0x7A:
+                body(scalar)
+                return
+            case 0x41...0x5A:
+                // 英大文字は小文字に。
+                if let lower = Unicode.Scalar(scalar.value + 0x20) { body(lower) }
+                return
+            case 0x00...0x7F:
+                // そのほかの半角の記号と空白は落とす。
+                return
+            case 0x3041...0x3096:
+                // ひらがなはカタカナに。
+                if let katakana = Unicode.Scalar(scalar.value + 0x60) { body(katakana) }
+                return
+            case 0x30A1...0x30FA, 0x30FC...0x30FE, 0x4E00...0x9FFF:
+                // カタカナ・長音・漢字はそのまま。
+                body(scalar)
+                return
+            default:
+                break
+            }
+        }
+        let folded = String(character).precomposedStringWithCompatibilityMapping.lowercased()
+        for scalar in folded.unicodeScalars {
+            let value = (0x3041...0x3096).contains(scalar.value) ? Unicode.Scalar(scalar.value + 0x60) ?? scalar : scalar
+            if CharacterSet.alphanumerics.contains(value) { body(value) }
+        }
     }
 
     /// 辞書で見つけたチェーンと、その名前が刷られていた行。
@@ -110,14 +146,14 @@ extension ReceiptParser {
         dictionary: ReceiptDictionary,
         fuzzy fuzzyAllowed: Bool
     ) -> ChainMatch? {
-        let keyed = keyedCharacters(text)
+        let keyed = keyedScalars(text)
         guard keyed.key.count >= 2 else { return nil }
 
         // 長い別名から当てる（「イオンスタイル」を「イオン」より先に）。
         var best: (chain: ReceiptDictionary.Chain, span: Range<Int>, fuzzy: Bool)?
         for chain in dictionary.chains {
-            for alias in chain.keys {
-                guard let span = exactSpan(of: Array(alias), in: keyed.key) else { continue }
+            for alias in chain.keyScalars {
+                guard let span = exactSpan(of: alias, in: keyed.key) else { continue }
                 // 2文字の名前（「西友」「出光」）は、行の頭にあるときだけ。
                 if alias.count <= 2, span.lowerBound != 0 { continue }
                 if span.count > (best?.span.count ?? 0) { best = (chain, span, false) }
@@ -125,8 +161,8 @@ extension ReceiptParser {
         }
         if best == nil, fuzzyAllowed {
             search: for chain in dictionary.chains {
-                for alias in chain.keys where alias.count >= fuzzyAliasMinimumLength {
-                    if let span = fuzzySpan(of: Array(alias), in: keyed.key) {
+                for alias in chain.keyScalars where alias.count >= fuzzyAliasMinimumLength {
+                    if let span = fuzzySpan(of: alias, in: keyed.key) {
                         best = (chain, span, true)
                         break search
                     }
@@ -137,9 +173,9 @@ extension ReceiptParser {
 
         // 名前のあとに続く文字。同じチェーンのほかの別名（「EQVo! エクボスタイル」の後ろ側）も名前に含める。
         var end = found.span.upperBound
-        for alias in found.chain.keys {
-            let span = exactSpan(of: Array(alias), in: keyed.key)
-                ?? (alias.count >= fuzzyAliasMinimumLength ? fuzzySpan(of: Array(alias), in: keyed.key) : nil)
+        for alias in found.chain.keyScalars {
+            let span = exactSpan(of: alias, in: keyed.key)
+                ?? (alias.count >= fuzzyAliasMinimumLength ? fuzzySpan(of: alias, in: keyed.key) : nil)
             if let span, span.lowerBound <= end + 1, span.upperBound > end { end = span.upperBound }
         }
         let characters = Array(text)
@@ -158,49 +194,61 @@ extension ReceiptParser {
 
     /// 照らし合わせる形の1文字ずつと、それが元の文字の何文字目から来たか。
     /// 見つけた別名の範囲を、元の文字の範囲に戻すために使う。
-    static func keyedCharacters(_ text: String) -> (key: [Character], origin: [Int]) {
-        var key: [Character] = []
+    static func keyedScalars(_ text: String) -> (key: [Unicode.Scalar], origin: [Int]) {
+        var key: [Unicode.Scalar] = []
         var origin: [Int] = []
         for (offset, character) in text.enumerated() {
-            for keyed in dictionaryKey(String(character)) {
-                key.append(keyed)
+            forEachKeyScalar(of: character) { scalar in
+                key.append(scalar)
                 origin.append(offset)
             }
         }
         return (key, origin)
     }
 
-    private static func exactSpan(of alias: [Character], in key: [Character]) -> Range<Int>? {
-        guard !alias.isEmpty, alias.count <= key.count else { return nil }
-        for start in 0...(key.count - alias.count) where Array(key[start..<(start + alias.count)]) == alias {
-            return start..<(start + alias.count)
+    /// 別名がそのまま入っていれば、その範囲。
+    static func exactSpan(of alias: [Unicode.Scalar], in key: [Unicode.Scalar]) -> Range<Int>? {
+        guard let first = alias.first, alias.count <= key.count else { return nil }
+        for start in 0...(key.count - alias.count) where key[start] == first {
+            if key[start..<(start + alias.count)].elementsEqual(alias) {
+                return start..<(start + alias.count)
+            }
         }
         return nil
     }
 
     /// 別名が1文字の読み違い（置き換え・抜け・余分）で入っていれば、その範囲。
-    private static func fuzzySpan(of alias: [Character], in key: [Character]) -> Range<Int>? {
+    private static func fuzzySpan(of alias: [Unicode.Scalar], in key: [Unicode.Scalar]) -> Range<Int>? {
+        guard alias.count >= 2 else { return nil }
         for start in key.indices {
+            // 1文字違いなら、窓の頭の2文字のどちらかが、別名の頭の2文字のどちらかと合う。
+            // 合わない窓は比べない（長いレシートで、ここがいちばん時間を食っていた）。
+            let head = key[start]
+            let next: Unicode.Scalar? = start + 1 < key.count ? key[start + 1] : nil
+            guard head == alias[0] || head == alias[1] || next == alias[0] || next == alias[1] else { continue }
             for length in [alias.count, alias.count - 1, alias.count + 1] where length > 0 {
                 let end = start + length
                 guard end <= key.count else { continue }
-                if withinOneEdit(Array(key[start..<end]), alias) { return start..<end }
+                if withinOneEdit(key[start..<end], alias[...]) { return start..<end }
             }
         }
         return nil
     }
 
     /// 2つの並びが1文字の違い（置き換え・抜け・余分）までか。
-    private static func withinOneEdit(_ left: [Character], _ right: [Character]) -> Bool {
+    private static func withinOneEdit(
+        _ left: ArraySlice<Unicode.Scalar>,
+        _ right: ArraySlice<Unicode.Scalar>
+    ) -> Bool {
         if left.count == right.count {
             return zip(left, right).filter { $0 != $1 }.count <= 1
         }
         let (shorter, longer) = left.count < right.count ? (left, right) : (right, left)
         guard longer.count - shorter.count == 1 else { return false }
-        var i = 0
-        var j = 0
+        var i = shorter.startIndex
+        var j = longer.startIndex
         var skipped = false
-        while i < shorter.count, j < longer.count {
+        while i < shorter.endIndex, j < longer.endIndex {
             if shorter[i] == longer[j] {
                 i += 1
                 j += 1
