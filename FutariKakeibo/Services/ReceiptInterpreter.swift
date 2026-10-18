@@ -14,13 +14,36 @@ enum ReceiptInterpreter {
     static func interpret(
         lines: [RecognizedLine],
         now: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        memos: [MerchantMemo] = []
     ) async -> ReceiptDraft {
-        let base = ReceiptParser.parse(lines: lines, now: now, calendar: calendar)
+        let base = ruleDraft(lines: lines, now: now, calendar: calendar, memos: memos)
         guard let answer = await OnDeviceReceiptReader.read(text: base.recognizedText) else {
             return base
         }
         return merged(base: base, answer: answer, now: now, calendar: calendar)
+    }
+
+    /// ルールだけで読んだ結果。
+    ///
+    /// 同じ店について覚えていることがあれば、それを使って読み直す。
+    /// - レシートの書き方（`MerchantMemo.format`）: 前に合計だった行の書き方の行を、合計の語と同じに扱う
+    /// - 人が直した品（`MerchantMemo.itemNotes`）: 同じ書き方の品に、直した名前と種類を付ける
+    static func ruleDraft(
+        lines: [RecognizedLine],
+        now: Date = .now,
+        calendar: Calendar = .current,
+        memos: [MerchantMemo] = []
+    ) -> ReceiptDraft {
+        let draft = ReceiptParser.parse(lines: lines, now: now, calendar: calendar)
+        let format = MerchantMemory.format(for: draft, in: memos)
+        let notes = MerchantMemory.shopMemo(
+            key: draft.shopKey,
+            identifiers: draft.shopIdentifiers,
+            in: memos
+        )?.itemNotes ?? []
+        guard format != nil || !notes.isEmpty else { return draft }
+        return ReceiptParser.parse(lines: lines, now: now, calendar: calendar, format: format, itemNotes: notes)
     }
 
     /// AIの答えでルールの結果を上書きする。

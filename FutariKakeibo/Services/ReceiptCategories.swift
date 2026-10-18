@@ -10,7 +10,7 @@ import Foundation
 /// 支出に記録する種類は1つのまま（データの形は変えない）。品ごとの内訳は読み取りの中だけで使う。
 extension ReceiptParser {
     /// 店で決まる種類。品の内訳で上書きしない。
-    private static let shopDecidedCategories: Set<ExpenseCategory> = [
+    static let shopDecidedCategories: Set<ExpenseCategory> = [
         .dining, .transportation, .utilities, .travel, .entertainment
     ]
 
@@ -22,10 +22,18 @@ extension ReceiptParser {
     ///
     /// 正式な名前は**辞書にある略し方だけ**。分からない略し方は読み取ったままにする
     /// （もっともらしい名前を作らない）。
-    static func annotated(_ items: [ReceiptItem], dictionary: ReceiptDictionary) -> [ReceiptItem] {
+    ///
+    /// この店で人が直した品（`ItemNote`）は、直した名前と種類を辞書より先に使う。
+    /// 書き方がそのまま同じ品だけ（似た書き方の別の品に当てないため）。
+    static func annotated(
+        _ items: [ReceiptItem],
+        dictionary: ReceiptDictionary,
+        notes: [ItemNote] = []
+    ) -> [ReceiptItem] {
         items.map { item in
             var annotated = item
-            let key = Array(dictionaryKey(item.name).unicodeScalars)
+            let text = dictionaryKey(item.name)
+            let key = Array(text.unicodeScalars)
             if let product = dictionary.productNames.first(where: { entry in
                 entry.keyScalars.contains { exactSpan(of: $0, in: key) != nil }
             }) {
@@ -38,6 +46,10 @@ extension ReceiptParser {
             annotated.category = dictionary.productCategories.first { entry in
                 entry.keyScalars.contains { word in keys.contains { exactSpan(of: word, in: $0) != nil } }
             }?.category
+            if let note = notes.first(where: { $0.key == text }) {
+                annotated.normalizedName = note.name ?? annotated.normalizedName
+                annotated.category = note.category ?? annotated.category
+            }
             return annotated
         }
     }
@@ -62,7 +74,7 @@ extension ReceiptParser {
         return best?.category
     }
 
-    /// レシート全体の種類と、それが確かな手がかりで決まったか。
+    /// レシート全体の種類と、それが確かな手がかりで決まったか、品の値段の重さで決まったか。
     ///
     /// 1. 店で決まる種類（外食・交通など）は店を優先する
     /// 2. 品の種類を値段の重さで足し上げて決まれば、それ
@@ -73,17 +85,17 @@ extension ReceiptParser {
         merchant: String,
         items: [ReceiptItem],
         chain: ReceiptDictionary.Chain?
-    ) -> (category: ExpenseCategory, wellEvidenced: Bool) {
+    ) -> (category: ExpenseCategory, wellEvidenced: Bool, byItems: Bool) {
         let fromShop = chain?.category ?? bestMatch(in: merchant)
         if let fromShop, shopDecidedCategories.contains(fromShop) {
-            return (fromShop, true)
+            return (fromShop, true, false)
         }
         if let weighted = weightedCategory(of: items) {
-            return (weighted, true)
+            return (weighted, true, true)
         }
         if let chain {
-            return (chain.category, true)
+            return (chain.category, true, false)
         }
-        return (category(from: text, merchant: merchant, items: items), false)
+        return (category(from: text, merchant: merchant, items: items), false, false)
     }
 }

@@ -120,7 +120,6 @@ extension ReceiptParser {
         guard !dictionary.chains.isEmpty else { return [] }
         var matches: [ChainMatch] = []
         for (index, row) in rows.enumerated() {
-            guard isChainSearchRow(row.text) else { continue }
             let company = isCompanyLine(row.text)
             let near = index < branchSearchRows
             // 読み取りの別の読み方も見る。ロゴの崩れた行で、2番目の読み方が正しいことがある。
@@ -131,6 +130,9 @@ extension ReceiptParser {
                     dictionary: dictionary,
                     fuzzy: near || company
                 ) else { continue }
+                // 値段・日付・電話の行は見ない。名前が見つかった行だけ確かめる
+                // （正規表現を使う確かめのほうが重いので、全部の行には使わない）。
+                guard isChainSearchRow(row.text) else { break }
                 if near || company || endsWithShopWord(cleanedBranch(match.suffix, chain: match.chain)) {
                     matches.append(match)
                 }

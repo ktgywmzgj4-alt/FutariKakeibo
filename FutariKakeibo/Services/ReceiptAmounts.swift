@@ -140,9 +140,12 @@ extension ReceiptParser {
     }
 
     /// 金額と、点数のような短い添え書きだけの行（「¥5,302」「4点 ¥884」）。
+    ///
+    /// 文字があるかを先に見る。品の行のほとんどは文字があるので、正規表現（金額を拾う）まで行かずに済む。
+    /// 品の行ごとに何度も呼ばれるので、この順番で解析の時間が変わる。
     static func isAmountOnlyRow(_ text: String) -> Bool {
-        guard !currencyAmounts(in: text).isEmpty || !amounts(in: text).isEmpty else { return false }
-        return !text.contains { $0.isLetter && $0 != "点" && $0 != "円" }
+        guard !text.contains(where: { $0.isLetter && $0 != "点" && $0 != "円" }) else { return false }
+        return !currencyAmounts(in: text).isEmpty || !amounts(in: text).isEmpty
     }
 
     // MARK: - 確かめる
@@ -243,5 +246,39 @@ extension ReceiptParser {
             check.note = "合計の行が読み取れなかったので、いちばん確からしい金額を入れました。レシートと見比べてください。"
         }
         return check
+    }
+}
+
+// MARK: - 店ごとの書式
+
+extension ReceiptParser {
+    /// 行の書き方。数字を除き、照らし合わせる形（`dictionaryKey`）にした文字。
+    ///
+    /// 「合計 6点 ¥5,302」→「合計点」。点数や金額が変わっても、同じ店の同じ行なら同じになる。
+    static func rowLabel(_ text: String) -> String {
+        dictionaryKey(text).filter { !("0"..."9").contains($0) }
+    }
+
+    /// 保存された合計が刷られていた行の書き方。店ごとの書式（`ReceiptFormat`）として覚える。
+    ///
+    /// 合計の候補（`totalCandidates`）のうち、その金額でいちばん点の高い行。小計・税・預り・お釣りの
+    /// 行は候補に入らないので選ばれない。金額だけの行なら、すぐ上の行（「合計」の語が分かれた行）。
+    /// 書き方が2文字に満たなければ覚えない（nil）。
+    ///
+    /// 読み取った文字（`ReceiptDraft.recognizedText`）は1行が1行のまま並んでいるので、
+    /// 位置からまとめ直さずにそのまま行にする（行の多いレシートで、隣の行とまとまらないように）。
+    static func totalLabel(forTotal total: Int, inReceiptText text: String) -> String? {
+        let rows = text
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .map { Row(fragments: [RecognizedLine(text: $0)]) }
+        let candidates = totalCandidates(in: rows, summary: summary(of: rows)).filter { $0.amount == total }
+        guard let best = candidates.max(by: { $0.score < $1.score }) else { return nil }
+        var label = rowLabel(rows[best.rowIndex].text)
+        if label.count < 2, best.rowIndex > 0 {
+            label = rowLabel(rows[best.rowIndex - 1].text)
+        }
+        return label.count >= 2 ? label : nil
     }
 }

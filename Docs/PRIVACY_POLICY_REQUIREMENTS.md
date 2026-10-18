@@ -30,6 +30,7 @@ AppleはApp Storeの商品ページに公開アクセス可能なプライバシ
 | 2人の呼び名 | 保存・共有 | 共有有効時はCloudKit | 画面表示・精算 | Name / App Functionality / Linked |
 | 支出金額・予算 | 保存・共有 | 共有有効時はCloudKit | 家計管理 | Other Financial Info / App Functionality / Linked |
 | 店名・メモ・カテゴリ | 保存・共有 | 共有有効時はCloudKit | 家計管理 | Other User Content / App Functionality / Linked |
+| 覚えた店（店名・種類・店を見分ける電話番号と登録番号・合計の行の書き方・人が直した品の書き方と名前・種類） | 保存・共有 | 共有有効時はCloudKit | 次のレシート読み取りの候補入力 | Other User Content / App Functionality / Linked。品は人が直したものだけで、金額・日付は含まない |
 | CloudKit参加情報 | Appleが共有管理 | CloudKit | 招待制共有 | User IDの申告要否をApp Store Connectで最終確認 |
 | レシート画像 | OCR中だけメモリ上で処理 | 送信しない | 候補入力 | Photos/Videosは「収集なし」想定 |
 | OCR文字列 | 保存前の画面だけ | 送信しない | 確認・修正 | 保存される項目のみ上記カテゴリへ含める |

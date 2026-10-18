@@ -13,6 +13,10 @@ struct ReceiptDraft: Equatable, Sendable {
     var recognizedText: String
     /// 同じ店だと見分けるための鍵。覚えた店を引き当てるのに使う（`MerchantKey`）。
     var shopKey: String?
+    /// 同じ店だと見分けられる鍵の全部（電話番号と、登録番号＋店名）。`MerchantKey.identifiers`。
+    ///
+    /// 覚えるときはこれを全部覚えておき、次の1枚でどれか1つが読めれば同じ店と分かるようにする。
+    var shopIdentifiers: [String]
     /// 同じ事業者だと見分けるための鍵（インボイスの登録番号）。`MerchantKey.businessKey`。
     ///
     /// **支店までは見分けない。** 登録番号は会社ごとの番号で、チェーンの店はみな同じ番号になる。
@@ -40,6 +44,9 @@ struct ReceiptDraft: Equatable, Sendable {
     var merchantIsWellEvidenced: Bool
     /// 種類を、店（外食など）か品の値段の重さで決めたか。立っているときは、AIの種類で上書きしない。
     var categoryIsWellEvidenced: Bool
+    /// 種類を、品の値段の重さで決めたか。立っているときは、覚えた店の種類でも上書きしない
+    /// （同じ店でも、買った物で種類は変わる）。
+    var categoryDecidedByItems: Bool
 
     init(
         merchant: String,
@@ -49,6 +56,7 @@ struct ReceiptDraft: Equatable, Sendable {
         suggestedCategory: ExpenseCategory = .other,
         recognizedText: String = "",
         shopKey: String? = nil,
+        shopIdentifiers: [String] = [],
         businessKey: String? = nil,
         usedMemo: Bool = false,
         amountIsWellEvidenced: Bool = false,
@@ -56,7 +64,8 @@ struct ReceiptDraft: Equatable, Sendable {
         amountNote: String? = nil,
         reconciledTotals: [Int] = [],
         merchantIsWellEvidenced: Bool = false,
-        categoryIsWellEvidenced: Bool = false
+        categoryIsWellEvidenced: Bool = false,
+        categoryDecidedByItems: Bool = false
     ) {
         self.merchant = merchant
         self.amount = amount
@@ -65,6 +74,7 @@ struct ReceiptDraft: Equatable, Sendable {
         self.suggestedCategory = suggestedCategory
         self.recognizedText = recognizedText
         self.shopKey = shopKey
+        self.shopIdentifiers = shopIdentifiers
         self.businessKey = businessKey
         self.usedMemo = usedMemo
         self.amountIsWellEvidenced = amountIsWellEvidenced
@@ -73,6 +83,7 @@ struct ReceiptDraft: Equatable, Sendable {
         self.reconciledTotals = reconciledTotals
         self.merchantIsWellEvidenced = merchantIsWellEvidenced
         self.categoryIsWellEvidenced = categoryIsWellEvidenced
+        self.categoryDecidedByItems = categoryDecidedByItems
     }
 
     static let empty = ReceiptDraft(merchant: "")
