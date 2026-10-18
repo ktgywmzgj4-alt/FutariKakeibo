@@ -82,6 +82,8 @@
 		C00000000000000000000071 /* ReceiptImageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000071 /* ReceiptImageTests.swift */; };
 		C00000000000000000000077 /* AppVersionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000077 /* AppVersionTests.swift */; };
 		C00000000000000000000079 /* WalletSpinnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000079 /* WalletSpinnerTests.swift */; };
+		C00000000000000000000080 /* ReceiptCorpus.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000080 /* ReceiptCorpus.swift */; };
+		C00000000000000000000081 /* ReceiptScoreboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000081 /* ReceiptScoreboardTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -174,6 +176,8 @@
 		B00000000000000000000071 /* ReceiptImageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptImageTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000077 /* AppVersionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVersionTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000079 /* WalletSpinnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletSpinnerTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000080 /* ReceiptCorpus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptCorpus.swift; sourceTree = "<group>"; };
+		B00000000000000000000081 /* ReceiptScoreboardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptScoreboardTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -299,6 +303,8 @@
 				B00000000000000000000071 /* ReceiptImageTests.swift */,
 				B00000000000000000000077 /* AppVersionTests.swift */,
 				B00000000000000000000079 /* WalletSpinnerTests.swift */,
+				B00000000000000000000080 /* ReceiptCorpus.swift */,
+				B00000000000000000000081 /* ReceiptScoreboardTests.swift */,
 			);
 			path = FutariKakeiboTests;
 			sourceTree = "<group>";
@@ -484,6 +490,8 @@
 				C00000000000000000000071 /* ReceiptImageTests.swift in Sources */,
 				C00000000000000000000077 /* AppVersionTests.swift in Sources */,
 				C00000000000000000000079 /* WalletSpinnerTests.swift in Sources */,
+				C00000000000000000000080 /* ReceiptCorpus.swift in Sources */,
+				C00000000000000000000081 /* ReceiptScoreboardTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

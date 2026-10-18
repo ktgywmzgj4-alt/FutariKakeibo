@@ -800,10 +800,17 @@ enum ReceiptParser {
 
     // MARK: - 何を見て決めたか（DEBUGのみ）
 
+    /// 候補と点数を記録に出すかどうか。
+    ///
+    /// 精度を数えるテストは同じレシートを何十回も読むので、そのあいだだけ止める
+    /// （`ReceiptParser.$logsDecisions.withValue(false) { ... }`）。読み方は何も変わらない。
+    @TaskLocal static var logsDecisions = true
+
     /// 候補と点数を出す。実機で外したとき、何を見て決めたかを追えるようにする。
     /// 配信するビルドでは1行も出ない。
     private static func logCandidates(_ label: String, _ entries: [(String, Int, String)]) {
         #if DEBUG
+        guard logsDecisions else { return }
         guard !entries.isEmpty else {
             print("[レシート解析] \(label): 候補なし")
             return
@@ -817,6 +824,7 @@ enum ReceiptParser {
 
     private static func logChoice(_ label: String, _ value: String, _ score: Int, _ reason: String) {
         #if DEBUG
+        guard logsDecisions else { return }
         print("[レシート解析] \(label) は「\(value)」に決めた（\(score)点 / \(reason)）")
         #endif
     }
