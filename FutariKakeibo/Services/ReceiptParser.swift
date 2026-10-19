@@ -375,7 +375,7 @@ enum ReceiptParser {
     /// - 売上票の欄の名前（「AID」「APL Visa」）
     ///
     /// レシートの上が切れて読まれると、こうした行がいちばん上に来て店名に選ばれていた
-    /// （2026-10-19、PISOLAで「・ソーセージ（季節）1本」、ローソンで「(肉海費祝動 11090袋」）。
+    /// （2026-10-19、PISOLAで「•ソーセージ（季節）1本」、ローソンで「(肉海費祝動 11090袋」）。
     static func startsLikeNonMerchant(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard let first = trimmed.first else { return false }
