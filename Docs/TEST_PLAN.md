@@ -5,7 +5,7 @@
 1. 起動・初期設定・再起動
 2. 1円、999円、10万円、999万9999円の保存
 3. A/B双方から追加・編集・削除
-4. 招待されていないApple Accountからアクセス不能
+4. 合言葉を知らないApple Accountからアクセス不能。使った合言葉・期限の切れた合言葉では参加できない（共有は「URLを知っている人なら参加できる」形。手順は `Docs/SHARING_SECURITY_AUDIT.md`）
 5. アプリ削除・再導入後のCloudKit再参加
 6. Production CloudKit環境での共有
 7. Releaseビルドでのレシート撮影

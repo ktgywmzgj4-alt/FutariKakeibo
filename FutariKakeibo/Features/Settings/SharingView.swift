@@ -6,6 +6,7 @@ struct SharingView: View {
     @EnvironmentObject private var store: AppStore
     @State private var enteredCode = ""
     @State private var didJoin = false
+    @State private var confirmStopSharing = false
     @FocusState private var codeFieldFocused: Bool
 
     private var isShared: Bool { store.household?.cloudLocation != nil }
@@ -14,9 +15,15 @@ struct SharingView: View {
         ScrollView {
             VStack(spacing: AppTheme.cardSpacing) {
                 stateCard
+                if isShared, let members = store.shareMembers {
+                    membersCard(members)
+                }
                 if let invite = store.shareInvite {
                     codeCard(invite)
                 } else {
+                    if store.inviteWasUsed {
+                        usedNotice
+                    }
                     inviteCard
                 }
                 joinCard
@@ -26,6 +33,23 @@ struct SharingView: View {
             .padding(.bottom, 26)
         }
         .background(AppTheme.background)
+        .task {
+            // 誰が参加しているかを読み、使われた・期限の切れた合言葉を片付ける。
+            await store.loadShareMembers()
+            await store.tidyIssuedInvites()
+        }
+        .confirmationDialog(
+            "共有をやめますか？",
+            isPresented: $confirmStopSharing,
+            titleVisibility: .visible
+        ) {
+            Button("共有をやめる", role: .destructive) {
+                Task { await store.stopSharingBecauseOfStrangers() }
+            }
+            Button("やめない", role: .cancel) {}
+        } message: {
+            Text(Self.stopSharingMessage)
+        }
         .navigationTitle("ふたりで共有")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -53,7 +77,7 @@ struct SharingView: View {
             // 誰も招いていないうちから「2人で共有しています」と言わない。
             Text(isShared
                  ? "この家計簿はiCloudに保存されています。合言葉を伝えた相手が参加すると、どちらが記録してももう一方の端末に届きます。"
-                 : "いまはこのiPhoneの中だけに保存しています。合言葉を発行すると、相手と同じ家計簿を使えます。")
+                 : "いまはこのiPhoneの中だけに保存しています。アプリを削除すると、この家計簿は戻せません。合言葉を発行すると、iCloudにも保存され、相手と同じ家計簿を使えます。")
                 .font(.footnote)
                 .foregroundStyle(AppTheme.secondaryText)
         }
@@ -161,6 +185,65 @@ struct SharingView: View {
         .appCard()
     }
 
+    /// 共有に参加している人。ふたりより多ければ知らせる。
+    private func membersCard(_ members: [CloudKitSyncService.ShareMember]) -> some View {
+        let joined = members.filter { $0.isOwner || $0.hasAccepted }
+        let strangers = CloudKitSyncService.strangerCount(in: members)
+        let isOwner = store.household?.cloudLocation?.scope == .privateDatabase
+        return VStack(alignment: .leading, spacing: 9) {
+            Label("参加している人（\(joined.count)人）", systemImage: "person.2")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppTheme.ink)
+
+            ForEach(Array(joined.enumerated()), id: \.offset) { _, member in
+                Text(Self.memberLine(member))
+                    .font(.footnote)
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+
+            if strangers > 0 {
+                Text("ふたりより多く参加しています（\(strangers)人多い）。合言葉やリンクが知らない人に渡った可能性があります。")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(AppTheme.danger)
+                if isOwner {
+                    Button("共有をやめる（全員が外れます）") { confirmStopSharing = true }
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(AppTheme.danger)
+                        .disabled(store.isPreparingInvite)
+                } else {
+                    Text("この家計簿を作った人に知らせて、共有をやめてもらってください。")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard()
+    }
+
+    /// 共有をやめる前の確認。**「やめれば前のリンクで入れなくなる」とは言わない。**
+    /// 共有を始め直すと、共有のリンクは前と同じになる（Appleの `CKShare.url` の説明）。
+    static let stopSharingMessage =
+        "パートナーも含めて、参加している人は全員この家計簿に入れなくなります。家計簿の記録は消えません。"
+        + "続けて使うときは、新しい合言葉でパートナーに入り直してもらってください。"
+        + "共有のリンクは前と同じなので、リンクそのものを控えている人はまた入れます。そのときもここに人数が出ます。"
+
+    static func memberLine(_ member: CloudKitSyncService.ShareMember) -> String {
+        let name = member.name ?? "（名前は表示されません）"
+        var tags: [String] = []
+        if member.isOwner { tags.append("作った人") }
+        if member.isCurrentUser { tags.append("あなた") }
+        return tags.isEmpty ? "・\(name)" : "・\(name)（\(tags.joined(separator: "・"))）"
+    }
+
+    private var usedNotice: some View {
+        Label("合言葉が使われました。相手がこの家計簿に参加しています。", systemImage: "checkmark.circle")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(AppTheme.positive)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .appCard()
+    }
+
     private var joinCard: some View {
         VStack(alignment: .leading, spacing: 13) {
             Label("相手の家計簿に入る", systemImage: "key.horizontal")
@@ -226,9 +309,10 @@ struct SharingView: View {
                 .foregroundStyle(AppTheme.ink)
 
             bullet("合言葉には家計のデータは入っていません。どの家計簿に入るかを示すだけです。")
-            bullet("1日で使えなくなります。")
-            bullet("誰かが参加すると、その合言葉は無効になります。")
-            bullet("家計のデータはAppleのiCloudに保存され、招いた相手だけが読み書きできます。")
+            bullet("合言葉は、iCloudの公開データベース（このアプリの利用者なら、合言葉を指定して読める場所）に、家計簿の場所と期限だけを入れて一時的に置きます。使われたら、発行したiPhoneが次にアプリを開いたときに消します。")
+            bullet("1日で使えなくなります。誰かが1回参加すると、その合言葉はもう使えません。")
+            bullet("合言葉を知っている人は誰でも参加できます。相手にだけ伝えてください。")
+            bullet("家計のデータはAppleのiCloudに保存され、この家計簿に参加した人だけが読み書きできます。")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .appCard()

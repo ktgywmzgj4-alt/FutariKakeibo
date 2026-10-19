@@ -34,6 +34,10 @@ final class AppStore: ObservableObject {
     @Published var shareConfiguration: ShareConfiguration?
     /// 相手に伝える合言葉。発行した直後だけ画面に出す。
     @Published var shareInvite: ShareInvite?
+    /// 画面に出していた合言葉が使われた（相手が参加した）。共有の画面でお知らせを出す。
+    @Published private(set) var inviteWasUsed = false
+    /// 共有に参加している人（`loadShareMembers`）。共有していない・まだ読んでいないなら nil。
+    @Published private(set) var shareMembers: [CloudKitSyncService.ShareMember]?
     @Published private(set) var isPreparingInvite = false
     /// 直近の自動計上で何件追加したか。ホーム画面の通知に使う。
     @Published var lastRecurringInsertCount = 0
@@ -158,18 +162,28 @@ final class AppStore: ObservableObject {
     enum RecoveryOutcome: Equatable {
         case recovered
         case nothingFound
+        /// iCloudに家計簿が2つ以上ある。どれに戻るかを利用者に選んでもらう（`recoveryCandidates`）。
+        case chooseOne
         case failed(String)
     }
 
     @Published var isRecovering = false
     @Published var recoveryOutcome: RecoveryOutcome?
+    @Published private(set) var recoveryCandidates: [RecoveryCandidate] = []
+    /// 選ぶ画面に出しているあいだ、取ってきた中身を持っておく（選んだあとに取り直さない）。
+    private var recoverySnapshots: [String: CloudKitSyncService.CloudSnapshot] = [:]
 
     /// iCloudに残っている家計簿を探して取り戻す。
     ///
     /// **アプリを消して入れ直すと、合言葉を発行した側は家計簿に戻れなかった。**
     /// 参加した側は合言葉をもう一度入れれば `joinSharing` が全部取り直すが、
-    /// 発行した側は入れる合言葉を持たない。合言葉は使い切りで消えるからだ。
+    /// 発行した側は入れる合言葉を持たない。合言葉は使い切りだからだ。
     /// iCloudにデータはあるのに手元から届かない、という状態だった。
+    ///
+    /// **見つかった家計簿が2つ以上なら、どれに戻るかを選んでもらう。**
+    /// 以前は自分で作ったほうを必ず選んでいたので、参加する前に一度でも合言葉を発行した人は、
+    /// 相手との家計簿ではなく、そのとき作った古い家計簿に戻っていた（2026-10-19 監査）。
+    /// 「取り戻せました」と出るのに、いつもの家計簿ではない、という状態になる。
     ///
     /// **自動では動かさない。** 起動時にCloudKitを触ると、entitlementの無いビルドで
     /// アプリごと落ちる（`loadIfNeeded` のコメント）。押した人がいるときだけ動く。
@@ -177,36 +191,46 @@ final class AppStore: ObservableObject {
         guard snapshot.household == nil, !isRecovering else { return }
         isRecovering = true
         recoveryOutcome = nil
+        recoveryCandidates = []
+        recoverySnapshots = [:]
         defer { isRecovering = false }
 
         do {
-            guard let location = try await cloudService.findExistingHouseholdLocation() else {
+            let locations = try await cloudService.findExistingHouseholdLocations()
+            guard !locations.isEmpty else {
                 recoveryOutcome = .nothingFound
                 return
             }
-            let cloud = try await cloudService.fetchSnapshot(at: location)
-            var household = cloud.household
-            household.cloudLocation = location
-            // **どちら側として戻ってきたかで「自分」が変わる。**
-            // プライベート側にあるのは自分で作った家計簿なので、自分は発行した側。
-            // 共有側にあるのは相手から共有された家計簿なので、自分は参加した側。
-            // ここを取り違えると、支出が相手の名前で記録されていく。
-            let me = Self.memberOnThisPhone(
-                after: location.scope,
-                members: household.members,
-                ownerMemberID: household.ownerMemberID
-            )
-            snapshot = AppSnapshot(
-                household: household,
-                selectedMemberID: me,
-                expenses: cloud.expenses,
-                incomes: cloud.incomes,
-                deletedExpenseIDs: cloud.deletedExpenseIDs,
-                deletedIncomeIDs: cloud.deletedIncomeIDs
-            )
-            await persistLocally()
-            syncState = .synced(.now)
-            recoveryOutcome = .recovered
+            var found: [(location: CloudLocation, cloud: CloudKitSyncService.CloudSnapshot)] = []
+            var firstError: Error?
+            for location in locations {
+                do {
+                    let cloud = try await cloudService.fetchSnapshot(at: location)
+                    found.append((location, cloud))
+                } catch {
+                    // 1つ読めなくても、ほかの家計簿には戻れる。全部だめなときだけ失敗にする。
+                    firstError = firstError ?? error
+                }
+            }
+            guard !found.isEmpty else {
+                throw firstError ?? CloudKitSyncService.SyncError.missingRootRecord
+            }
+            if found.count == 1, let only = found.first {
+                await restore(only.cloud, at: only.location)
+                return
+            }
+            for item in found {
+                recoverySnapshots[RecoveryCandidate.key(for: item.location)] = item.cloud
+            }
+            recoveryCandidates = RecoveryCandidate.ranked(found.map {
+                RecoveryCandidate(
+                    location: $0.location,
+                    household: $0.cloud.household,
+                    expenses: $0.cloud.expenses,
+                    incomes: $0.cloud.incomes
+                )
+            })
+            recoveryOutcome = .chooseOne
         } catch {
             syncState = .localOnly
             recoveryOutcome = .failed(Self.inviteFailureMessage(
@@ -214,6 +238,54 @@ final class AppStore: ObservableObject {
                 fallback: "iCloudに繋がりませんでした。電波の届くところでもう一度お試しください。"
             ))
         }
+    }
+
+    /// 選ぶ画面で選ばれた家計簿に戻る。
+    func recover(_ candidate: RecoveryCandidate) async {
+        guard snapshot.household == nil, !isRecovering else { return }
+        isRecovering = true
+        defer { isRecovering = false }
+        do {
+            let cloud: CloudKitSyncService.CloudSnapshot
+            if let cached = recoverySnapshots[candidate.id] {
+                cloud = cached
+            } else {
+                cloud = try await cloudService.fetchSnapshot(at: candidate.location)
+            }
+            await restore(cloud, at: candidate.location)
+        } catch {
+            recoveryOutcome = .failed(Self.inviteFailureMessage(
+                for: error,
+                fallback: "iCloudに繋がりませんでした。電波の届くところでもう一度お試しください。"
+            ))
+        }
+    }
+
+    private func restore(_ cloud: CloudKitSyncService.CloudSnapshot, at location: CloudLocation) async {
+        var household = cloud.household
+        household.cloudLocation = location
+        // **どちら側として戻ってきたかで「自分」が変わる。**
+        // プライベート側にあるのは自分で作った家計簿なので、自分は発行した側。
+        // 共有側にあるのは相手から共有された家計簿なので、自分は参加した側。
+        // ここを取り違えると、支出が相手の名前で記録されていく。
+        let me = Self.memberOnThisPhone(
+            after: location.scope,
+            members: household.members,
+            ownerMemberID: household.ownerMemberID
+        )
+        snapshot = AppSnapshot(
+            household: household,
+            selectedMemberID: me,
+            expenses: cloud.expenses,
+            incomes: cloud.incomes,
+            deletedExpenseIDs: cloud.deletedExpenseIDs,
+            deletedIncomeIDs: cloud.deletedIncomeIDs
+        )
+        await persistLocally()
+        syncState = .synced(.now)
+        recoveryCandidates = []
+        recoverySnapshots = [:]
+        recoveryOutcome = .recovered
     }
 
     func createHousehold(selfName: String, partnerName: String, monthlyBudget: Int) async {
@@ -683,8 +755,15 @@ final class AppStore: ObservableObject {
             guard let url = result.1.url else {
                 throw CloudKitSyncService.SyncError.inviteUnavailable("共有のURLが空でした")
             }
-            shareInvite = try await cloudService.publishInvite(shareURL: url)
+            let invite = try await cloudService.publishInvite(shareURL: url)
+            shareInvite = invite
+            inviteWasUsed = false
+            // 控えに足す。前に発行した合言葉は、後片付け（`tidyIssuedInvites`）で
+            // 公開データベースから消す（共有のURLが入っているので残さない）。
+            snapshot.issuedInvites.append(IssuedInvite(code: invite.code, expiresAt: invite.expiresAt))
+            await persistLocally()
             syncState = .synced(.now)
+            Task { await tidyIssuedInvites() }
         } catch {
             syncState = .failed(error.localizedDescription)
             errorMessage = Self.inviteFailureMessage(for: error)
@@ -728,25 +807,23 @@ final class AppStore: ObservableObject {
 
         do {
             let invite = try await cloudService.resolveInvite(code: code)
+            // **参加する前に、合言葉を自分のものにする（「使われた印」を作る）。** 合言葉は1回だけ。
+            // 発行した人にしか合言葉を消せないので、印が無いと期限まで誰でも使えてしまう。
+            // 先に印を作れた1人だけが進める。参加に失敗しても、同じ人ならもう一度入れる。
+            try await cloudService.claimInvite(invite)
             let location = try await cloudService.acceptShare(at: invite.shareURL)
             let cloud = try await cloudService.fetchSnapshot(at: location)
 
-            var household = cloud.household
-            household.cloudLocation = location
-            let selectedMember = household.members.first { $0.role == .partner }?.id
-                ?? household.members.last?.id
-            snapshot = AppSnapshot(
-                household: household,
-                selectedMemberID: selectedMember,
-                expenses: cloud.expenses,
-                incomes: cloud.incomes,
-                deletedExpenseIDs: cloud.deletedExpenseIDs,
-                deletedIncomeIDs: cloud.deletedIncomeIDs
-            )
+            // この端末が前に発行した合言葉（自分の前の家計簿のもの）は、もう要らない。
+            // 控えだけ引き継いで、後片付けで公開データベースから消す。
+            let leftoverInvites = snapshot.issuedInvites
+            snapshot = Self.snapshotAfterJoining(current: snapshot, cloud: cloud, at: location)
+            shareInvite = nil
             await persistLocally()
-            // 一度使った合言葉は残さない。
-            await cloudService.consumeInvite(code: invite.code)
             syncState = .synced(.now)
+            if !leftoverInvites.isEmpty {
+                Task { await withdrawAllIssuedInvites() }
+            }
             return true
         } catch {
             syncState = .failed(error.localizedDescription)
@@ -758,8 +835,54 @@ final class AppStore: ObservableObject {
         }
     }
 
+    /// 共有のリンクから届いた招待で、まだ参加していないもの（参加してよいか確かめている）。
+    @Published private(set) var pendingShareInvitation: PendingShareInvitation?
+
+    /// 確かめ中の招待。家計簿を作った人の名前は、iCloudが教えてくれるときだけ入る。
+    struct PendingShareInvitation: Identifiable {
+        let id = UUID()
+        let metadata: CKShare.Metadata
+        var ownerName: String?
+    }
+
+    /// 共有のリンク（iCloudの招待）を開いたときに参加する。
+    ///
+    /// **すでに家計簿がある人は、黙って置き換えない。** 参加すると手元の家計簿は共有先のものに
+    /// 置き換わり、iPhoneの中だけの記録は消える。合言葉で参加する画面には注意書きがあるが、
+    /// リンクから入る経路は確かめずに置き換えていた（2026-10-19 監査）。この共有は
+    /// 「リンクを知っている人なら誰でも参加できる」形なので、知らない人から届いたリンクでも起きうる。
+    /// 同じ家計簿のリンクを開き直しただけなら、置き換わるものが無いので確かめない。
     func acceptPendingShareIfNeeded() async {
         guard let metadata = CloudShareInbox.shared.take() else { return }
+        if let household = snapshot.household,
+           metadata.hierarchicalRootRecordID?.zoneID.zoneName != household.cloudLocation?.zoneName {
+            pendingShareInvitation = PendingShareInvitation(
+                metadata: metadata,
+                ownerName: metadata.ownerIdentity.nameComponents.flatMap { components in
+                    let text = PersonNameComponentsFormatter.localizedString(from: components, style: .default)
+                    return text.isEmpty ? nil : text
+                }
+            )
+            return
+        }
+        await accept(metadata)
+    }
+
+    /// 確かめたうえで、届いていた招待に参加する。
+    ///
+    /// 招待は引数で受け取る。アラートは押されたあとに閉じる処理（`declinePendingShare`）も呼ぶので、
+    /// プロパティから読むと、参加する前に消えていることがある。
+    func confirmPendingShare(_ invitation: PendingShareInvitation) async {
+        pendingShareInvitation = nil
+        await accept(invitation.metadata)
+    }
+
+    /// 届いていた招待には参加しない。手元の家計簿はそのまま。
+    func declinePendingShare() {
+        pendingShareInvitation = nil
+    }
+
+    private func accept(_ metadata: CKShare.Metadata) async {
         isLoading = true
         syncState = .syncing
         defer { isLoading = false }
@@ -767,20 +890,14 @@ final class AppStore: ObservableObject {
         do {
             let location = try await cloudService.acceptShare(metadata)
             let cloud = try await cloudService.fetchSnapshot(at: location)
-            var household = cloud.household
-            household.cloudLocation = location
-            let selectedMember = household.members.first { $0.role == .partner }?.id
-                ?? household.members.last?.id
-            snapshot = AppSnapshot(
-                household: household,
-                selectedMemberID: selectedMember,
-                expenses: cloud.expenses,
-                incomes: cloud.incomes,
-                deletedExpenseIDs: cloud.deletedExpenseIDs,
-                deletedIncomeIDs: cloud.deletedIncomeIDs
-            )
+            let leftoverInvites = snapshot.issuedInvites
+            snapshot = Self.snapshotAfterJoining(current: snapshot, cloud: cloud, at: location)
+            shareInvite = nil
             await persistLocally()
             syncState = .synced(.now)
+            if !leftoverInvites.isEmpty {
+                Task { await withdrawAllIssuedInvites() }
+            }
         } catch {
             syncState = .failed(error.localizedDescription)
             errorMessage = "共有への参加に失敗しました。\n\(error.localizedDescription)"
@@ -863,55 +980,31 @@ final class AppStore: ObservableObject {
             try await cloudService.saveHousehold(household)
 
             let cloud = try await cloudService.fetchSnapshot(at: location)
-            let deletions = snapshot.deletedExpenseIDs.merging(cloud.deletedExpenseIDs) {
-                max($0, $1)
-            }
-            let deleted = Set(deletions.keys)
-            let localByID = Dictionary(uniqueKeysWithValues: snapshot.expenses.map { ($0.id, $0) })
-            let remoteByID = Dictionary(uniqueKeysWithValues: cloud.expenses.map { ($0.id, $0) })
-            let mergedIDs = Set(localByID.keys).union(remoteByID.keys).subtracting(deleted)
-            let merged = mergedIDs.compactMap { id -> Expense? in
-                switch (localByID[id], remoteByID[id]) {
-                case let (local?, remote?): local.updatedAt >= remote.updatedAt ? local : remote
-                case let (local?, nil): local
-                case let (nil, remote?): remote
-                case (nil, nil): nil
-                }
-            }.sorted { $0.date > $1.date }
-            let incomeDeletions = snapshot.deletedIncomeIDs.merging(cloud.deletedIncomeIDs) {
-                max($0, $1)
-            }
-            let deletedIncomes = Set(incomeDeletions.keys)
-            let localIncomes = Dictionary(uniqueKeysWithValues: snapshot.incomes.map { ($0.id, $0) })
-            let remoteIncomes = Dictionary(uniqueKeysWithValues: cloud.incomes.map { ($0.id, $0) })
-            let mergedIncomeIDs = Set(localIncomes.keys)
-                .union(remoteIncomes.keys)
-                .subtracting(deletedIncomes)
-            let mergedIncomes = mergedIncomeIDs.compactMap { id -> Income? in
-                switch (localIncomes[id], remoteIncomes[id]) {
-                case let (local?, remote?): local.updatedAt >= remote.updatedAt ? local : remote
-                case let (local?, nil): local
-                case let (nil, remote?): remote
-                case (nil, nil): nil
-                }
-            }.sorted { $0.date > $1.date }
+            // 突き合わせの決まりは `SyncMerge` にまとめてある（削除印が勝つ・新しいほうが勝つ・
+            // 送り直すのはiCloud側が古いものだけ）。場面ごとのテストは `SyncMergeTests`。
+            let expenseMerge = SyncMerge.merge(
+                local: snapshot.expenses,
+                localDeletions: snapshot.deletedExpenseIDs,
+                remote: cloud.expenses,
+                remoteDeletions: cloud.deletedExpenseIDs
+            )
+            let incomeMerge = SyncMerge.merge(
+                local: snapshot.incomes,
+                localDeletions: snapshot.deletedIncomeIDs,
+                remote: cloud.incomes,
+                remoteDeletions: cloud.deletedIncomeIDs
+            )
+            let merged = expenseMerge.entries
+            let deletions = expenseMerge.deletions
+            let mergedIncomes = incomeMerge.entries
+            let incomeDeletions = incomeMerge.deletions
 
-            // クラウドに無い、またはクラウドのほうが古いものだけが送り直しの対象。
+            // iCloudに無い、またはiCloudのほうが古いものだけが送り直しの対象。
             // 前回の送信が通っていれば、ここはたいてい空になる。
-            let staleExpenseIDs = Self.staleIDs(
-                local: merged.map { ($0.id, $0.updatedAt) },
-                remote: cloud.expenses.map { ($0.id, $0.updatedAt) }
-            )
-            let staleExpenses = merged.filter { staleExpenseIDs.contains($0.id) }
-            let staleIncomeIDs = Self.staleIDs(
-                local: mergedIncomes.map { ($0.id, $0.updatedAt) },
-                remote: cloud.incomes.map { ($0.id, $0.updatedAt) }
-            )
-            let staleIncomes = mergedIncomes.filter { staleIncomeIDs.contains($0.id) }
-            let unsentDeletions = deletions.filter { cloud.deletedExpenseIDs[$0.key] == nil }
-            let unsentIncomeDeletions = incomeDeletions.filter {
-                cloud.deletedIncomeIDs[$0.key] == nil
-            }
+            let staleExpenses = merged.filter { expenseMerge.staleIDs.contains($0.id) }
+            let staleIncomes = mergedIncomes.filter { incomeMerge.staleIDs.contains($0.id) }
+            let unsentDeletions = expenseMerge.unsentDeletions
+            let unsentIncomeDeletions = incomeMerge.unsentDeletions
 
             var mergedHousehold = cloud.household
             mergedHousehold.cloudLocation = location
@@ -947,13 +1040,71 @@ final class AppStore: ObservableObject {
         // 相手が追加したひな形の分も、この端末で計上しておく。
         await applyRecurringExpenses()
         tidyReceiptImages()
+        // 発行した合言葉が残っていれば後片付けする。無ければ通信しない。
+        if !snapshot.issuedInvites.isEmpty {
+            await tidyIssuedInvites()
+        }
     }
 
-    /// 送り直しが要るものの印。**クラウドに無いか、クラウドのほうが古いものだけ。**
+    /// 家計簿に入ったあとの手元の中身（合言葉からでも、共有のリンクからでも）。
     ///
-    /// ここを「全部」にすると、同期のたびに件数ぶんの往復が走り、相手の記録が
-    /// 画面に出るまで何秒もかかる。実機で10秒を超えていたのがそれだった。
-    /// 同じ時刻のものは送らない — 送っても中身が変わらないため。
+    /// **同じ家計簿に入り直したときは、手元を置き換えずに突き合わせる。**
+    /// 家計簿を作った人に共有をやめられて外れていたあいだに足した記録や、送れていなかった記録は、
+    /// 手元にしか無い。置き換えるとそれが消える（同じ家計簿の合言葉をもう一度入れたときも同じ）。
+    /// 突き合わせて残し、次の同期で送る。レシート画像の送信待ちも残す（2026-10-19 監査）。
+    ///
+    /// 別の家計簿に入ったときは、これまでどおり置き換える（参加する前に画面で伝えている）。
+    /// 発行した合言葉の控えは、どちらでも引き継ぐ（後片付けで公開データベースから消すため）。
+    nonisolated static func snapshotAfterJoining(
+        current: AppSnapshot,
+        cloud: CloudKitSyncService.CloudSnapshot,
+        at location: CloudLocation
+    ) -> AppSnapshot {
+        var household = cloud.household
+        household.cloudLocation = location
+        let partner = household.members.first { $0.role == .partner }?.id ?? household.members.last?.id
+        let isSameHousehold = current.household?.cloudLocation.map(RecoveryCandidate.key(for:))
+            == RecoveryCandidate.key(for: location)
+        guard isSameHousehold else {
+            return AppSnapshot(
+                household: household,
+                selectedMemberID: partner,
+                expenses: cloud.expenses,
+                incomes: cloud.incomes,
+                deletedExpenseIDs: cloud.deletedExpenseIDs,
+                deletedIncomeIDs: cloud.deletedIncomeIDs,
+                issuedInvites: current.issuedInvites
+            )
+        }
+
+        let expenses = SyncMerge.merge(
+            local: current.expenses,
+            localDeletions: current.deletedExpenseIDs,
+            remote: cloud.expenses,
+            remoteDeletions: cloud.deletedExpenseIDs
+        )
+        let incomes = SyncMerge.merge(
+            local: current.incomes,
+            localDeletions: current.deletedIncomeIDs,
+            remote: cloud.incomes,
+            remoteDeletions: cloud.deletedIncomeIDs
+        )
+        // この端末の「自分」は、家計簿に残っていればそのまま。
+        let me = current.selectedMemberID.flatMap { id in
+            household.members.contains { $0.id == id } ? id : nil
+        } ?? partner
+        return AppSnapshot(
+            household: household,
+            selectedMemberID: me,
+            expenses: expenses.entries,
+            incomes: incomes.entries,
+            deletedExpenseIDs: expenses.deletions,
+            deletedIncomeIDs: incomes.deletions,
+            pendingReceiptImageIDs: current.pendingReceiptImageIDs,
+            issuedInvites: current.issuedInvites
+        )
+    }
+
     /// 取り戻したあと、この端末の「自分」を誰にするか。
     ///
     /// **どちら側として戻ってきたかで入れ替わる。**
@@ -975,19 +1126,12 @@ final class AppStore: ObservableObject {
         }
     }
 
+    /// 送り直しが要るものの印。中身は `SyncMerge.staleIDs`（テストはこの名前で呼んでいる）。
     nonisolated static func staleIDs(
         local: [(id: UUID, updatedAt: Date)],
         remote: [(id: UUID, updatedAt: Date)]
     ) -> Set<UUID> {
-        let remoteByID = Dictionary(remote.map { ($0.id, $0.updatedAt) }) { first, _ in first }
-        return Set(
-            local
-                .filter { item in
-                    guard let remoteDate = remoteByID[item.id] else { return true }
-                    return item.updatedAt > remoteDate
-                }
-                .map(\.id)
-        )
+        SyncMerge.staleIDs(local: local, remote: remote)
     }
 
     /// 前回の送信が通らなかったぶんを送り直す。
@@ -1032,6 +1176,108 @@ final class AppStore: ObservableObject {
             }
         }
         await persistLocally()
+    }
+
+    // MARK: - 合言葉の後片付けと、共有に参加している人
+
+    /// この端末が発行した合言葉の後片付け。
+    ///
+    /// 合言葉のレコードには共有のURLが入っていて、**消せるのは発行した本人だけ**。
+    /// 使われたもの・期限の切れたもの・発行し直して要らなくなったものを、公開データベースから消す。
+    /// 通信できなければ控えを残し、次の同期でもう一度試す。
+    func tidyIssuedInvites() async {
+        let issued = snapshot.issuedInvites
+        guard !issued.isEmpty else { return }
+        let latestCode = IssuedInvite.latest(in: issued)?.code
+        var finished: Set<String> = []
+        for invite in issued {
+            let isLatest = invite.code == latestCode
+            var remote: ShareInvite.State?
+            if IssuedInvite.needsRemoteCheck(invite, isLatest: isLatest) {
+                remote = try? await cloudService.issuedInviteState(code: invite.code)
+                if remote == nil { continue }
+            }
+            switch IssuedInvite.disposition(invite, isLatest: isLatest, remoteState: remote) {
+            case .keep:
+                continue
+            case .forget:
+                finished.insert(invite.code)
+            case .withdraw:
+                do {
+                    try await cloudService.withdrawInvite(code: invite.code)
+                    finished.insert(invite.code)
+                } catch {
+                    continue
+                }
+            }
+            if remote == .used, shareInvite?.code == invite.code {
+                shareInvite = nil
+                inviteWasUsed = true
+            } else if shareInvite?.code == invite.code {
+                shareInvite = nil
+            }
+        }
+        guard !finished.isEmpty else { return }
+        // 待っているあいだに新しく発行した合言葉は消さない。片付いたものだけ外す。
+        snapshot.issuedInvites.removeAll { finished.contains($0.code) }
+        await persistLocally()
+    }
+
+    /// 発行した合言葉を、期限や使われたかに関わらず全部消す（別の家計簿に移ったとき・共有をやめたとき）。
+    private func withdrawAllIssuedInvites() async {
+        var finished: Set<String> = []
+        for invite in snapshot.issuedInvites {
+            if (try? await cloudService.withdrawInvite(code: invite.code)) != nil {
+                finished.insert(invite.code)
+            }
+        }
+        guard !finished.isEmpty else { return }
+        snapshot.issuedInvites.removeAll { finished.contains($0.code) }
+        await persistLocally()
+    }
+
+    /// 共有に参加している人を読む。共有の画面を開いたときに呼ぶ。
+    ///
+    /// 読めなかったときは前の結果を残し、アラートは出さない（通信が切れているだけのことが多い）。
+    func loadShareMembers() async {
+        guard let location = snapshot.household?.cloudLocation else {
+            shareMembers = nil
+            return
+        }
+        do {
+            shareMembers = try await cloudService.shareMembers(at: location)
+        } catch {
+            // 前の結果を残す。
+        }
+    }
+
+    /// 知らない人が参加していたときに、共有をやめる（家計簿を作った人だけ）。
+    ///
+    /// 家計簿のデータは消えない。パートナーも入れなくなるので、新しい合言葉で入り直してもらう。
+    /// 共有を始め直しても共有のURLは前と同じ（Appleの説明）。使った合言葉ではもう入れないが、
+    /// URLそのものを控えている人は入れてしまう（`CloudKitSyncService.stopSharing`）。
+    @discardableResult
+    func stopSharingBecauseOfStrangers() async -> Bool {
+        guard let location = snapshot.household?.cloudLocation, location.scope == .privateDatabase else {
+            return false
+        }
+        isPreparingInvite = true
+        defer { isPreparingInvite = false }
+        do {
+            try await cloudService.stopSharing(at: location)
+            shareInvite = nil
+            inviteWasUsed = false
+            shareMembers = nil
+            await withdrawAllIssuedInvites()
+            await loadShareMembers()
+            return true
+        } catch {
+            errorMessage = Self.inviteFailureMessage(
+                for: error,
+                fallback: "共有をやめられませんでした。通信の状態を確かめて、もう一度お試しください。"
+            )
+            return false
+        }
     }
 
     func exportCSV() throws -> URL {
