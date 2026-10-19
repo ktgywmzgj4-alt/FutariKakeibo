@@ -384,17 +384,17 @@
       "status": "review",
       "owner": "実行役 + 人間",
       "passes": "店名の欄の入力例が「例：ガソリンスタンド」、内容の欄の入力例が「例：ガソリン代」であること。文言をテストで押さえること。利用者が実機で確かめること",
-      "evidence": "2026-10-19 ExpenseEditorText（入力例の文言）と ExpenseEditorTextTests を足し、店名・内容の欄がそれを使う。scripts/check_all.sh 通過。CIと配信はこれから。",
+      "evidence": "2026-10-19 ExpenseEditorText（入力例の文言）と ExpenseEditorTextTests を足し、店名・内容の欄がそれを使う。PR #44（1ddaca4）、CI 276件中276件成功（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/39178587368）。main へ（50e7939）。TestFlight 2.0.0 / 2026.1019.16 を配信（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/39179277875）: UPLOAD SUCCEEDED（Delivery UUID 7b57fb4c-7188-49a4-9667-3b874d21ccea）、VALID / IN_BETA_TESTING（09:21 JST）。**実機はこれから。**",
       "dependencies": [],
       "notes": "1回目の依頼は 2026-10-09（「店名入力例は「例:ガソリンスタンド」として下さい」）。tasks.json に書かず、店名ではなく内容の欄に入れてしまい、誰も確かめなかった。2026-10-19 に利用者が2回目の依頼をし、ハーネスの変更をClaudeに任せた。AGENTS.md（作業の型 0、罠の表）と CLAUDE.md に「依頼は受けたその場で tasks.json に書く」を足した"
     },
     {
       "id": "T-039",
       "task": "実機で外れたレシート2枚（ローソン・PISOLA）を ReceiptCorpus に足し、店名・合計・内容を直す",
-      "status": "doing",
+      "status": "review",
       "owner": "実行役 + 人間",
       "passes": "ローソンのレシートで店名がチェーン名と支店名（ローソン 北名古屋鹿田合田店）、合計が 590 であること。PISOLA のレシートで店名がチェーン名と支店名（PISOLA 甚目寺店）、合計が 7,257 であること（10%課税額 659 を合計にしない）。品名を店名にしないこと。Apple Intelligence の答えが、レシートの上の方に無い店名や、税額・小計など合計でない金額のときに採らないこと。[OCR評価] が前の段階より下がらないこと",
-      "evidence": "",
+      "evidence": "2026-10-19 PR #44（8164763）。CI 276件中276件成功（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/39178587368）。切り抜きの前に文字のありかを探し、四角の外に文字が2つ以上あれば切り抜かない（ReceiptImageRectifier.cutsOffText）。[OCR評価] 13枚→15枚: 店名（支店名まで）12/13→14/15、（チェーン名まで）12/13→14/15、合計 13/13→15/15、日付 13/13→15/15、種類 12/13→14/15、明細の抽出 67/67→71/71、品名と値段の対応 67/67→71/71、余分 0。もとの13枚の結果は変わらず、ローソン（ローソン 北名古屋鹿田合田店・590）と PISOLA（PISOLA甚目寺店・7,257）は全項目○。1回保存したあと 15/15。上が切れた形の回帰テストでは、店名を空のままにし、PISOLAの 659 を合計にしない。解析 平均32.60ms・最大58.88ms（前回 27.8/50.1ms。CIの機械で揺れる）。下限を測った値に上げた（a53d8ec）。main へ（50e7939）。TestFlight 2.0.0 / 2026.1019.16 を配信（https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/39179277875）: UPLOAD SUCCEEDED（Delivery UUID 7b57fb4c-7188-49a4-9667-3b874d21ccea、2,388,164 bytes）、VALID / IN_BETA_TESTING（09:21 JST）。**実機はこれから。実機の読み取り結果は手元に無く、切り抜きが原因というのは見込み。**",
       "dependencies": ["T-037"],
       "notes": "2026-10-19 利用者がスクリーンショット4枚で報告。ローソン北名古屋鹿田合田店（合計 590）が店名「(肉海費祝動 11090袋」・¥590・その他。PISOLA甚目寺店（合計 7,257）が店名と内容「・ソーセージ（季節）1本」・¥659・外食。写真は公開リポジトリに入れず、文字を組み直し、カード番号・承認番号・担当者名を伏せた。PISOLA の写真はアプリのレシート画面のスクリーンショット（「閉じる」などの文字が写っている）。利用者がどの版で読んだかは未確認"
     }
