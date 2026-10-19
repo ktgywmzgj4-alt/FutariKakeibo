@@ -3,6 +3,9 @@ import Foundation
 
 @MainActor
 final class AppStore: ObservableObject {
+    /// アプリ全体で1つ。画面のほか、通知を押したとき（`AppDelegate`）からも使う。
+    static let shared = AppStore()
+
     enum SyncState: Equatable {
         case localOnly
         case syncing
@@ -974,6 +977,8 @@ final class AppStore: ObservableObject {
         else { return }
 
         syncState = .syncing
+        // 同期の前から手元にあった支出（削除印も）。ここに無いものが「新しく届いた支出」（通知の候補）。
+        let knownExpenseIDs = Set(snapshot.expenses.map(\.id)).union(snapshot.deletedExpenseIDs.keys)
         do {
             // 家計簿の設定はこの先でクラウド側にまるごと置き換わる。
             // 手元で変えた呼び名や予算を落とさないよう、これだけは先に送る。1往復で済む。
@@ -1022,6 +1027,12 @@ final class AppStore: ObservableObject {
             snapshot.pendingReceiptImageIDs.removeAll { !liveImageIDs.contains($0) }
             await persistLocally()
             syncState = .synced(.now)
+            // 手元に保存し終えてから知らせる。押したときにその支出を開けるように。
+            await announcePartnerExpenses(
+                knownBefore: knownExpenseIDs,
+                merged: merged,
+                creators: cloud.expenseCreators
+            )
 
             // ここから先は画面に出ている内容を変えない。待たせない。
             Task {
@@ -1278,6 +1289,107 @@ final class AppStore: ObservableObject {
             )
             return false
         }
+    }
+
+    // MARK: - 相手の支出の通知（T-045・T-046）
+
+    /// 通知を押して開く先。画面（`MainTabView`）が開いたら使って消す。
+    enum NotificationRoute: Equatable, Sendable {
+        case expense(UUID)
+        /// 何件かまとめた通知。履歴を開く。
+        case history
+    }
+
+    @Published var pendingNotificationRoute: NotificationRoute?
+    /// 設定の「パートナーの支出を知らせる」。この端末だけの設定（相手には伝わらない）。
+    @Published private(set) var notifyPartnerExpenses = UserDefaults.standard.bool(forKey: AppStore.notifyPartnerExpensesKey)
+    @Published private(set) var notificationPermission: NotificationPermission = .notDetermined
+
+    nonisolated static let notifyPartnerExpensesKey = "notifyPartnerExpenses"
+    private static let announcedExpenseIDsKey = "announcedPartnerExpenseIDs"
+    private let notifications = LocalNotifications()
+    /// この利用者のユーザーレコードの名前。誰が登録した支出かを見分ける（初めて要るときに1回だけ聞く）。
+    private var myUserRecordName: String?
+
+    /// 知らせた支出の控え（端末だけ）。家計簿を置き換えても残す。同じ支出を2回知らせないため。
+    private static var announcedExpenseIDs: [UUID] {
+        get {
+            (UserDefaults.standard.stringArray(forKey: announcedExpenseIDsKey) ?? []).compactMap { UUID(uuidString: $0) }
+        }
+        set {
+            UserDefaults.standard.set(newValue.map(\.uuidString), forKey: announcedExpenseIDsKey)
+        }
+    }
+
+    func refreshNotificationPermission() async {
+        notificationPermission = await notifications.permission()
+    }
+
+    /// 設定の「パートナーの支出を知らせる」を切り替える。
+    ///
+    /// **通知の許可は、ここでONにしたときだけ求める**（起動したときには聞かない）。
+    /// 許可されなければONにしない（設定の画面で、iPhoneの「設定」への案内を出す）。
+    /// OFFにしても同期は続く。
+    ///
+    /// いまは**アプリを開いているあいだの同期**（30秒ごと・開いたとき）で届いた支出を知らせる。
+    /// 閉じているあいだも知らせるには、バックグラウンドで動く許可とプッシュの権限が要る
+    /// （利用者の承認待ち。`Docs/NOTIFICATIONS.md`）。
+    func setNotifyPartnerExpenses(_ isOn: Bool) async {
+        if isOn {
+            var permission = await notifications.permission()
+            if permission == .notDetermined {
+                permission = await notifications.requestPermission()
+            }
+            notificationPermission = permission
+            guard permission == .allowed else {
+                notifyPartnerExpenses = false
+                UserDefaults.standard.set(false, forKey: Self.notifyPartnerExpensesKey)
+                return
+            }
+        }
+        notifyPartnerExpenses = isOn
+        UserDefaults.standard.set(isOn, forKey: Self.notifyPartnerExpensesKey)
+    }
+
+    /// 相手が新しく登録した支出があれば、この端末で知らせる。決まりは `PartnerExpenseAlert`。
+    private func announcePartnerExpenses(
+        knownBefore: Set<UUID>,
+        merged: [Expense],
+        creators: [UUID: String]
+    ) async {
+        guard notifyPartnerExpenses else { return }
+        let candidates = PartnerExpenseAlert.candidates(
+            knownBefore: knownBefore,
+            merged: merged,
+            alreadyAnnounced: Set(Self.announcedExpenseIDs),
+            now: .now
+        )
+        // 新しい支出が無ければ、ここで終わる（通信しない）。
+        guard !candidates.isEmpty else { return }
+        guard await notifications.permission() == .allowed else { return }
+        if myUserRecordName == nil {
+            myUserRecordName = try? await cloudService.currentUserRecordName()
+        }
+        let identity = PartnerExpenseAlert.Identity(
+            placeholder: CKCurrentUserDefaultName,
+            recordName: myUserRecordName
+        )
+        // 待っているあいだに別の同期が同じ支出を知らせていないか、控えを読み直してから決める。
+        // ここから控えに書くまでは待たないので、2回知らせることはない。
+        let toAnnounce = PartnerExpenseAlert.expensesToAnnounce(
+            knownBefore: knownBefore,
+            merged: candidates,
+            creators: creators,
+            identity: identity,
+            alreadyAnnounced: Set(Self.announcedExpenseIDs),
+            now: .now
+        )
+        guard let content = PartnerExpenseAlert.content(for: toAnnounce) else { return }
+        Self.announcedExpenseIDs = PartnerExpenseAlert.remembering(
+            toAnnounce.map(\.id),
+            in: Self.announcedExpenseIDs
+        )
+        await notifications.post(content)
     }
 
     func exportCSV() throws -> URL {

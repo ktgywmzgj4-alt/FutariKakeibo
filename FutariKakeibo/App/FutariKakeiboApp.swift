@@ -4,7 +4,8 @@ import SwiftUI
 struct FutariKakeiboApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var store = AppStore()
+    // 通知を押したとき（`AppDelegate`）にも同じものを使うので、共有の1つを持つ。
+    @StateObject private var store = AppStore.shared
 
     init() {
         // 引っ張って更新のときは、標準のくるくるの代わりにお財布を回す（walletRefreshable）。
@@ -36,6 +37,8 @@ struct FutariKakeiboApp: App {
             Task {
                 await store.acceptPendingShareIfNeeded()
                 await store.refreshFromCloudIfConfigured()
+                // iPhoneの「設定」で通知の許可を変えて戻ってきたときのため。
+                await store.refreshNotificationPermission()
             }
             // 相手が保存したことを知らせてくれる仕組みがまだ無いので、
             // 開いているあいだは自分から見に行く。これが無いと、画面を開いたまま

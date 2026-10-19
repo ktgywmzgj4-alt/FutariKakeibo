@@ -76,7 +76,10 @@ private struct MainTabView: View {
         case settings
     }
 
+    @EnvironmentObject private var store: AppStore
     @State private var selection: Tab = .dashboard
+    /// 通知を押して開いた支出。
+    @State private var notifiedExpense: Expense?
 
     var body: some View {
         TabView(selection: $selection) {
@@ -103,5 +106,23 @@ private struct MainTabView: View {
                 .tag(Tab.settings)
         }
         .tint(AppTheme.accent)
+        // 通知を押してアプリが起動したときは、この画面が出たときに開く。
+        .onAppear(perform: openNotificationRoute)
+        .onChange(of: store.pendingNotificationRoute) { _, _ in openNotificationRoute() }
+        .sheet(item: $notifiedExpense) { expense in
+            NavigationStack {
+                ExpenseEditorView(expense: expense)
+            }
+        }
+    }
+
+    /// 通知を押して開いたとき。その支出を開く。見つからなければ（もう消された・何件かまとめた通知）履歴を開く。
+    private func openNotificationRoute() {
+        guard let route = store.pendingNotificationRoute else { return }
+        store.pendingNotificationRoute = nil
+        selection = .history
+        if case let .expense(id) = route, let expense = store.expenses.first(where: { $0.id == id }) {
+            notifiedExpense = expense
+        }
     }
 }

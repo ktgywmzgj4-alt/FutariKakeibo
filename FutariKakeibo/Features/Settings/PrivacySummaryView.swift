@@ -47,6 +47,14 @@ struct PrivacySummaryView: View {
                     )
                 }
 
+                Section("通知") {
+                    privacyRow(
+                        "通知に金額は出さない",
+                        detail: Self.notificationDetail,
+                        icon: "bell.badge"
+                    )
+                }
+
                 Section("利用しないもの") {
                     privacyRow("広告トラッキングなし", detail: "行動追跡SDKや広告IDは使いません。", icon: "hand.raised.slash.fill")
                     privacyRow("位置情報なし", detail: "現在地や移動履歴は取得しません。", icon: "location.slash.fill")
@@ -76,6 +84,10 @@ struct PrivacySummaryView: View {
     /// 合言葉は公開データベースに置いている（`CloudKitSyncService.publishInvite`）。
     static let inviteDetail =
         "合言葉を発行すると、共有の場所と期限だけを、CloudKitの公開データベース（アプリの利用者が合言葉を指定して読める場所）に一時的に置きます。家計のデータは置きません。合言葉は1回使われるか1日たつと使えなくなり、発行したiPhoneが次にアプリを開いたときに消します。合言葉を知っている人はだれでも参加できるので、相手にだけ伝えてください。"
+
+    /// 相手の支出の通知（T-046）。通知の文は端末で作り、ロック画面に金額・店名を出さない。
+    static let notificationDetail =
+        "パートナーの支出の通知は、設定でONにしたときだけ、このiPhoneの中で作ります。ロック画面に金額や店名は出しません。"
 
     private func privacyRow(_ title: String, detail: String, icon: String) -> some View {
         Label {

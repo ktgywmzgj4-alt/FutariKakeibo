@@ -60,6 +60,7 @@
 		C00000000000000000000090 /* ExpenseEditorTextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000090 /* ExpenseEditorTextTests.swift */; };
 		C00000000000000000000094 /* SharingSafetyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000094 /* SharingSafetyTests.swift */; };
 		C00000000000000000000093 /* SyncMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000093 /* SyncMergeTests.swift */; };
+		C00000000000000000000097 /* PartnerExpenseAlertTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000097 /* PartnerExpenseAlertTests.swift */; };
 		C00000000000000000000040 /* CategoryBudget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000040 /* CategoryBudget.swift */; };
 		C00000000000000000000041 /* MonthlyReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000041 /* MonthlyReport.swift */; };
 		C00000000000000000000042 /* RecurringExpense.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000042 /* RecurringExpense.swift */; };
@@ -81,6 +82,8 @@
 		C00000000000000000000058 /* ShareInvite.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000058 /* ShareInvite.swift */; };
 		C00000000000000000000092 /* SyncMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000092 /* SyncMerge.swift */; };
 		C00000000000000000000091 /* RecoveryCandidate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000091 /* RecoveryCandidate.swift */; };
+		C00000000000000000000095 /* PartnerExpenseAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000095 /* PartnerExpenseAlert.swift */; };
+		C00000000000000000000096 /* LocalNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000096 /* LocalNotifications.swift */; };
 		C00000000000000000000059 /* SharingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000059 /* SharingView.swift */; };
 		C00000000000000000000060 /* ShareInviteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000060 /* ShareInviteTests.swift */; };
 		C00000000000000000000073 /* SyncPushBackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000073 /* SyncPushBackTests.swift */; };
@@ -165,6 +168,7 @@
 		B00000000000000000000090 /* ExpenseEditorTextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseEditorTextTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000094 /* SharingSafetyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharingSafetyTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000093 /* SyncMergeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncMergeTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000097 /* PartnerExpenseAlertTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PartnerExpenseAlertTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000038 /* FutariKakeibo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FutariKakeibo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B00000000000000000000039 /* FutariKakeiboTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FutariKakeiboTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B00000000000000000000040 /* CategoryBudget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/CategoryBudget.swift; sourceTree = "<group>"; };
@@ -188,6 +192,8 @@
 		B00000000000000000000058 /* ShareInvite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/ShareInvite.swift; sourceTree = "<group>"; };
 		B00000000000000000000092 /* SyncMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/SyncMerge.swift; sourceTree = "<group>"; };
 		B00000000000000000000091 /* RecoveryCandidate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/RecoveryCandidate.swift; sourceTree = "<group>"; };
+		B00000000000000000000095 /* PartnerExpenseAlert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/PartnerExpenseAlert.swift; sourceTree = "<group>"; };
+		B00000000000000000000096 /* LocalNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/LocalNotifications.swift; sourceTree = "<group>"; };
 		B00000000000000000000059 /* SharingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Settings/SharingView.swift; sourceTree = "<group>"; };
 		B00000000000000000000060 /* ShareInviteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareInviteTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000073 /* SyncPushBackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPushBackTests.swift; sourceTree = "<group>"; };
@@ -298,6 +304,8 @@
 				B00000000000000000000058 /* ShareInvite.swift */,
 				B00000000000000000000092 /* SyncMerge.swift */,
 				B00000000000000000000091 /* RecoveryCandidate.swift */,
+				B00000000000000000000095 /* PartnerExpenseAlert.swift */,
+				B00000000000000000000096 /* LocalNotifications.swift */,
 				B00000000000000000000059 /* SharingView.swift */,
 				B00000000000000000000052 /* Income.swift */,
 				B00000000000000000000053 /* IncomeRow.swift */,
@@ -330,6 +338,7 @@
 				B00000000000000000000090 /* ExpenseEditorTextTests.swift */,
 				B00000000000000000000094 /* SharingSafetyTests.swift */,
 				B00000000000000000000093 /* SyncMergeTests.swift */,
+				B00000000000000000000097 /* PartnerExpenseAlertTests.swift */,
 				B00000000000000000000048 /* CategoryBudgetTests.swift */,
 				B00000000000000000000049 /* MonthlyReportTests.swift */,
 				B00000000000000000000050 /* RecurringExpenseSchedulerTests.swift */,
@@ -503,6 +512,8 @@
 				C00000000000000000000058 /* ShareInvite.swift in Sources */,
 				C00000000000000000000092 /* SyncMerge.swift in Sources */,
 				C00000000000000000000091 /* RecoveryCandidate.swift in Sources */,
+				C00000000000000000000095 /* PartnerExpenseAlert.swift in Sources */,
+				C00000000000000000000096 /* LocalNotifications.swift in Sources */,
 				C00000000000000000000059 /* SharingView.swift in Sources */,
 				C00000000000000000000052 /* Income.swift in Sources */,
 				C00000000000000000000053 /* IncomeRow.swift in Sources */,
@@ -530,6 +541,7 @@
 				C00000000000000000000090 /* ExpenseEditorTextTests.swift in Sources */,
 				C00000000000000000000094 /* SharingSafetyTests.swift in Sources */,
 				C00000000000000000000093 /* SyncMergeTests.swift in Sources */,
+				C00000000000000000000097 /* PartnerExpenseAlertTests.swift in Sources */,
 				C00000000000000000000048 /* CategoryBudgetTests.swift in Sources */,
 				C00000000000000000000049 /* MonthlyReportTests.swift in Sources */,
 				C00000000000000000000050 /* RecurringExpenseSchedulerTests.swift in Sources */,
