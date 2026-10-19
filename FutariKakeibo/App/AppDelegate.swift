@@ -1,5 +1,6 @@
 @preconcurrency import CloudKit
 import UIKit
+import UserNotifications
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(
@@ -7,6 +8,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         configureTabBarAppearance()
+        // 通知を押したとき・アプリを開いているときの通知の出し方を受け持つ。
+        // 通知を押してアプリが起動したときに間に合うよう、起動の途中で決める。
+        // （CloudKitには触らない。`AppStore.loadIfNeeded` のコメント）
+        UNUserNotificationCenter.current().delegate = self
         return true
     }
 
@@ -34,6 +39,28 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         CloudShareInbox.shared.store(cloudKitShareMetadata)
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .didReceiveCloudKitShare, object: nil)
+        }
+    }
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    /// アプリを開いているときも、相手の支出の通知を上に出す。
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+
+    /// 通知を押したら、その支出を開く。何件かまとめた通知なら履歴を開く。
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let expenseID = PartnerExpenseAlert.expenseID(from: response.notification.request.content.userInfo)
+        await MainActor.run {
+            AppStore.shared.pendingNotificationRoute = expenseID.map { AppStore.NotificationRoute.expense($0) }
+                ?? AppStore.NotificationRoute.history
         }
     }
 }

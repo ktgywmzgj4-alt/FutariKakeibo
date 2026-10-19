@@ -1,7 +1,9 @@
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.openURL) private var openURL
     @State private var householdName = ""
     @State private var budgetText = ""
     @State private var members: [Member] = []
@@ -18,6 +20,7 @@ struct SettingsView: View {
                 householdCard
                 planningCard
                 cloudCard
+                notificationCard
                 dataCard
                 aboutCard
             }
@@ -159,6 +162,66 @@ struct SettingsView: View {
         }
         .appCard()
     }
+
+    /// 通知（T-046）。**許可はONにしたときだけ求める。** OFFにしても同期は続く。
+    private var notificationCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionTitle("通知", icon: "bell.fill")
+
+            Toggle(isOn: Binding(
+                get: { store.notifyPartnerExpenses && store.notificationPermission == .allowed },
+                set: { isOn in Task { await store.setNotifyPartnerExpenses(isOn) } }
+            )) {
+                Text("パートナーの支出を知らせる")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(AppTheme.ink)
+            }
+            .tint(AppTheme.accent)
+
+            Label(
+                Self.permissionText(store.notificationPermission),
+                systemImage: store.notificationPermission == .allowed ? "checkmark.circle" : "bell.slash"
+            )
+            .font(.footnote)
+            .foregroundStyle(AppTheme.secondaryText)
+
+            if store.notificationPermission == .denied {
+                Text("iPhoneの「設定」で、ふたり家計簿の通知を許可すると使えます。")
+                    .font(.footnote)
+                    .foregroundStyle(AppTheme.secondaryText)
+                Button {
+                    if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                        openURL(url)
+                    }
+                } label: {
+                    settingsRow("iPhoneの「設定」を開く", icon: "gearshape")
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text(Self.notificationNote)
+                .font(.footnote)
+                .foregroundStyle(AppTheme.secondaryText)
+        }
+        .appCard()
+        .task { await store.refreshNotificationPermission() }
+    }
+
+    static func permissionText(_ permission: NotificationPermission) -> String {
+        switch permission {
+        case .allowed: "iPhoneの通知: 許可されています"
+        case .denied: "iPhoneの通知: 許可されていません"
+        case .notDetermined: "iPhoneの通知: まだ決めていません（ONにすると確認が出ます）"
+        }
+    }
+
+    /// 何を知らせて、何を知らせないか。**届かない場面を隠さない。**
+    /// いまはアプリを開いているあいだの同期で届いた支出だけを知らせる。閉じているあいだも知らせるには、
+    /// バックグラウンドで動く許可とプッシュの権限が要る（利用者の承認待ち。`Docs/NOTIFICATIONS.md`）。
+    static let notificationNote =
+        "ふたりで共有しているときに、相手が新しく登録した支出を知らせます。自分の登録・直し・削除・定期支出の自動計上は知らせません。"
+        + "通知に金額や店名は出しません。OFFにしても同期は続きます。"
+        + "いまは、アプリを開いているあいだ（開いたときを含む）に届いた支出を知らせます。アプリを閉じているあいだは知らせません。"
 
     private var dataCard: some View {
         VStack(alignment: .leading, spacing: 14) {

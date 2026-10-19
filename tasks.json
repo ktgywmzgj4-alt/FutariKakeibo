@@ -441,32 +441,42 @@
     {
       "id": "T-044",
       "task": "支出に「登録した人（端末・メンバー）」を記録し、支払者（paidByMemberID）と区別する",
-      "status": "todo",
+      "status": "doing",
       "owner": "実行役 + 人間",
       "passes": "新しく保存した支出に、登録したメンバー（または端末）を持たせること。支払者とは別の項目にすること。登録者の無い旧データを今までどおり読めて、旧データから通知が出ないこと。古い版の端末と共有していても壊れないこと。CloudKit の項目を増やすなら、Production スキーマへの反映は利用者の承認を得てからにすること",
-      "evidence": "",
+      "evidence": "2026-10-19 登録者は、iCloudが記録に付ける「作成者」（CKRecord.creatorUserRecordID）で見分ける。支払者（paidByMemberID）とは別。Expense に項目を足さず、CloudKit の項目も増やさない（Production スキーマ変更なし・承認不要）。旧データも作成者を持っているので「登録者の無い旧データ」は生まれず、前の版の端末と共有しても食い違わない。作成者が分からない・自分の名前がまだ分からないときは相手と決めつけず通知しない（PartnerExpenseAlert.registrant）。fetchSnapshot が CloudSnapshot.expenseCreators を返す。CI・実機は未確認",
       "dependencies": [],
       "notes": "2026-10-19 利用者の依頼の 2-3（paidByMemberID は支払者で、登録者とは限らない）"
     },
     {
       "id": "T-045",
       "task": "相手が新しい支出を保存したら、もう一方のiPhoneに通知する（CloudKit Subscription と APNs）",
-      "status": "todo",
+      "status": "doing",
       "owner": "実行役 + 人間",
       "passes": "相手が新しい支出を保存したとき、アプリを開いていなくても、もう一方のiPhoneに通知が出ること（Appleの仕様で保証できる範囲と、できない範囲を明記する）。自分で保存した支出・初回共有で取り込んだ過去の支出・復元で取り込んだ支出・定期支出の自動計上では通知しないこと。同じ支出の同じ通知を何度も出さないこと。通知の文に金額と店名を出さないこと。通知をタップしたら、できればその支出を開くこと。通知を受けたことと同期が終わったことを区別し、通知が届かなくても今の同期で追いつくこと。編集・削除の通知は作らないこと。Push Notifications の Capability・署名・Provisioning Profile を変えるなら、先に影響を説明すること。TestFlight 内部配信をして、実機で確かめることを利用者向けに残すこと",
-      "evidence": "",
+      "evidence": "2026-10-19 第2段階a: アプリを開いているあいだ（30秒ごと・開いたとき）の同期で、相手が新しく登録した支出を知らせる（PartnerExpenseAlert・LocalNotifications、Docs/NOTIFICATIONS.md）。自分の登録・直し・削除・定期支出・取り込み・3日を過ぎた支出・一度知らせた支出は知らせない。何件でも1つにまとめ、文に金額・店名を出さない。押すとその支出（まとめた通知なら履歴）を開く。同期が終わって手元に入ってから知らせる。アプリを閉じているあいだの通知は T-047（Info.plist のバックグラウンド実行が auto モードの判定器に止められた・push の権限とプロファイルの変更が要る。利用者の承認待ち）。CI・実機は未確認",
       "dependencies": ["T-044"],
       "notes": "2026-10-19 利用者の依頼の 2-1・2-2・2-3・2-5"
     },
     {
       "id": "T-046",
       "task": "設定画面に「通知」を足す（パートナーの支出登録通知のON/OFF、通知の許可の状態、設定アプリへの案内）",
-      "status": "todo",
+      "status": "doing",
       "owner": "実行役 + 人間",
       "passes": "設定画面に「通知」の区切りがあり、パートナーの支出登録通知のON/OFF、iOSの通知の許可の状態、許可されていないときの設定アプリへの案内が出ること。アプリを起動した直後に通知の許可を求めず、利用者が通知をONにしたときに求めること。通知をOFFにしても CloudKit の同期は続くこと。初期状態ではロック画面に金額や店名を出さないこと",
-      "evidence": "",
+      "evidence": "2026-10-19 設定 → 通知: 「パートナーの支出を知らせる」のON/OFF（初期はOFF、端末だけの設定）、iPhoneの通知の許可の状態、許可されていないときの「iPhoneの「設定」を開く」（openNotificationSettingsURLString）。許可はONにしたときだけ求める（起動時は聞かない）。OFFでも同期は続く。閉じているあいだは知らせないことを画面に書いた（SettingsView.notificationNote）。「データとプライバシー」に通知の行。CI・実機は未確認",
       "dependencies": ["T-045"],
       "notes": "2026-10-19 利用者の依頼の 2-4"
+    },
+    {
+      "id": "T-047",
+      "task": "アプリを閉じているあいだも、相手の新しい支出を知らせる（CloudKitのデータベースの購読・サイレントプッシュ・バックグラウンド更新）",
+      "status": "todo",
+      "owner": "実行役 + 人間",
+      "passes": "利用者の承認のあと: Info.plist に UIBackgroundModes（fetch・remote-notification）と BGTaskSchedulerPermittedIdentifiers を足すこと。App ID の Push Notifications を有効にし、配信用プロファイルを作り直し、GitHub Secret APPLE_PROVISIONING_PROFILE_BASE64 を差し替えたあとで、entitlements に aps-environment を足すこと（順番を逆にすると配信できなくなる）。CKDatabaseSubscription（作った人はプライベート側・参加した人は共有側、型は Expense、中身の無い合図だけ）で合図を受けて同期し、T-045 と同じ決まりで知らせること。通知がOFFなら購読を消し、裏で起こさないこと。Appleが届くことを保証しない範囲（強制終了・間引き）を利用者向けに書くこと。CIが緑で、TestFlight 内部配信をして、実機の確認項目を残すこと",
+      "evidence": "",
+      "dependencies": ["T-045"],
+      "notes": "2026-10-19 利用者の依頼の 2（できればアプリを開いていない状態でも通知）。同日、Info.plist へのバックグラウンド実行の追加が Claude Code の auto モードの判定器に止められた（Unauthorized Persistence）。影響と手順は Docs/NOTIFICATIONS.md 4章"
     }
   ]
 }

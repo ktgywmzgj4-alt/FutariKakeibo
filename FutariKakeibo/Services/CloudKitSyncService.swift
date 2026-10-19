@@ -60,6 +60,10 @@ actor CloudKitSyncService {
         var incomes: [Income]
         var deletedExpenseIDs: [UUID: Date]
         var deletedIncomeIDs: [UUID: Date]
+        /// 支出ごとの作成者（iCloudが記録に付ける `creatorUserRecordID` の名前）。
+        /// 誰が登録したかを見分けるのに使う（`PartnerExpenseAlert`）。支払った人とは別。
+        /// iCloudが自分で付ける欄なので、CloudKitの項目は増えない。
+        var expenseCreators: [UUID: String] = [:]
     }
 
     private nonisolated let explicitContainer: CKContainer?
@@ -499,7 +503,8 @@ actor CloudKitSyncService {
         return name == CKCurrentUserDefaultName || name == currentUserRecordName
     }
 
-    private func currentUserRecordName() async throws -> String {
+    /// この利用者のユーザーレコードの名前（誰が登録した支出かを見分けるのに使う）。
+    func currentUserRecordName() async throws -> String {
         try await withCheckedThrowingContinuation { continuation in
             container.fetchUserRecordID { recordID, error in
                 if let recordID {
@@ -610,6 +615,7 @@ actor CloudKitSyncService {
         let records = try await queryAll(query, zoneID: zoneID(for: location), in: database)
         var expenses: [Expense] = []
         var deletedExpenseIDs: [UUID: Date] = [:]
+        var expenseCreators: [UUID: String] = [:]
         for record in records {
             if (record["isDeleted"] as? NSNumber)?.boolValue == true {
                 let deletion = try decodeDeletion(record)
@@ -618,7 +624,11 @@ actor CloudKitSyncService {
                     deletion.deletedAt
                 )
             } else {
-                expenses.append(try decodeExpense(record))
+                let expense = try decodeExpense(record)
+                expenses.append(expense)
+                if let creator = record.creatorUserRecordID?.recordName {
+                    expenseCreators[expense.id] = creator
+                }
             }
         }
         expenses.sort { $0.date > $1.date }
@@ -645,7 +655,8 @@ actor CloudKitSyncService {
             expenses: expenses,
             incomes: incomes,
             deletedExpenseIDs: deletedExpenseIDs,
-            deletedIncomeIDs: deletedIncomeIDs
+            deletedIncomeIDs: deletedIncomeIDs,
+            expenseCreators: expenseCreators
         )
     }
 
