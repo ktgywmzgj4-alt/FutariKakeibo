@@ -55,7 +55,8 @@ enum ReceiptCorpus {
     static var all: [Sample] {
         [
             tenhou, eqvoAugust, chavaty, manaNoMori, selfix, mcdonalds, konomiya,
-            aeonSeptember, eqvoSeptember, eggsNThings, fujiSafari, misterDonut, aeonOctober
+            aeonSeptember, eqvoSeptember, eggsNThings, fujiSafari, misterDonut, aeonOctober,
+            lawsonOctober, pisolaOctober
         ]
     }
 
@@ -77,6 +78,22 @@ enum ReceiptCorpus {
     /// 右端に刷られた金額の断片。
     static func price(_ text: String, y: Double) -> RecognizedLine {
         RecognizedLine(text: text, minX: 0.74, maxX: 0.93, midY: y, height: 0.018)
+    }
+
+    /// 画面を撮った1枚の中に、小さく写ったレシートの文字。
+    static func small(_ text: String, x: Double, width: Double, y: Double, height: Double = 0.012) -> RecognizedLine {
+        RecognizedLine(text: text, minX: x, maxX: x + width, midY: y, height: height)
+    }
+
+    /// 傾いて写った1枚を再現する。右へ行くほど `slope` ぶん下へずれる（負なら上へ）。
+    /// `slope` には、読み取りが文字の四隅から測る傾きと同じものを入れる。
+    static func tilted(_ lines: [RecognizedLine], slope: Double) -> [RecognizedLine] {
+        lines.map { source in
+            var moved = source
+            moved.slope = slope
+            moved.midY = source.midY + slope * (source.midX - 0.5)
+            return moved
+        }
     }
 
     // MARK: - レシート
@@ -835,6 +852,158 @@ enum ReceiptCorpus {
                     ("１９６無糖マンオレＲ", 240),
                     ("ＢＰムトウＧＦ５００ｍ", 145),
                     ("私のふらのメロンサワー", 168)
+                ]
+            )
+        )
+    }
+
+    /// ローソン 北名古屋鹿田合田店（2026-10-18）。写真から組み直した（カード番号の末尾・承認番号・処理通番・責任者の番号は伏せた）。
+    ///
+    /// **アプリのレシート画面を撮った1枚を読んだもの。** いちばん上に時刻と「レシート」「閉じる」が写る。
+    /// 実機では店名が「(肉海費祝動 11090袋」、種類が「その他」になった（2026-10-19 利用者の報告）。
+    /// 合計（¥590）と日付は合っていて、レシートの下のほうだけを読んだような結果だった。実機の読み取り結果は
+    /// 手元に無いので、ここに置くのは「上から下まで読めたとき」の文字（切り抜きで上を落とさないよう直した。
+    /// `ReceiptImageRectifier.cutsOffText`）。
+    ///
+    /// レシートは右が上がるように傾いて写っている（点線が斜め）。右の金額は、左の品名より半行から1行上に来る。
+    /// 「合計」は大きな文字で、「計」が「言」と「十」に割れて見える。品名は半角カナで刷られているが、
+    /// 実機の読み取りは全角で返す（PISOLAの店名の欄に出た「•ソーセージ（季節）1本」が全角だった）ので、全角で書いた。
+    static var lawsonOctober: Sample {
+        // 画面の文字（時刻・「レシート」・「閉じる」）は傾いていない。傾いているのは写真の中のレシートだけ。
+        let screen = [
+            line("15:21", x: 0.09, width: 0.12, y: 0.036, height: 0.016),
+            line("5G", x: 0.81, width: 0.05, y: 0.036, height: 0.014),
+            line("レシート", x: 0.42, width: 0.16, y: 0.121),
+            line("閉じる", x: 0.79, width: 0.12, y: 0.121)
+        ]
+        let receipt = tilted([
+            line("LAWSON", x: 0.19, width: 0.63, y: 0.262, height: 0.045),
+            line("北名古屋鹿田合田店", x: 0.32, width: 0.37, y: 0.313),
+            line("登録番号;T6180003016334", x: 0.36, width: 0.48, y: 0.332),
+            line("愛知県北名古屋市鹿田合田１８", x: 0.17, width: 0.59, y: 0.355),
+            line("電話;0568-23-7475", x: 0.17, width: 0.36, y: 0.378),
+            line("店コード;370955", x: 0.58, width: 0.26, y: 0.378),
+            line("2026年10月18日(日) 00:11", x: 0.26, width: 0.50, y: 0.401),
+            line("レジ;#1 51312", x: 0.17, width: 0.25, y: 0.424),
+            line("責;00000000", x: 0.58, width: 0.26, y: 0.424),
+            line("クレジット売上票", x: 0.18, width: 0.66, y: 0.447, height: 0.026),
+            line("[お客様控え]", x: 0.39, width: 0.24, y: 0.468),
+            line("ST-196ムトウヒピングレ500ML", x: 0.19, width: 0.45, y: 0.492), price("254", y: 0.492),
+            line("STアシタノサワーアセロラ500ML", x: 0.19, width: 0.38, y: 0.513), price("197", y: 0.513),
+            line("STアシタノサワーアセロラ350ML", x: 0.19, width: 0.38, y: 0.534), price("139", y: 0.534),
+            line("合 言十", x: 0.18, width: 0.25, y: 0.559, height: 0.026),
+            line("¥590", x: 0.69, width: 0.16, y: 0.559, height: 0.026),
+            line("(内消費税等", x: 0.18, width: 0.22, y: 0.581), price("¥53)", y: 0.581),
+            line("(10%対象", x: 0.33, width: 0.18, y: 0.602), price("¥590)", y: 0.602),
+            line("(内消費税額", x: 0.33, width: 0.22, y: 0.623), price("¥53)", y: 0.623),
+            line("点　　数", x: 0.19, width: 0.22, y: 0.644), price("3個", y: 0.644),
+            line("買上金額", x: 0.18, width: 0.16, y: 0.690), price("¥590", y: 0.690),
+            line("クレジット取扱合計", x: 0.18, width: 0.29, y: 0.712), price("¥590", y: 0.712),
+            line("CL VISA", x: 0.18, width: 0.14, y: 0.734),
+            line("有効期限****/**", x: 0.52, width: 0.32, y: 0.734),
+            line("会員No", x: 0.18, width: 0.12, y: 0.756),
+            line("****-****-****-0000", x: 0.43, width: 0.41, y: 0.756),
+            line("お取扱日", x: 0.18, width: 0.15, y: 0.778),
+            line("2026年10月18日", x: 0.43, width: 0.30, y: 0.778),
+            line("支払方法", x: 0.18, width: 0.15, y: 0.800),
+            line("一回", x: 0.43, width: 0.08, y: 0.800),
+            line("承認番号", x: 0.18, width: 0.15, y: 0.822),
+            line("0000000", x: 0.43, width: 0.15, y: 0.822),
+            line("処理通番", x: 0.18, width: 0.15, y: 0.844),
+            line("00000", x: 0.43, width: 0.11, y: 0.844),
+            line("AID", x: 0.18, width: 0.06, y: 0.866),
+            line("A0000000031010", x: 0.56, width: 0.32, y: 0.886),
+            line("APL", x: 0.18, width: 0.06, y: 0.914),
+            line("Visa", x: 0.80, width: 0.08, y: 0.910)
+        ], slope: -0.03)
+        return Sample(
+            name: "ローソン 北名古屋鹿田合田店",
+            source: .reconstructed,
+            now: day(2026, 10, 19),
+            lines: screen + receipt,
+            expected: Expected(
+                merchants: ["ローソン 北名古屋鹿田合田店", "LAWSON 北名古屋鹿田合田店"],
+                chains: ["ローソン", "LAWSON"],
+                total: 590,
+                date: day(2026, 10, 18),
+                category: .groceries,
+                items: [
+                    ("ST-196ムトウヒピングレ500ML", 254),
+                    ("STアシタノサワーアセロラ500ML", 197),
+                    ("STアシタノサワーアセロラ350ML", 139)
+                ]
+            )
+        )
+    }
+
+    /// PISOLA 甚目寺店（2026-10-18）。写真から組み直した（担当者の名前は伏せた）。
+    ///
+    /// **アプリのレシート画面を撮った1枚を読んだもの。** レシートは画面の中に小さく写り、上に時刻と
+    /// 「レシート」「閉じる」が写る。実機では店名と内容が「•ソーセージ（季節）1本」、合計が ¥659
+    /// （10%課税額）になった（2026-10-19 利用者の報告）。正しい合計は ¥7,257。
+    ///
+    /// - 店名と電話番号が1行に刷られている（「PISOLA甚目寺店 052-559-8311」）
+    /// - 外税だが「外税」と書いていない（小計額 6,598 ＋ 10%課税額 659 ＝ 合計 7,257）
+    /// - 値段に税の区分が付く（「¥6,598外」）。セットの品は 0円（明細の正解には入れない）
+    /// - 右が下がるように傾いて写っている。「合計」の「計」が割れて見える
+    static var pisolaOctober: Sample {
+        let screen = [
+            line("23:36", x: 0.06, width: 0.12, y: 0.036, height: 0.016),
+            line("レシート", x: 0.42, width: 0.16, y: 0.121),
+            line("閉じる", x: 0.79, width: 0.12, y: 0.121)
+        ]
+        let receipt = tilted([
+            small("PISOLA", x: 0.36, width: 0.25, y: 0.251, height: 0.024),
+            small("PISOLA甚目寺店", x: 0.24, width: 0.22, y: 0.288),
+            small("052-559-8311", x: 0.56, width: 0.19, y: 0.288),
+            small("愛知県あま市下萱津平島16", x: 0.24, width: 0.38, y: 0.323),
+            small("2026年10月18日(日)17時19分000101", x: 0.24, width: 0.51, y: 0.376),
+            small("食べ飲みスタン（Dバー）", x: 0.27, width: 0.30, y: 0.411),
+            small("@3,299x 2", x: 0.37, width: 0.17, y: 0.432), small("¥6,598外", x: 0.62, width: 0.13, y: 0.432),
+            small("◇仔羊串2本 ローズマ塩", x: 0.27, width: 0.30, y: 0.450), small("¥0外", x: 0.68, width: 0.07, y: 0.450),
+            small("•ソーセージ（季節）1本", x: 0.27, width: 0.28, y: 0.468),
+            small("@0x 2", x: 0.42, width: 0.12, y: 0.487), small("¥0外", x: 0.68, width: 0.07, y: 0.487),
+            small("♪モッツァとナスのミートソース F", x: 0.27, width: 0.31, y: 0.506),
+            small("¥0外", x: 0.68, width: 0.07, y: 0.506),
+            small("♪タコと明太子の和風 S", x: 0.27, width: 0.31, y: 0.524), small("¥0外", x: 0.68, width: 0.07, y: 0.524),
+            small("◇グリーンサラダ", x: 0.27, width: 0.17, y: 0.542), small("¥0外", x: 0.68, width: 0.07, y: 0.542),
+            small("◇Fチキン（4コ）バルサ/タルタル", x: 0.27, width: 0.29, y: 0.561),
+            small("¥0外", x: 0.68, width: 0.07, y: 0.561),
+            small("◇モッツァ ズッキーニのフリット", x: 0.27, width: 0.29, y: 0.580),
+            small("¥0外", x: 0.68, width: 0.07, y: 0.580),
+            small("◇ベーコンとサラミ", x: 0.27, width: 0.18, y: 0.598), small("¥0外", x: 0.68, width: 0.07, y: 0.598),
+            small("◇生ハムサラミ盛り合わせ", x: 0.27, width: 0.28, y: 0.616), small("¥0外", x: 0.68, width: 0.07, y: 0.616),
+            small("◇ポテトサラダ", x: 0.27, width: 0.22, y: 0.634), small("¥0外", x: 0.68, width: 0.07, y: 0.634),
+            small("◇エスプレアイス（1個盛）", x: 0.27, width: 0.26, y: 0.652),
+            small("@0x 3", x: 0.42, width: 0.12, y: 0.671), small("¥0外", x: 0.68, width: 0.07, y: 0.671),
+            small("◇チョコアイス（1個盛）", x: 0.27, width: 0.25, y: 0.689), small("¥0外", x: 0.68, width: 0.07, y: 0.689),
+            small("伝票No.", x: 0.25, width: 0.10, y: 0.708), small("70", x: 0.43, width: 0.04, y: 0.708),
+            small("テーブルNo.", x: 0.51, width: 0.13, y: 0.708), small("13", x: 0.71, width: 0.04, y: 0.708),
+            small("小 計 額", x: 0.24, width: 0.15, y: 0.743), small("¥6,598", x: 0.64, width: 0.10, y: 0.743),
+            small("(10%課税対象", x: 0.24, width: 0.20, y: 0.761), small("¥6,598)", x: 0.63, width: 0.11, y: 0.761),
+            small("10%課税額(", x: 0.25, width: 0.18, y: 0.780), small("¥659", x: 0.68, width: 0.07, y: 0.780),
+            small("合 言十", x: 0.24, width: 0.15, y: 0.799, height: 0.018),
+            small("¥7,257", x: 0.58, width: 0.16, y: 0.799, height: 0.018),
+            small("信計", x: 0.24, width: 0.06, y: 0.818), small("¥7,257", x: 0.58, width: 0.16, y: 0.818),
+            small("合計点数", x: 0.24, width: 0.12, y: 0.836), small("17点", x: 0.68, width: 0.07, y: 0.836),
+            small("T印は軽減税率適用商品", x: 0.25, width: 0.33, y: 0.868),
+            small("登録番号 T5160001021925", x: 0.24, width: 0.37, y: 0.889),
+            small("58扱担当", x: 0.25, width: 0.17, y: 0.930), small("No.2064", x: 0.50, width: 0.11, y: 0.930),
+            small("2名", x: 0.70, width: 0.05, y: 0.930)
+        ], slope: 0.027)
+        return Sample(
+            name: "PISOLA 甚目寺店",
+            source: .reconstructed,
+            now: day(2026, 10, 19),
+            lines: screen + receipt,
+            expected: Expected(
+                merchants: ["PISOLA甚目寺店", "PISOLA 甚目寺店"],
+                chains: ["PISOLA", "ピソラ"],
+                total: 7257,
+                date: day(2026, 10, 18),
+                category: .dining,
+                items: [
+                    ("食べ飲みスタン（Dバー）", 6598)
                 ]
             )
         )

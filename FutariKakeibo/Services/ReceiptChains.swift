@@ -124,7 +124,7 @@ extension ReceiptParser {
             let near = index < branchSearchRows
             // 読み取りの別の読み方も見る。ロゴの崩れた行で、2番目の読み方が正しいことがある。
             for text in [row.text] + row.alternativeTexts {
-                guard let match = chainMatch(
+                guard var match = chainMatch(
                     in: text,
                     rowIndex: index,
                     dictionary: dictionary,
@@ -132,7 +132,15 @@ extension ReceiptParser {
                 ) else { continue }
                 // 値段・日付・電話の行は見ない。名前が見つかった行だけ確かめる
                 // （正規表現を使う確かめのほうが重いので、全部の行には使わない）。
-                guard isChainSearchRow(row.text) else { break }
+                if !isChainSearchRow(row.text) {
+                    // 店名と電話番号が1行に刷られた行（「PISOLA甚目寺店 052-559-8311」）は、
+                    // 電話番号を外した残りが「〜店」で終わるときだけ、その残りで見直す。
+                    let shop = merchantText(of: row)
+                    guard shop != row.text, isChainSearchRow(shop),
+                          let again = chainMatch(in: shop, rowIndex: index, dictionary: dictionary, fuzzy: near || company)
+                    else { break }
+                    match = again
+                }
                 if near || company || endsWithShopWord(cleanedBranch(match.suffix, chain: match.chain)) {
                     matches.append(match)
                 }
@@ -274,7 +282,7 @@ extension ReceiptParser {
         ["株式会社", "(株)", "（株）", "有限会社", "合同会社"].contains { text.contains($0) }
     }
 
-    private static func endsWithShopWord(_ text: String) -> Bool {
+    static func endsWithShopWord(_ text: String) -> Bool {
         let lower = text.lowercased()
         return shopWords.contains { lower.hasSuffix($0) }
     }
@@ -291,8 +299,9 @@ extension ReceiptParser {
         dictionary: ReceiptDictionary
     ) -> String? {
         for row in rows.prefix(branchSearchRows) {
-            guard isMerchantCandidate(row) else { continue }
-            let branch = cleanedBranch(row.text, chain: chain)
+            let text = merchantText(of: row)
+            guard isMerchantCandidate(text) else { continue }
+            let branch = cleanedBranch(text, chain: chain)
             guard isPlausibleBranch(branch), endsWithShopWord(branch) else { continue }
             // ほかのチェーンの名前が入っている行は、そのチェーンの店名。
             let key = dictionaryKey(branch)

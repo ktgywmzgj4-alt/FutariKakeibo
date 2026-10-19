@@ -3,6 +3,17 @@ import PhotosUI
 import UIKit
 import VisionKit
 
+/// 支出の画面に出す入力例。
+///
+/// **利用者が指定した文言（2026-10-19、2回目の依頼）。** 店名の例は「ガソリンスタンド」、
+/// 内容の例は「ガソリン代」。1回目（2026-10-09）は店名ではなく内容の欄に入れてしまい、
+/// 台帳（tasks.json）にも書かなかったので誰も確かめず、同じ直しを2回頼ませた。
+/// テスト（`ExpenseEditorTextTests`）で文言を押さえているので、変えるなら先に利用者に確かめる。
+enum ExpenseEditorText {
+    static let merchantExample = "例：ガソリンスタンド"
+    static let titleExample = "例：ガソリン代"
+}
+
 struct ExpenseEditorView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
@@ -528,7 +539,7 @@ struct ExpenseEditorView: View {
         VStack(spacing: 17) {
             field("店名") {
                 HStack(spacing: 10) {
-                    TextField("例：Selfix北名古屋", text: $merchant)
+                    TextField(ExpenseEditorText.merchantExample, text: $merchant)
                         .textInputAutocapitalization(.never)
                         .focused($focusedField, equals: .merchant)
                     shopMenu
@@ -536,7 +547,7 @@ struct ExpenseEditorView: View {
             }
 
             field("内容") {
-                TextField("例：ガソリンスタンド", text: $title)
+                TextField(ExpenseEditorText.titleExample, text: $title)
                     .textInputAutocapitalization(.never)
                     .focused($focusedField, equals: .title)
             }

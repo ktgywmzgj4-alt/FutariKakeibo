@@ -1122,4 +1122,135 @@ final class ReceiptParserTests: XCTestCase {
             .utilities
         )
     }
+
+    // MARK: - アプリのレシート画面を撮った1枚（ローソン・PISOLA、2026-10-19）
+
+    /// 上から下まで読めれば、店名はチェーン名と支店名、合計は「合 言十」（「計」が割れた形）の行。
+    /// 画面の時刻と「閉じる」は店名にも品にもならない。右の金額は傾きで半行から1行ずれている。
+    func testLawsonScreenshotReadsTheChainBranchTotalAndItems() {
+        let sample = ReceiptCorpus.lawsonOctober
+        let draft = ReceiptParser.parse(lines: sample.lines, now: sample.now, calendar: calendar)
+
+        XCTAssertEqual(draft.merchant, "ローソン 北名古屋鹿田合田店")
+        XCTAssertEqual(draft.amount, 590)
+        XCTAssertTrue(draft.amountIsWellEvidenced)
+        XCTAssertEqual(
+            pricedNames(draft.items),
+            ["ST-196ムトウヒピングレ500ML 254", "STアシタノサワーアセロラ500ML 197", "STアシタノサワーアセロラ350ML 139"]
+        )
+        XCTAssertEqual(draft.suggestedCategory, .groceries)
+        XCTAssertEqual(draft.date, date(2026, 10, 18))
+    }
+
+    /// 店名は電話番号と同じ行（「PISOLA甚目寺店 052-559-8311」）。合計は 7,257 で、
+    /// 10%課税額の 659 ではない。小計額＋課税額が合計の行に刷られているので、外税として確かめられる。
+    func testPisolaScreenshotReadsTheShopBesideThePhoneAndTheTotalAfterTax() {
+        let sample = ReceiptCorpus.pisolaOctober
+        let draft = ReceiptParser.parse(lines: sample.lines, now: sample.now, calendar: calendar)
+
+        XCTAssertEqual(draft.merchant, "PISOLA甚目寺店")
+        XCTAssertEqual(draft.amount, 7_257)
+        XCTAssertEqual(draft.reconciledTotals, [7_257])
+        XCTAssertTrue(draft.amountIsWellEvidenced)
+        XCTAssertFalse(draft.amountNeedsConfirmation)
+        // 「@3,299x 2」と「¥6,598外」で1品。0円のセットの品は拾わない。
+        XCTAssertEqual(pricedNames(draft.items), ["食べ飲みスタン（Dバー） 6598"])
+        XCTAssertEqual(draft.items.first?.quantity, 2)
+        XCTAssertEqual(draft.items.first?.unitPrice, 3_299)
+        XCTAssertEqual(draft.suggestedCategory, .dining)
+        XCTAssertEqual(draft.date, date(2026, 10, 18))
+    }
+
+    /// 辞書に無い店でも、電話番号と同じ行の「〜店」を店名にする。
+    func testAShopNamePrintedBesideThePhoneNumberIsFoundWithoutTheDictionary() {
+        let sample = ReceiptCorpus.pisolaOctober
+        let draft = ReceiptParser.parse(lines: sample.lines, now: sample.now, calendar: calendar, dictionary: .empty)
+
+        XCTAssertEqual(draft.merchant, "PISOLA甚目寺店")
+        XCTAssertEqual(ReceiptParser.merchantText(of: ReceiptParser.Row(fragments: [
+            line("PISOLA甚目寺店", y: 0.1), line("052-559-8311", x: 0.6, width: 0.3, y: 0.1)
+        ])), "PISOLA甚目寺店")
+        // 電話番号を外した残りが店名らしくなければ、今までどおり電話の行。
+        let phoneRow = ReceiptParser.Row(fragments: [line("電話;0568-23-7475", y: 0.1), line("店コード;370955", x: 0.6, width: 0.3, y: 0.1)])
+        XCTAssertFalse(ReceiptParser.isMerchantCandidate(phoneRow))
+        XCTAssertFalse(ReceiptParser.isMerchantCandidate(ReceiptParser.Row(fragments: [line("TEL:0266-27-2972", y: 0.1)])))
+    }
+
+    /// 実機で外れた2枚は、どちらもレシートの下のほうだけを読んだような結果だった。
+    /// 上が切れて読まれても、内訳の行や品の行を店名にしない（分からなければ空のまま、人が入れる）。
+    func testAReceiptReadFromTheMiddleDoesNotNameTheShopAfterATaxOrItemRow() {
+        let lawson = ReceiptParser.parse(lines: lawsonLowerPart(), now: date(2026, 10, 19), calendar: calendar)
+        XCTAssertEqual(lawson.merchant, "")
+        XCTAssertEqual(lawson.amount, 590)
+
+        let pisola = ReceiptParser.parse(lines: pisolaMiddlePart(), now: date(2026, 10, 19), calendar: calendar)
+        XCTAssertEqual(pisola.merchant, "")
+        // 合計の行が無い。税の額（659）を合計にしない。
+        XCTAssertNotEqual(pisola.amount, 659)
+        if pisola.amount != nil {
+            XCTAssertTrue(pisola.amountNeedsConfirmation)
+        }
+    }
+
+    /// 頭の形で店名ではないと分かる行。会社の種類（「(株)」）や、語の途中の「apl」は店名に残す。
+    func testRowsThatStartLikeItemsOrBreakdownsAreNotShopNames() {
+        XCTAssertTrue(ReceiptParser.startsLikeNonMerchant("◇ソーセージ（季節）1本"))
+        XCTAssertTrue(ReceiptParser.startsLikeNonMerchant("•ソーセージ（季節）1本"))
+        XCTAssertTrue(ReceiptParser.startsLikeNonMerchant("♪タコと明太子の和風 S"))
+        XCTAssertTrue(ReceiptParser.startsLikeNonMerchant("(肉海費祝動 11090袋"))
+        XCTAssertTrue(ReceiptParser.startsLikeNonMerchant("(内消費税等"))
+        XCTAssertTrue(ReceiptParser.startsLikeNonMerchant("AID"))
+        XCTAssertTrue(ReceiptParser.startsLikeNonMerchant("APL Visa"))
+        XCTAssertFalse(ReceiptParser.startsLikeNonMerchant("(株)マナの森"))
+        XCTAssertFalse(ReceiptParser.startsLikeNonMerchant("（有）テンホウ"))
+        XCTAssertFalse(ReceiptParser.startsLikeNonMerchant("Apple 名古屋栄"))
+        XCTAssertFalse(ReceiptParser.isMerchantCandidate("閉じる"))
+        XCTAssertFalse(ReceiptParser.isMerchantCandidate("点　　数 3個"))
+        XCTAssertFalse(ReceiptParser.isMerchantCandidate("支払方法 一回"))
+        XCTAssertFalse(ReceiptParser.isPlausibleMerchantName("•ソーセージ（季節）1本"))
+    }
+
+    /// 大きな文字の「合計」「小計」は、「計」が「言」と「十」に割れて読まれることがある。
+    func testATotalWhoseKanjiSplitInTwoIsStillTheTotal() {
+        XCTAssertTrue(ReceiptParser.hasStrongTotalKeyword("合 言十"))
+        XCTAssertTrue(ReceiptParser.isSideAmountRow("小 言十"))
+        XCTAssertFalse(ReceiptParser.hasStrongTotalKeyword("クレジット売上票") && !ReceiptParser.isNeverTotalRow("クレジット売上票"))
+    }
+
+    /// ローソンの1枚の、下のほうだけ（「(内消費税等」の行が崩れて読まれた形から下）。
+    private func lawsonLowerPart() -> [RecognizedLine] {
+        [
+            line("(肉海費祝動 11090袋", x: 0.18, width: 0.40, y: 0.04),
+            line("(内消費税額", x: 0.33, width: 0.22, y: 0.09), price("¥53)", y: 0.09),
+            line("点　　数", x: 0.19, width: 0.22, y: 0.14), price("3個", y: 0.14),
+            line("買上金額", x: 0.18, width: 0.16, y: 0.22), price("¥590", y: 0.22),
+            line("クレジット取扱合計", x: 0.18, width: 0.29, y: 0.27), price("¥590", y: 0.27),
+            line("CL VISA", x: 0.18, width: 0.14, y: 0.32), line("有効期限****/**", x: 0.52, width: 0.32, y: 0.32),
+            line("会員No", x: 0.18, width: 0.12, y: 0.37), line("****-****-****-0000", x: 0.43, width: 0.41, y: 0.37),
+            line("お取扱日", x: 0.18, width: 0.15, y: 0.42), line("2026年10月18日", x: 0.43, width: 0.30, y: 0.42),
+            line("支払方法", x: 0.18, width: 0.15, y: 0.47), line("一回", x: 0.43, width: 0.08, y: 0.47),
+            line("承認番号", x: 0.18, width: 0.15, y: 0.52), line("0000000", x: 0.43, width: 0.15, y: 0.52),
+            line("処理通番", x: 0.18, width: 0.15, y: 0.57), line("00000", x: 0.43, width: 0.11, y: 0.57),
+            line("AID", x: 0.18, width: 0.06, y: 0.62), line("A0000000031010", x: 0.56, width: 0.32, y: 0.66),
+            line("APL", x: 0.18, width: 0.06, y: 0.71), line("Visa", x: 0.80, width: 0.08, y: 0.71)
+        ]
+    }
+
+    /// PISOLAの1枚の、品の途中から10%課税額まで（合計の行が無い）。
+    private func pisolaMiddlePart() -> [RecognizedLine] {
+        [
+            line("•ソーセージ（季節）1本", x: 0.10, width: 0.45, y: 0.04),
+            line("@0x 2", x: 0.30, width: 0.15, y: 0.09), price("¥0外", y: 0.09),
+            line("♪モッツァとナスのミートソース F", x: 0.10, width: 0.50, y: 0.14), price("¥0外", y: 0.14),
+            line("♪タコと明太子の和風 S", x: 0.10, width: 0.50, y: 0.19), price("¥0外", y: 0.19),
+            line("◇グリーンサラダ", x: 0.10, width: 0.30, y: 0.24), price("¥0外", y: 0.24),
+            line("◇ベーコンとサラミ", x: 0.10, width: 0.30, y: 0.29), price("¥0外", y: 0.29),
+            line("◇ポテトサラダ", x: 0.10, width: 0.30, y: 0.34), price("¥0外", y: 0.34),
+            line("伝票No.", x: 0.10, width: 0.15, y: 0.40), line("70", x: 0.35, width: 0.05, y: 0.40),
+            line("テーブルNo.", x: 0.45, width: 0.20, y: 0.40), price("13", y: 0.40),
+            line("小 計 額", x: 0.08, width: 0.25, y: 0.47), price("¥6,598", y: 0.47),
+            line("(10%課税対象", x: 0.08, width: 0.30, y: 0.52), price("¥6,598)", y: 0.52),
+            line("10%課税額(", x: 0.10, width: 0.28, y: 0.57), price("¥659", y: 0.57)
+        ]
+    }
 }

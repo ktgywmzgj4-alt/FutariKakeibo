@@ -16,6 +16,10 @@ enum ReceiptImageRectifier {
     private static let minimumAreaRatio = 0.15
     /// 直したあとの縦横比の上限。レシートは細長いが、これを超えるのは検出の失敗。
     private static let maximumAspectRatio = 12.0
+    /// 四角の外にあってよい文字のかたまりの数。1つまでは検出の誤り（布の模様など）として見逃す。
+    private static let tolerableTextOutside = 1
+    /// 四角の縁のすぐ外の文字は内側とみなす幅（四角の中心からの広げ方の割合）。
+    private static let edgeMargin: CGFloat = 0.04
 
     /// 読み取りに渡す1枚を用意する。直せたときだけ、直した画像が返る。
     ///
@@ -47,7 +51,75 @@ enum ReceiptImageRectifier {
         guard let corners = documentCorners(in: image, orientation: orientation) else {
             return nil
         }
+        // 四角の外に文字が残るなら、切り抜くと文字を落とす。直さずに元の1枚を読む。
+        guard let boxes = textBoxes(in: image, orientation: orientation),
+              !cutsOffText(corners: cornerPoints(of: corners), textBoxes: boxes)
+        else { return nil }
         return perspectiveCorrected(image, orientation: orientation, corners: corners)
+    }
+
+    // MARK: - 文字を切り落とさないか
+
+    /// 画像の中の文字のかたまりの位置。読み取り（OCR）より軽い、文字のありかだけの検出。
+    /// 検出に失敗したら nil（確かめられないので、切り抜かない）。
+    private static func textBoxes(
+        in image: CGImage,
+        orientation: CGImagePropertyOrientation
+    ) -> [CGRect]? {
+        let request = VNDetectTextRectanglesRequest()
+        request.reportCharacterBoxes = false
+        do {
+            let handler = VNImageRequestHandler(cgImage: image, orientation: orientation)
+            try handler.perform([request])
+            return (request.results ?? []).map(\.boundingBox)
+        } catch {
+            return nil
+        }
+    }
+
+    private static func cornerPoints(of observation: VNRectangleObservation) -> [CGPoint] {
+        [observation.topLeft, observation.topRight, observation.bottomRight, observation.bottomLeft]
+    }
+
+    /// 四角で切り抜くと、文字のかたまりを落とすか。
+    ///
+    /// 書類の検出は、レシートの一部（点線から下だけ、など）や、画面を撮った1枚の中の別の枠を
+    /// 拾うことがある。そこで切り抜くと、店名や合計の行が読み取りに届かない。
+    /// 2026-10-19、アプリのレシート画面を撮った2枚で、店名が明細や内訳の行になり
+    /// （PISOLA「・ソーセージ（季節）1本」、ローソン「(肉海費祝動 11090袋」）、
+    /// レシートの上のほうを読んでいない結果になった（保存される画像は切り抜く前の1枚なので、画像には全部写っている）。
+    ///
+    /// 文字のかたまりの中心が、四角（縁を少し広げたもの）の外に2つ以上あれば落とすとみなす。
+    /// 引数は左上から時計回りの4点と、文字のかたまり。どちらも画像の左下が (0,0)、右上が (1,1)。
+    static func cutsOffText(corners: [CGPoint], textBoxes: [CGRect]) -> Bool {
+        guard corners.count == 4 else { return false }
+        let center = CGPoint(
+            x: corners.map(\.x).reduce(0, +) / 4,
+            y: corners.map(\.y).reduce(0, +) / 4
+        )
+        let widened = corners.map { point in
+            CGPoint(
+                x: center.x + (point.x - center.x) * (1 + edgeMargin),
+                y: center.y + (point.y - center.y) * (1 + edgeMargin)
+            )
+        }
+        let outside = textBoxes.filter { !isInside(CGPoint(x: $0.midX, y: $0.midY), quad: widened) }
+        return outside.count > tolerableTextOutside
+    }
+
+    /// へこみの無い四角の中に点があるか（縁の上も中）。四隅の回る向きはどちらでもよい。
+    private static func isInside(_ point: CGPoint, quad corners: [CGPoint]) -> Bool {
+        var sawPositive = false
+        var sawNegative = false
+        for index in corners.indices {
+            let a = corners[index]
+            let b = corners[(index + 1) % corners.count]
+            let cross = (b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x)
+            if cross > 0 { sawPositive = true }
+            if cross < 0 { sawNegative = true }
+            if sawPositive && sawNegative { return false }
+        }
+        return true
     }
 
     static func cgOrientation(_ orientation: UIImage.Orientation) -> CGImagePropertyOrientation {

@@ -212,4 +212,59 @@ final class ReceiptImageTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - 切り抜きで文字を落とさない（2026-10-19）
+
+    /// 画像の下の半分だけを囲む四角。上の半分の文字（店名・品）が落ちるので切り抜かない。
+    func testACropThatLeavesTextOutsideIsRefused() {
+        let lowerHalf = [
+            CGPoint(x: 0.1, y: 0.45), CGPoint(x: 0.9, y: 0.45), CGPoint(x: 0.9, y: 0.05), CGPoint(x: 0.1, y: 0.05)
+        ]
+        XCTAssertTrue(ReceiptImageRectifier.cutsOffText(corners: lowerHalf, textBoxes: receiptText))
+    }
+
+    /// レシート全体を囲む四角は切り抜いてよい。
+    func testACropAroundTheWholeReceiptIsAccepted() {
+        XCTAssertFalse(ReceiptImageRectifier.cutsOffText(corners: wholeReceipt, textBoxes: receiptText))
+    }
+
+    /// 四角の外の文字が1つだけなら検出の誤り（模様など）とみなして切り抜く。縁にかかる文字は内側。
+    func testOneStrayBoxOrTextOnTheEdgeDoesNotStopTheCrop() {
+        let stray = receiptText + [CGRect(x: 0.92, y: 0.5, width: 0.05, height: 0.02)]
+        XCTAssertFalse(ReceiptImageRectifier.cutsOffText(corners: wholeReceipt, textBoxes: stray))
+
+        let edges = receiptText + [
+            CGRect(x: 0.05, y: 0.5, width: 0.1, height: 0.02),
+            CGRect(x: 0.86, y: 0.6, width: 0.1, height: 0.02)
+        ]
+        XCTAssertFalse(ReceiptImageRectifier.cutsOffText(corners: wholeReceipt, textBoxes: edges))
+    }
+
+    /// アプリのレシート画面を撮った1枚。紙だけを囲む四角では、上の時刻と「レシート」「閉じる」が外に残る。
+    /// 切り抜かずに画面ごと読む（画面の文字は解析で外す）。
+    func testAScreenshotIsNotCroppedToThePaper() {
+        let paper = [
+            CGPoint(x: 0.22, y: 0.84), CGPoint(x: 0.78, y: 0.84), CGPoint(x: 0.78, y: 0.05), CGPoint(x: 0.22, y: 0.05)
+        ]
+        let screen = [
+            CGRect(x: 0.06, y: 0.955, width: 0.12, height: 0.02),
+            CGRect(x: 0.42, y: 0.87, width: 0.16, height: 0.02),
+            CGRect(x: 0.79, y: 0.87, width: 0.12, height: 0.02)
+        ]
+        let receipt = stride(from: 0.1, through: 0.78, by: 0.04).map {
+            CGRect(x: 0.25, y: $0, width: 0.5, height: 0.015)
+        }
+        XCTAssertTrue(ReceiptImageRectifier.cutsOffText(corners: paper, textBoxes: receipt + screen))
+        XCTAssertFalse(ReceiptImageRectifier.cutsOffText(corners: paper, textBoxes: receipt))
+    }
+
+    /// レシート全体を囲む四角。左上から時計回り、画像の左下が (0,0)。
+    private var wholeReceipt: [CGPoint] {
+        [CGPoint(x: 0.1, y: 0.97), CGPoint(x: 0.9, y: 0.97), CGPoint(x: 0.9, y: 0.03), CGPoint(x: 0.1, y: 0.03)]
+    }
+
+    /// 上から下まで並んだ文字の行。
+    private var receiptText: [CGRect] {
+        stride(from: 0.08, through: 0.92, by: 0.04).map { CGRect(x: 0.2, y: $0, width: 0.6, height: 0.02) }
+    }
 }
