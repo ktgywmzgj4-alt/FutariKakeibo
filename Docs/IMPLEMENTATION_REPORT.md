@@ -2,6 +2,13 @@
 
 更新日: 2026-08-13
 
+> **2026-10-19 注記**: これは最初の実装のときの記録です。いまは次の2点が違います。
+> 1. 合言葉の招待に **CloudKit の Public Database を使っています**（共有の場所と期限だけ。家計のデータは置かない）。
+>    共有は「共有のURLを知っている人なら参加できる」形（`publicPermission = .readWrite`）です。
+> 2. レシート画像は、利用者が「レシート画像を保存」をONにしたときだけ、縮小した1枚を保存します（2026-09-04）。
+>
+> いまの説明は `Docs/ARCHITECTURE_AND_RISK.md`・`Docs/PRIVACY_POLICY_REQUIREMENTS.md`・`Docs/SHARING_SECURITY_AUDIT.md` を見てください。
+
 ## 結論
 
 空の状態から、iOS 17以降向けSwiftUIアプリのTestFlight準備版を作成した。ローカルで完結する家計簿機能、端末内レシートOCR、招待制CloudKit共有、プライバシー関連リソース、単体テスト、公開準備文書を含む。
@@ -18,14 +25,14 @@
 - レシート: VisionKit撮影、Visionの端末内OCR、保存前の候補確認
 - 共有: CloudKit Private/Shared Database、CKShare招待、手動/前面復帰同期
 - 競合対策: 更新日時による新しい編集の優先、永続的な削除印による誤復活防止
-- プライバシー: Public Database不使用、画像非保存、追跡/広告/外部解析SDKなし
+- プライバシー: Public Database不使用、画像非保存、追跡/広告/外部解析SDKなし（**2026-10-19 注記: 前の2つは今は違う。冒頭の注記**）
 - 公開準備: App Icon、Privacy Manifest、App Store素材案、収益化3案、ポリシー要件、TestFlightチェックリスト
 
 ## 修正した重要問題
 
 | 優先度 | 問題 | 対応 |
 | --- | --- | --- |
-| P0 | 公開DB経由で家計情報が見える危険 | Private/Shared Databaseと非公開CKShareだけを使用 |
+| P0 | 公開DB経由で家計情報が見える危険 | Private/Shared Databaseと非公開CKShareだけを使用（**2026-10-19 注記: 家計のデータは今も公開DBに置かない。ただし合言葉は公開DBに置き、CKShareは公開の権限つき。冒頭の注記**） |
 | P0 | 長期オフライン端末から削除済み支出が復活し得る | CloudKitのExpenseレコードへ削除印を永続化し、古い再送より優先 |
 | P1 | レシート画像やOCRが外部送信される危険 | VisionKit/Visionだけで端末内処理し、画像を保存しない |
 | P1 | CSV一時ファイルに家計情報が残る | ファイル保護を適用し、共有シート終了後に削除 |

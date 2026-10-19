@@ -10,7 +10,7 @@ struct CloudSharingView: UIViewControllerRepresentable {
     }
 
     func makeUIViewController(context: Context) -> UICloudSharingController {
-        configuration.share.publicPermission = .readWrite
+        configuration.share.publicPermission = CloudKitSyncService.sharePublicPermission
         let controller = UICloudSharingController(
             share: configuration.share,
             container: configuration.container

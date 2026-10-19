@@ -26,6 +26,8 @@ actor CloudKitSyncService {
         case inviteUnavailable(String)
         case inviteNotFound
         case inviteExpired
+        /// 合言葉はもう誰かが使った。合言葉は1回だけ（`claimInvite`）。
+        case inviteAlreadyUsed
         case receiptImageMissing
 
         var errorDescription: String? {
@@ -44,6 +46,8 @@ actor CloudKitSyncService {
                 "その合言葉は見つかりませんでした。入力を確かめるか、相手にもう一度発行してもらってください。"
             case .inviteExpired:
                 "この合言葉は期限が切れています。相手にもう一度発行してもらってください。"
+            case .inviteAlreadyUsed:
+                "この合言葉はもう使われています。相手に新しい合言葉を発行してもらってください。心当たりがなければ、そのことも相手に伝えてください。"
             case .receiptImageMissing:
                 "レシート画像をiCloudから取得できませんでした。通信の状態を確かめて、もう一度お試しください。"
             }
@@ -101,7 +105,7 @@ actor CloudKitSyncService {
     /// この利用者のiCloudに、すでにある家計簿が残っていないか探す。
     ///
     /// **アプリを消して入れ直したときの戻り道。**
-    /// 合言葉は使い切りで、使った時点で消える。発行した側は入れる合言葉を持たず、
+    /// 合言葉は使い切りで、使った時点で使えなくなる。発行した側は入れる合言葉を持たず、
     /// 参加した側ももう一度もらい直さないと戻れなかった。
     /// データはiCloudにあるのに、手元から届かない状態になっていた。
     ///
@@ -110,23 +114,25 @@ actor CloudKitSyncService {
     /// 最初はプライベート側しか見ておらず、参加した側の端末では必ず
     /// 「見つかりませんでした」になった（2026-10-04 実機で判明）。
     ///
-    /// 共有への参加はiCloudのアカウントに残るので、アプリを消しても共有側のゾーンは見える。
+    /// **見つかったものを全部返す。どれに戻るかは呼ぶ側が決める。**
+    /// 以前は自分で作ったほう（プライベート側）を必ず選んでいた。参加した側が、参加する前に
+    /// 一度でも合言葉を発行していると、プライベート側に自分の古い家計簿が残っている。
+    /// 入れ直すと、いつも使っている相手との家計簿ではなく、その古いほうに戻っていた（2026-10-19 監査）。
     ///
+    /// 共有への参加はiCloudのアカウントに残るので、アプリを消しても共有側のゾーンは見える。
     /// ゾーンだけ残って中身が空のこともあるので、**家計簿のレコードがあるものだけ**返す。
-    func findExistingHouseholdLocation() async throws -> CloudLocation? {
+    func findExistingHouseholdLocations() async throws -> [CloudLocation] {
         let status = try await accountStatus()
-        guard status == .available else { return nil }
+        guard status == .available else { return [] }
 
-        // 自分で作ったものを先に見る。両方にあるなら自分のぶんが本体。
+        var found: [CloudLocation] = []
         for scope in [CloudLocation.Scope.privateDatabase, .sharedDatabase] {
-            if let location = try await findHouseholdZone(in: scope) {
-                return location
-            }
+            found += try await findHouseholdZones(in: scope)
         }
-        return nil
+        return found
     }
 
-    private func findHouseholdZone(in scope: CloudLocation.Scope) async throws -> CloudLocation? {
+    private func findHouseholdZones(in scope: CloudLocation.Scope) async throws -> [CloudLocation] {
         let database = switch scope {
         case .privateDatabase: container.privateCloudDatabase
         case .sharedDatabase: container.sharedCloudDatabase
@@ -139,6 +145,7 @@ actor CloudKitSyncService {
             .sorted { $0.zoneName < $1.zoneName }
         log("\(scope.rawValue): ゾーン \(zoneIDs.count)件、うち家計簿らしきもの \(candidates.count)件")
 
+        var found: [CloudLocation] = []
         for zoneID in candidates {
             let location = CloudLocation(
                 scope: scope,
@@ -153,11 +160,11 @@ actor CloudKitSyncService {
                 zoneID: zoneID
             )
             if try await fetchRecord(rootID, from: database) != nil {
-                log("家計簿が見つかった（\(scope.rawValue)）。ここから取り戻せる")
-                return location
+                log("家計簿が見つかった（\(scope.rawValue)）")
+                found.append(location)
             }
         }
-        return nil
+        return found
     }
 
     private func allRecordZones(in database: CKDatabase) async throws -> [CKRecordZone] {
@@ -228,7 +235,7 @@ actor CloudKitSyncService {
         let share = CKShare(rootRecord: rootRecord)
         share[CKShare.SystemFieldKey.title] = "ふたり家計簿" as CKRecordValue
         // 合言葉を知っている相手が参加できるようにする。合言葉は期限つきの使い切り。
-        share.publicPermission = .readWrite
+        share.publicPermission = Self.sharePublicPermission
 
         // **保存したときにサーバーが返す CKShare を使う。**
         // 共有のURLはサーバー側で割り当てられ、こちらで作った `share` には入らない。
@@ -274,7 +281,7 @@ actor CloudKitSyncService {
         // 読んでも付いてこないので、保存し直して応答から受け取る。
         // 合言葉を知っている相手が参加できる形にそろえてから送る。
         let target = refetched ?? share
-        target.publicPermission = .readWrite
+        target.publicPermission = Self.sharePublicPermission
         let resaved = try await modifyRecords(
             saving: [target],
             deleting: [],
@@ -324,6 +331,74 @@ actor CloudKitSyncService {
         )
     }
 
+    // MARK: - 共有に参加している人
+
+    /// 共有に参加している1人。名前はiCloudが教えてくれるときだけ入る。
+    struct ShareMember: Equatable, Sendable {
+        var isOwner: Bool
+        var isCurrentUser: Bool
+        var hasAccepted: Bool
+        var name: String?
+    }
+
+    /// 家計簿の共有に参加している人。共有していなければ nil。
+    ///
+    /// **この共有は「URLを知っている人なら誰でも参加できる」形（`publicPermission = .readWrite`）。**
+    /// 合言葉が漏れれば、知らない人が参加できてしまう。誰が入っているかを見えるようにして、
+    /// 2人より多ければ気づけるようにする（2026-10-19 監査）。
+    func shareMembers(at location: CloudLocation) async throws -> [ShareMember]? {
+        let database = database(for: location)
+        let rootID = CKRecord.ID(recordName: location.rootRecordName, zoneID: zoneID(for: location))
+        guard
+            let root = try await fetchRecord(rootID, from: database),
+            let reference = root.share,
+            let share = try await fetchRecord(reference.recordID, from: database) as? CKShare
+        else { return nil }
+
+        let me = share.currentUserParticipant
+        return share.participants.map { participant in
+            ShareMember(
+                isOwner: participant.role == .owner,
+                isCurrentUser: me.map { $0 == participant } ?? false,
+                hasAccepted: participant.acceptanceStatus == .accepted,
+                name: participant.userIdentity.nameComponents.flatMap { components in
+                    let text = PersonNameComponentsFormatter.localizedString(from: components, style: .default)
+                    return text.isEmpty ? nil : text
+                }
+            )
+        }
+    }
+
+    /// ふたりの家計簿に、ふたりより多く参加していれば、その人数。
+    ///
+    /// 数えるのは、作った人と、参加を済ませた人だけ。
+    static func strangerCount(in members: [ShareMember]) -> Int {
+        let joined = members.filter { $0.isOwner || $0.hasAccepted }
+        return max(joined.count - 2, 0)
+    }
+
+    /// 共有をやめる。**家計簿を作った人の端末からだけ**できる。家計簿のデータは消えない。
+    ///
+    /// 共有（`CKShare`）を消すと、参加していた人は全員この家計簿に入れなくなる。
+    /// 公開の参加者を1人だけ外すことはできない（外すには公開の権限を無くす必要があり、
+    /// そうするとパートナーも一緒に外れる。Appleの `publicPermission` の説明）。
+    /// 知らない人が参加していたときは、いったん共有をやめて全員を外す。
+    ///
+    /// **共有を始め直しても、共有のURLは前と同じになる**（Appleの `CKShare.url` の説明:
+    /// 同じ根のレコードを共有し直してもURLは変わらない）。使った合言葉ではもう入れないが、
+    /// URLそのもの（アプリの画面には出ない）を控えている人は、また入れてしまう。
+    /// URLで入れなくするには、公開の権限を使わない共有（参加者を名指しする形）に移る必要がある
+    /// （`Docs/SHARING_SECURITY_AUDIT.md`）。
+    func stopSharing(at location: CloudLocation) async throws {
+        guard location.scope == .privateDatabase else { throw SyncError.shareNotAccepted }
+        let database = database(for: location)
+        let rootID = CKRecord.ID(recordName: location.rootRecordName, zoneID: zoneID(for: location))
+        guard let root = try await fetchRecord(rootID, from: database), let reference = root.share else {
+            return
+        }
+        try await modifyRecords(saving: [], deleting: [reference.recordID], in: database, atomically: true)
+    }
+
     // MARK: - 合言葉
 
     /// 合言葉を公開データベースへ1件だけ置く。中身は共有の場所と失効時刻だけで、
@@ -359,24 +434,110 @@ actor CloudKitSyncService {
         let cleaned = ShareInvite.normalized(code)
         guard cleaned.count == ShareInvite.codeLength else { throw SyncError.inviteNotFound }
 
+        // 合言葉と「使われた印」を1往復で取る。無いレコードは結果に入らないだけ。
+        let inviteID = inviteRecordID(for: cleaned)
+        let usedID = inviteUsedRecordID(for: cleaned)
+        let found = try await fetchRecords([inviteID, usedID], from: container.publicCloudDatabase)
         guard
-            let record = try await fetchRecord(
-                inviteRecordID(for: cleaned),
-                from: container.publicCloudDatabase
-            ),
+            let record = found[inviteID],
             let urlText = record["shareURL"] as? String,
             let url = URL(string: urlText),
             let expiresAt = record["expiresAt"] as? Date
         else { throw SyncError.inviteNotFound }
 
-        guard expiresAt > .now else { throw SyncError.inviteExpired }
-        return ShareInvite(code: cleaned, shareURL: url, expiresAt: expiresAt)
+        var isUsed = false
+        if let used = found[usedID] {
+            // 自分で作った印なら、前に参加しかけて通信が切れただけ。もう一度進んでよい。
+            isUsed = await !isMine(used)
+        }
+        switch ShareInvite.state(exists: true, expiresAt: expiresAt, isUsed: isUsed) {
+        case .used: throw SyncError.inviteAlreadyUsed
+        case .expired: throw SyncError.inviteExpired
+        case .gone: throw SyncError.inviteNotFound
+        case .active: return ShareInvite(code: cleaned, shareURL: url, expiresAt: expiresAt)
+        }
     }
 
-    /// 使い終えた合言葉は残さない。消せなくても参加は済んでいるので黙って進む。
-    func consumeInvite(code: String) async {
-        let recordID = inviteRecordID(for: ShareInvite.normalized(code))
-        try? await deleteRecord(recordID, from: container.publicCloudDatabase)
+    /// 参加する前に、合言葉を自分のものにする。**合言葉を1回だけにする本体。**
+    ///
+    /// **合言葉のレコードは、発行した人にしか消せない**（公開データベースは「作った人だけが
+    /// 書き換えられる」。Appleの `publicCloudDatabase` の説明）。以前は参加した側が消そうとして
+    /// 失敗していたので、使った合言葉が期限（1日）まで使えたままだった。画面には「誰かが参加すると
+    /// 無効になる」と書いてあったのに、そうなっていなかった（2026-10-19 監査）。
+    ///
+    /// 代わりに、参加する人が「使われた印」を作る（作るのはサインインした人なら誰でもできる）。
+    /// 印は合言葉ごとに1つしか作れない（同じ名前のレコードは2つ作れない）ので、2人がほぼ同時に
+    /// 同じ合言葉を入れても、先に印を作れたほうだけが参加できる。作れなかったら印を読み直し、
+    /// 作ったのが自分なら（前に参加しかけて通信が切れた）そのまま進む。
+    /// 印には共有のURLを入れない（期限だけ）。型は合言葉と同じ `ShareInvite` なので、
+    /// CloudKitの項目は増えない。
+    func claimInvite(_ invite: ShareInvite) async throws {
+        let database = container.publicCloudDatabase
+        let recordID = inviteUsedRecordID(for: invite.code)
+        let record = CKRecord(recordType: RecordType.shareInvite, recordID: recordID)
+        record["expiresAt"] = invite.expiresAt as CKRecordValue
+        do {
+            _ = try await saveRecord(record, to: database)
+        } catch {
+            log("合言葉の印を作る", error: error)
+            // 印がすでにあるのか、通信が切れただけなのかを、読み直して確かめる。
+            guard let existing = try? await fetchRecord(recordID, from: database) else { throw error }
+            guard await isMine(existing) else { throw SyncError.inviteAlreadyUsed }
+        }
+    }
+
+    /// そのレコードを作ったのが、この端末の利用者か。
+    private func isMine(_ record: CKRecord) async -> Bool {
+        let myName = try? await currentUserRecordName()
+        return Self.isCurrentUser(record.creatorUserRecordID, currentUserRecordName: myName)
+    }
+
+    /// 作った人が自分か。CloudKitは、自分のことを `CKCurrentUserDefaultName` で返すことがあるので両方を見る。
+    /// 分からないとき（作った人が無い）は自分ではないとする。
+    static func isCurrentUser(_ creator: CKRecord.ID?, currentUserRecordName: String?) -> Bool {
+        guard let name = creator?.recordName else { return false }
+        return name == CKCurrentUserDefaultName || name == currentUserRecordName
+    }
+
+    private func currentUserRecordName() async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            container.fetchUserRecordID { recordID, error in
+                if let recordID {
+                    continuation.resume(returning: recordID.recordName)
+                } else {
+                    continuation.resume(throwing: error ?? SyncError.iCloudUnavailable)
+                }
+            }
+        }
+    }
+
+    /// 自分が発行した合言葉の、いまの様子。発行した端末の後片付け（`withdrawInvite`）に使う。
+    func issuedInviteState(code: String) async throws -> ShareInvite.State {
+        let cleaned = ShareInvite.normalized(code)
+        let inviteID = inviteRecordID(for: cleaned)
+        let usedID = inviteUsedRecordID(for: cleaned)
+        let found = try await fetchRecords([inviteID, usedID], from: container.publicCloudDatabase)
+        return ShareInvite.state(
+            exists: found[inviteID] != nil,
+            expiresAt: found[inviteID]?["expiresAt"] as? Date,
+            isUsed: found[usedID] != nil
+        )
+    }
+
+    /// 自分が発行した合言葉を、公開データベースから消す。
+    ///
+    /// 合言葉のレコードには共有のURLが入っている。使われたもの・期限の切れたもの・
+    /// 新しく発行し直して要らなくなったものを残さない。消せるのは発行した本人だけ。
+    /// もう無いなら、それでよい。
+    func withdrawInvite(code: String) async throws {
+        do {
+            try await deleteRecord(
+                inviteRecordID(for: ShareInvite.normalized(code)),
+                from: container.publicCloudDatabase
+            )
+        } catch let error as CKError where error.code == .unknownItem {
+            return
+        }
     }
 
     /// 共有のURLから参加する。
@@ -387,6 +548,15 @@ actor CloudKitSyncService {
 
     private func inviteRecordID(for code: String) -> CKRecord.ID {
         CKRecord.ID(recordName: "invite-\(code)")
+    }
+
+    /// 「使われた印」のレコード。合言葉の文字に「-」は無いので、合言葉のレコード名とは重ならない。
+    private func inviteUsedRecordID(for code: String) -> CKRecord.ID {
+        CKRecord.ID(recordName: Self.inviteUsedRecordName(for: code))
+    }
+
+    static func inviteUsedRecordName(for code: String) -> String {
+        "invite-used-\(code)"
     }
 
     private func deleteRecord(_ id: CKRecord.ID, from database: CKDatabase) async throws {
@@ -944,6 +1114,14 @@ actor CloudKitSyncService {
 
     /// 1回の操作に入れる件数の上限。CloudKit側の上限（400件前後）より十分小さくとる。
     static let batchSize = 200
+
+    /// 家計簿の共有の公開の権限。**「共有のURLを知っている人なら、読み書きできる参加者になれる」。**
+    ///
+    /// **変えてはいけない（変えるなら移行の手順が先）。** Appleの説明では、`.none` にして保存すると
+    /// 公開の参加者が全員外れる（`CKShare.publicPermission`・`CKShare.Participant`）。
+    /// いまの参加者はみな公開の参加者なので、パートナーも家計簿に入れなくなる。
+    /// 1人ずつ参加者を管理する形に移るときの影響と手順は `Docs/SHARING_SECURITY_AUDIT.md`。
+    static let sharePublicPermission: CKShare.ParticipantPermission = .readWrite
 
     /// 共有をはじめるときに、手元の支出と収入をまとめてクラウドへ送る。
     ///

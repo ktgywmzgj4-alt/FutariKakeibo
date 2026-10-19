@@ -71,7 +71,14 @@ Productionは作ってくれません。**人間が手で反映する必要が�
 | `ReceiptImage` | id, expenseID, asset（画像本体・Asset型）, thumbnail（縮小画像・Asset型）, createdAt |
 
 `ShareInvite` だけは **Public Database** に置きます。
-他の4つは Private Database の中の、招待した相手だけが読める場所（共有ゾーン）です。
+他の4つは Private Database の中の、共有に参加した人だけが読める場所（共有ゾーン）です。
+
+**2026-10-19 追記（スキーマの変更なし）**: 合言葉を1回だけにするため、参加する人が
+「使われた印」を作るようになりました。印は**同じ `ShareInvite` 型**のレコードで、
+名前は `invite-used-<合言葉>`、入れる項目は `expiresAt` だけです（共有のURLは入れません）。
+レコード型も項目も増えないので、**Productionへの反映は要りません**。
+Public Database の初期の権限（だれでも読める・サインインした人なら作れる・作った人だけが書き換えられる）
+のままで動きます。権限や索引を変えていないかを確かめる手順は `Docs/SHARING_SECURITY_AUDIT.md` にあります。
 
 `ReceiptImage` の `asset` と `thumbnail` は **Asset型**（ファイル）です。文字や数値ではありません。
 Development で自動で作られたものをそのまま反映すれば、型は合っています。

@@ -131,7 +131,7 @@ struct OnboardingView: View {
             if let outcome = store.recoveryOutcome {
                 recoveryMessage(outcome)
             } else {
-                Text("このiPhoneを前にも使っていたなら、ここから戻せます。")
+                Text(Self.recoveryHint)
                     .font(.caption)
                     .foregroundStyle(AppTheme.secondaryText)
                     .multilineTextAlignment(.center)
@@ -146,16 +146,64 @@ struct OnboardingView: View {
             // 取り戻せたときは画面そのものが入れ替わるので、ここはまず見えない。
             EmptyView()
         case .nothingFound:
-            Text("このiCloudには家計簿が見つかりませんでした。相手から合言葉をもらって参加するか、新しく始めてください。")
+            Text("このiCloudには家計簿が見つかりませんでした。iPhoneの中だけで使っていた家計簿は、アプリを削除すると戻せません。相手から合言葉をもらって参加するか、新しく始めてください。")
                 .font(.caption)
                 .foregroundStyle(AppTheme.secondaryText)
                 .multilineTextAlignment(.center)
+        case .chooseOne:
+            candidateList
         case let .failed(message):
             Text(message)
                 .font(.caption)
                 .foregroundStyle(AppTheme.warning)
                 .multilineTextAlignment(.center)
         }
+    }
+
+    /// 取り戻せる家計簿が2つ以上あるときの選ぶ一覧。いちばん最近まで使われていたものが先頭。
+    private var candidateList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("iCloudに家計簿が\(store.recoveryCandidates.count)つ見つかりました。いつも使っている家計簿を選んでください。選ばなかった家計簿もiCloudに残ります。")
+                .font(.caption)
+                .foregroundStyle(AppTheme.secondaryText)
+            ForEach(store.recoveryCandidates) { candidate in
+                Button {
+                    Task { await store.recover(candidate) }
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(Self.candidateTitle(candidate))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppTheme.ink)
+                        Text(Self.candidateDetail(candidate))
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(AppTheme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .disabled(store.isRecovering)
+                .accessibilityHint("この家計簿をこのiPhoneに戻します")
+            }
+        }
+    }
+
+    /// 取り戻せるのは、同じApple IDで、iCloudに置いてあった家計簿だけ。
+    /// 「このiPhoneを前にも使っていたなら」と書いていたが、iPhoneの中だけで使っていた家計簿は
+    /// アプリを消すと戻せない。戻せない家計簿に「戻せます」と言わない（2026-10-19 監査）。
+    static let recoveryHint = "同じApple IDで、合言葉を発行したり参加したりしてiCloudに置いてあった家計簿なら、"
+        + "別のiPhoneからでも戻せます。iPhoneの中だけで使っていた家計簿は戻せません。"
+
+    static func candidateTitle(_ candidate: RecoveryCandidate) -> String {
+        let names = candidate.memberNames.joined(separator: "・")
+        let side = candidate.isOwnHousehold ? "あなたが作った家計簿" : "相手から共有された家計簿"
+        return names.isEmpty ? side : "\(names)（\(side)）"
+    }
+
+    static func candidateDetail(_ candidate: RecoveryCandidate) -> String {
+        let date = candidate.lastActivity.formatted(date: .numeric, time: .omitted)
+        return "支出\(candidate.expenseCount)件・収入\(candidate.incomeCount)件・最後の記録 \(date)"
     }
 
     private func labeledField(

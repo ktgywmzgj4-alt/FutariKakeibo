@@ -1,6 +1,7 @@
 # 構成・実装状況・リスク整理
 
-更新日: 2026-08-13
+更新日: 2026-08-13（2026-10-19 一部更新: 合言葉・共有の公開権限・レシート画像の記述を実装に合わせた。
+共有の安全の監査は `Docs/SHARING_SECURITY_AUDIT.md`）
 
 ## 使用技術
 
@@ -9,7 +10,7 @@
 | UI | SwiftUI / iOS 17以降 | iPhoneに最適化し、外部UIライブラリを持たない |
 | ローカル保存 | Codable + JSON / Application Support | 小規模MVPとして監査しやすく、オフラインで動く |
 | ファイル保護 | Complete until first user authentication | 端末ロックと連動して家計データを保護する |
-| 2人共有 | CloudKit Private/Shared Database + CKShare | 公開DBを使わず、招待参加者だけに共有する |
+| 2人共有 | CloudKit Private/Shared Database + CKShare。合言葉だけ Public Database | 家計データは公開DBに置かない。合言葉（共有の場所と期限だけ）を Public Database に一時的に置く。共有は「URLを知っている人なら参加できる」形（`publicPermission = .readWrite`） |
 | レシート | VisionKit + Vision | 画像を外部送信せず、端末内でOCRする |
 | テスト | XCTest + Linux受入スモークテスト | 金額・精算・保存・OCR抽出の回帰を防ぐ |
 
@@ -41,12 +42,12 @@ Appleは、CloudKitのPrivate Database内のレコードを他のiCloud利用者
 - 価格設定、StoreKit、課金画面
 - App Store Connectのアプリ登録、ビルドアップロード、TestFlight提出
 - 広告、外部解析SDK、外部AI/OCR API
-- レシート画像の保存または共有
+- ~~レシート画像の保存または共有~~（2026-09-04 に実装。「レシート画像を保存」がONのときだけ、縮小した1枚を端末と共有先のiCloudに残す）
 
 ## データの流れ
 
 1. 手入力またはレシート撮影で支出候補を作る。
-2. レシート画像はVisionで端末内処理し、画面を閉じた後は保持しない。
+2. レシート画像はVisionで端末内処理する。「レシート画像を保存」がONのときだけ、縮小した1枚を残す（原寸の写真は残さない）。
 3. 利用者が候補を確認・修正して保存する。
 4. 共有前はApplication Support内の保護付きJSONだけに保存する。
 5. 共有後はCloudKit Private Databaseの所有者データを、CKShare参加者のShared Databaseへ共有する。
@@ -56,7 +57,7 @@ Appleは、CloudKitのPrivate Database内のレコードを他のiCloud利用者
 
 | 優先度 | リスク | 現在の対策 | 残る確認 |
 | --- | --- | --- | --- |
-| P0 | 家計データが第三者に公開される | Public Database不使用、CKShareの公開権限なし | 実機2アカウントで参加者以外が開けないことを確認 |
+| P0 | 家計データが第三者に公開される | 家計データは Private/Shared Database だけ。CKShareの公開権限は readWrite（URLを知っている人は参加できる）。合言葉は1回だけ・1日で期限切れ・使われたら発行した端末が消す。参加している人を共有の画面に出し、ふたりより多ければ知らせる（2026-10-19） | 実機2アカウントで、使った合言葉・期限の切れた合言葉では参加できないことを確認。正式公開までに、公開権限を使わない共有（参加者を名指しする形）への切り替えを検討（`Docs/SHARING_SECURITY_AUDIT.md`） |
 | P0 | CloudKit設定不足でTestFlight版だけ同期不能 | Entitlementsと招待処理を実装 | Production schemaデプロイと配布ビルドでの確認 |
 | P0 | コンパイル/API互換性 | Swift全ファイルの構文解析、Xcodeプロジェクト解析 | Macの現行Xcodeで実ビルドが必須 |
 | P1 | オフライン編集の上書き・削除済み支出の復活 | `updatedAt`で新しい支出を優先し、CloudKit上の削除印を古い端末からの再送より優先 | 2台同時編集・長期オフライン復帰テスト |
@@ -74,5 +75,5 @@ Appleは、CloudKitのPrivate Database内のレコードを他のiCloud利用者
 - iCloudアカウントAが家計を作成し、Bだけを招待できる
 - Bの追加・編集・削除がAに反映し、逆方向も反映する
 - 機内モード中の追加/削除が復帰後に整合する
-- レシート画像がファイルシステム・CloudKit・CSVのいずれにも残らない
+- 「レシート画像を保存」がOFFのとき、レシート画像がファイルシステム・CloudKit・CSVのいずれにも残らない。支出を消すと、その支出の画像も端末とiCloudから消える
 - Production CloudKit schemaをデプロイした配布ビルドで同期できる

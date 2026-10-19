@@ -33,12 +33,37 @@ struct RootView: View {
         } message: {
             Text(store.errorMessage ?? "")
         }
+        // 共有のリンクから届いた招待。すでに家計簿があるときは、置き換える前に確かめる。
+        .alert(
+            "共有の招待を開きました",
+            isPresented: Binding(
+                get: { store.pendingShareInvitation != nil },
+                set: { if !$0 { store.declinePendingShare() } }
+            ),
+            presenting: store.pendingShareInvitation
+        ) { invitation in
+            Button("参加する", role: .destructive) {
+                Task { await store.confirmPendingShare(invitation) }
+            }
+            Button("参加しない", role: .cancel) { store.declinePendingShare() }
+        } message: { invitation in
+            Text(Self.invitationMessage(ownerName: invitation.ownerName))
+        }
         .sheet(item: $store.shareConfiguration) { configuration in
             CloudSharingView(configuration: configuration) { message in
                 store.errorMessage = message
             }
                 .ignoresSafeArea()
         }
+    }
+}
+
+extension RootView {
+    /// 共有のリンクから届いた招待を確かめる文。
+    static func invitationMessage(ownerName: String?) -> String {
+        let whose = ownerName.map { "\($0)さんの家計簿" } ?? "この家計簿"
+        return "\(whose)に参加しますか？参加すると、いまの家計簿は置き換わり、"
+            + "このiPhoneの中だけにある記録は消えます。知らない人から届いたリンクなら、参加しないでください。"
     }
 }
 
