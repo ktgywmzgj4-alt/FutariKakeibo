@@ -67,9 +67,9 @@ final class SyncMergeTests: XCTestCase {
     func testTheSameDeletionOnBothSidesKeepsTheLaterTimeAndIsNotResent() {
         let id = UUID()
         let result = SyncMerge.merge(
-            local: [],
+            local: [Expense](),
             localDeletions: [id: date(300)],
-            remote: [],
+            remote: [Expense](),
             remoteDeletions: [id: date(100)]
         )
 
