@@ -236,6 +236,9 @@ CloudKit Console で変えていないことを確かめてください（8章�
 
 ## 7. 残る課題: 「参加者を名指しする共有」への移行（提案。未実施）
 
+**2026-10-21: 利用者の回答は「いまは変えない。設計と検証の準備は進める」。** 設計・iOSごとの条件・データの保護・戻し方・検証の段取りは
+`Docs/SHARING_MIGRATION_PLAN.md` にまとめた（この章より新しい）。この章は監査のときの最初の案として残す。
+
 **なぜ要るか:** いまの形では、共有のURLを知っている人は、共有が続くかぎり（やめて始め直しても）参加できます。
 知らない人だけを外すこともできません。
 
@@ -274,18 +277,33 @@ CloudKit Console で変えていないことを確かめてください（8章�
 
 ---
 
-## 8. CloudKit Console で確かめてほしいこと（読むだけ。何も変えないでください）
+## 8. CloudKit Console で確かめてほしいこと（読むだけ。何も変えないでください。T-049）
 
-Production の `ShareInvite` 型の設定が、上の判断の前提どおりかを見てください。**変える操作はしないでください。**
-前提と違っていたら、そのままの画面を写真に撮って知らせてください。
+2026-10-21 に利用者が「読むだけの確認」を承認。**Production のスキーマ・索引・権限・レコード・トークンは変えない・消さない。**
+画面の名前は Apple の説明（CloudKit Database app）に合わせた。
 
-1. CloudKit Console → コンテナ `iCloud.jp.aikawa.futarikakeibo` → **Production**
-2. **Schema → Record Types → `ShareInvite`**: 項目が `shareURL`（String）と `expiresAt`（Date/Time）であること
-3. **Schema → Indexes → `ShareInvite`**: `recordName` や `shareURL` に **Queryable** が**付いていない**こと
-   （付いていると、一覧を読める人がいる）
-4. **Schema → Security Roles**（または Record Types の権限の欄）: `ShareInvite` が
-   「World: Read」「Authenticated（iCloud）: Create」「Creator: Read/Write」のままであること
-5. **Settings → Tokens & Keys（API Tokens）**: 使っていないAPIトークンが無いこと（あれば、Webからこの場所を読める）
+### 手順
+
+1. ブラウザで https://icloud.developer.apple.com/ を開き、Apple Developer のアカウントでサインインする
+2. 「CloudKit Database」を開く
+3. 画面の上で、コンテナ `iCloud.jp.aikawa.futarikakeibo` を選ぶ
+4. 環境の切り替えを **Production** にする（Development のままだと、試験用の設定を見てしまう）
+5. 左の **Schema → Indexes**: 一覧から `ShareInvite` の行を探し、種類が **QUERYABLE** の索引があるかを見る（とくに `recordName`）。
+   `Expense`・`Income` に `recordName` の QUERYABLE があるのは正常（アプリの同期が使う）
+6. 左の **Schema → Security Roles**: `ShareInvite` の権限を見る。初期は「World（だれでも）: Read」「Authenticated（サインインした人）: Create」「Creator（作った人）: Write」
+   （Apple のスキーマ言語の説明では、公開データベースの型の初期は `GRANT READ TO "_world"`・`GRANT CREATE TO "_icloud"`・`GRANT WRITE TO "_creator"`）
+7. 左の **Settings → Tokens & Keys**: API Token と Server-to-Server Key の一覧を見る。あれば**名前と作成日だけ**を控える（トークンの値は控えない・送らない）
+8. 何も押さずに閉じる（Save・Delete・Deploy は押さない）
+
+### 結果の見方（Claude が評価する）
+
+| 見たもの | 前提どおり | 前提と違ったら | 深刻度と対策（いずれも利用者の承認のあと） |
+| --- | --- | --- | --- |
+| `ShareInvite` の QUERYABLE 索引 | 無い | ある | **高。** このアプリの場所に入れる人（改造したアプリ・APIトークンを持つ人）が、合言葉を知らなくても全部の招待（共有のURL入り）を一覧できる。索引を外す（Production のスキーマ変更） |
+| `ShareInvite` の権限 | 上の初期のまま | World や Authenticated に Write がある | **高。** 他人が招待を書き換え・消せる（別の共有のURLに差し替えられる）。初期に戻す（Production の変更） |
+| API Token・Server-to-Server Key | 無い、または自分で作ったと分かるもの | 心当たりの無いものがある | **中。** Web から公開データベースを読める（合言葉を知っていれば招待が読める。QUERYABLE があれば一覧も）。使っていなければ取り消す |
+
+前提どおりなら、追加の対策は要らない（いまの守りは 5〜6章のとおり）。
 
 **任意の掃除（承認が要る操作）:** この版より前に発行された合言葉のレコード（`invite-` で始まるもの）は、
 発行した端末に控えが無いので、アプリからは消せません。中身は共有のURLと期限で、期限はすべて切れています。

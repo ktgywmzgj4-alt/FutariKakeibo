@@ -471,12 +471,32 @@
     {
       "id": "T-047",
       "task": "アプリを閉じているあいだも、相手の新しい支出を知らせる（CloudKitのデータベースの購読・サイレントプッシュ・バックグラウンド更新）",
-      "status": "todo",
+      "status": "doing",
       "owner": "実行役 + 人間",
       "passes": "利用者の承認のあと: Info.plist に UIBackgroundModes（fetch・remote-notification）と BGTaskSchedulerPermittedIdentifiers を足すこと。App ID の Push Notifications を有効にし、配信用プロファイルを作り直し、GitHub Secret APPLE_PROVISIONING_PROFILE_BASE64 を差し替えたあとで、entitlements に aps-environment を足すこと（順番を逆にすると配信できなくなる）。CKDatabaseSubscription（作った人はプライベート側・参加した人は共有側、型は Expense、中身の無い合図だけ）で合図を受けて同期し、T-045 と同じ決まりで知らせること。通知がOFFなら購読を消し、裏で起こさないこと。Appleが届くことを保証しない範囲（強制終了・間引き）を利用者向けに書くこと。CIが緑で、TestFlight 内部配信をして、実機の確認項目を残すこと",
       "evidence": "",
       "dependencies": ["T-045"],
-      "notes": "2026-10-19 利用者の依頼の 2（できればアプリを開いていない状態でも通知）。同日、Info.plist へのバックグラウンド実行の追加が Claude Code の auto モードの判定器に止められた（Unauthorized Persistence）。影響と手順は Docs/NOTIFICATIONS.md 4章"
+      "notes": "2026-10-19 利用者の依頼の 2（できればアプリを開いていない状態でも通知）。同日、Info.plist へのバックグラウンド実行の追加が Claude Code の auto モードの判定器に止められた（Unauthorized Persistence）。影響と手順は Docs/NOTIFICATIONS.md 4章。2026-10-21 利用者が条件つきで承認: Info.plist のバックグラウンドモードは T-047 に要る範囲で承認。条件: 先に既存の App ID・Provisioning Profile・署名設定を確かめる／Push Notifications がすでに有効なら再設定しない／プロファイルの作り直しが本当に要るか確かめる／要ると確かめるまで Apple Developer の設定を変えない／CloudKit Subscription のサイレントプッシュを優先する／BGTaskScheduler は必要性を確かめてから入れる／電池の消費を最小にする／通知OFFでも同期は続ける／自分の支出は知らせない／本文に金額・店名などを入れない／重複させない／届かなくても次の同期で追いつく。auto モードの制限は正規の承認の手順で扱い、回避しない。Apple Developer の変更と Secret の差し替えは、必要と確かめてから具体的な手順を出す。署名プロファイルを無効にする操作は、作り直しと Secret の更新の用意が整うまで保留"
+    },
+    {
+      "id": "T-048",
+      "task": "共有を「参加者を名指しする形」に移すための設計と検証の準備（既存の共有は変えない）",
+      "status": "doing",
+      "owner": "実行役 + 人間",
+      "passes": "次を文書にまとめること: oneTimeURLParticipant が実際に保証するセキュリティ、一度きりのURLとApple IDを指定した招待の違い、iOS 17・18・26 での動作条件、既存の共有を解除せずに移行を準備する方法、パートナーが入り直すときのデータの保護、未同期の支出・レシート・設定の扱い、移行に失敗したときの戻し方、第三者の参加を防ぐ・見つける・取り消す方法。準備のコードと自動テストは別のPRにすること。いまの2人の共有を解除したり、データを消したりする操作をしないこと。Production への適用・既存の共有の権限の変更・最低対応iOSの変更は、改めて利用者の承認を得ること",
+      "evidence": "2026-10-21 設計 Docs/SHARING_MIGRATION_PLAN.md: oneTimeURLParticipant が保証すること・しないこと（URLを最初に使った1人。本人確認にはならない）、一度きりのURLとApple ID指定の違い、iOS 17・18・26の条件（oneTimeURLParticipant は iOS 18、oneTimeURL(for:) の Swift は iOS 26 と Apple の資料に表示、申し込み・承認・ブロックは iOS 26、LookupInfo(userRecordID:) は iOS 10）、おすすめは同じ置き場所のまま公開→名指しに切り替える案A（パートナーは一度外れて受け直す。戻すときは公開の権限を戻せば同じURL）、データの保護・戻し方・第三者の防止/検出/取り消し・Development での検証の段取り。準備のコード: 入り直すとき家計簿のIDが同じなら置き場所が違っても同じ家計簿として突き合わせる（AppStore.isSameHousehold）、設定は新しいほうを残す、移す前の条件 ShareMigrationReadiness（まだ画面では使わない）。テスト SharingMigrationPreparationTests。既存の共有・権限・最低対応iOSは変えていない。CI未確認",
+      "dependencies": [],
+      "notes": "2026-10-21 利用者の回答の ②（既存の共有方式の変更は承認しない。設計と検証の準備は進めてよい）"
+    },
+    {
+      "id": "T-049",
+      "task": "CloudKit Console の読むだけの確認（ShareInvite の Queryable 索引・Security Roles・使っていない API トークン）を利用者に案内し、結果から追加の対策が要るか評価する",
+      "status": "doing",
+      "owner": "実行役 + 人間",
+      "passes": "利用者が操作する手順を、画面の名前と見る場所まで具体的に書くこと。CloudKit Production のスキーマ・索引・権限・レコード・トークンは変更も削除もしないこと（案内にも書く）。利用者の確認結果を受けて、追加のセキュリティ対策が要るかを評価して記録すること",
+      "evidence": "2026-10-21 読むだけの手順を Docs/SHARING_SECURITY_AUDIT.md 8章に書き直した（CloudKit Database → Production → Schema の Indexes・Security Roles、Settings の Tokens & Keys。Save・Delete・Deploy は押さない）。公開データベースの型の初期の権限は Apple のスキーマ言語の説明で確かめた（READ _world・CREATE _icloud・WRITE _creator）。結果ごとの深刻度と対策の表を付けた。利用者の確認の結果を待っている",
+      "dependencies": ["T-040"],
+      "notes": "2026-10-21 利用者の回答の ③（読み取りだけの確認を承認）"
     }
   ]
 }

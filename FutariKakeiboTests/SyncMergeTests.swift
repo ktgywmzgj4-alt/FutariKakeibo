@@ -373,3 +373,147 @@ final class RejoinSnapshotTests: XCTestCase {
         XCTAssertTrue(result.expenses.isEmpty)
     }
 }
+
+/// 共有の形を移す準備（T-048）。入り直しで手元を消さないことと、移す前の条件。
+@MainActor
+final class SharingMigrationPreparationTests: XCTestCase {
+    private let owner = Member(displayName: "そら", role: .owner)
+    private let partner = Member(displayName: "つばさ", role: .partner)
+    private let householdID = UUID()
+
+    private func location(_ zone: String, _ scope: CloudLocation.Scope = .sharedDatabase) -> CloudLocation {
+        CloudLocation(scope: scope, zoneName: zone, ownerName: "_owner", rootRecordName: zone)
+    }
+
+    private func household(at location: CloudLocation?, name: String = "ふたりの家計", updated: TimeInterval) -> Household {
+        Household(
+            id: householdID,
+            name: name,
+            monthlyBudget: 100_000,
+            members: [owner, partner],
+            ownerMemberID: owner.id,
+            cloudLocation: location,
+            updatedAt: Date(timeIntervalSince1970: 1_760_000_000 + updated)
+        )
+    }
+
+    private func expense(_ title: String) -> Expense {
+        Expense(
+            title: title,
+            amount: 500,
+            date: Date(timeIntervalSince1970: 1_760_000_000),
+            category: .groceries,
+            paidByMemberID: partner.id,
+            createdAt: Date(timeIntervalSince1970: 1_760_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_760_000_000)
+        )
+    }
+
+    private func cloud(_ household: Household, expenses: [Expense] = []) -> CloudKitSyncService.CloudSnapshot {
+        CloudKitSyncService.CloudSnapshot(
+            household: household,
+            expenses: expenses,
+            incomes: [],
+            deletedExpenseIDs: [:],
+            deletedIncomeIDs: [:]
+        )
+    }
+
+    /// 家計簿を別の場所へ写して共有し直しても、IDが同じなら同じ家計簿。手元にしか無い記録は消さない。
+    func testRejoiningACopyOfTheSameHouseholdElsewhereKeepsLocalRecords() {
+        let old = location("household-old")
+        let moved = location("household-new")
+        let onlyHere = expense("外れていたあいだに足した")
+        let current = AppSnapshot(household: household(at: old, updated: 0), expenses: [onlyHere])
+
+        let result = AppStore.snapshotAfterJoining(
+            current: current,
+            cloud: cloud(household(at: nil, updated: 0), expenses: [expense("iCloudの記録")]),
+            at: moved
+        )
+
+        XCTAssertTrue(result.expenses.contains { $0.id == onlyHere.id }, "手元にしか無い記録が消えた")
+        XCTAssertEqual(result.household?.cloudLocation, moved, "新しい場所に付け替わっていない")
+    }
+
+    /// 別々に作った家計簿（IDが違う）は、場所が違えば置き換える（これまでどおり）。
+    func testADifferentHouseholdIsNotTreatedAsTheSame() {
+        let other = Household(monthlyBudget: 1, members: [owner, partner], ownerMemberID: owner.id)
+        XCTAssertFalse(AppStore.isSameHousehold(other, as: household(at: nil, updated: 0), at: location("z")))
+        XCTAssertFalse(AppStore.isSameHousehold(nil, as: household(at: nil, updated: 0), at: location("z")))
+        XCTAssertTrue(AppStore.isSameHousehold(household(at: nil, updated: 0), as: household(at: nil, updated: 9), at: location("z")))
+    }
+
+    /// 外れていたあいだに変えた設定（手元のほうが新しい）は残す。iCloudのほうが新しければそちら。
+    func testRejoiningKeepsTheNewerSettings() {
+        let here = location("household-a")
+        let newerLocal = AppSnapshot(household: household(at: here, name: "手元で変えた名前", updated: 200))
+        let keptLocal = AppStore.snapshotAfterJoining(
+            current: newerLocal,
+            cloud: cloud(household(at: nil, name: "iCloudの名前", updated: 100)),
+            at: here
+        )
+        XCTAssertEqual(keptLocal.household?.name, "手元で変えた名前")
+        XCTAssertEqual(keptLocal.household?.cloudLocation, here)
+
+        let olderLocal = AppSnapshot(household: household(at: here, name: "手元の古い名前", updated: 100))
+        let tookCloud = AppStore.snapshotAfterJoining(
+            current: olderLocal,
+            cloud: cloud(household(at: nil, name: "iCloudの新しい名前", updated: 200)),
+            at: here
+        )
+        XCTAssertEqual(tookCloud.household?.name, "iCloudの新しい名前")
+    }
+
+    // MARK: - 移す前の条件（ShareMigrationReadiness）
+
+    private let now = Date(timeIntervalSince1970: 1_760_000_000)
+
+    func testOnlyTheOwnersPhoneRightAfterASyncWithNothingPendingIsReady() {
+        let blockers = ShareMigrationReadiness.blockers(
+            location: location("z", .privateDatabase),
+            lastSyncedAt: now.addingTimeInterval(-60),
+            pendingReceiptImageCount: 0,
+            now: now
+        )
+        XCTAssertTrue(blockers.isEmpty)
+    }
+
+    func testEachReasonToWaitIsReported() {
+        XCTAssertEqual(
+            ShareMigrationReadiness.blockers(location: nil, lastSyncedAt: now, pendingReceiptImageCount: 0, now: now),
+            [.notShared]
+        )
+        XCTAssertEqual(
+            ShareMigrationReadiness.blockers(
+                location: location("z", .sharedDatabase),
+                lastSyncedAt: now.addingTimeInterval(-ShareMigrationReadiness.recentSyncWindow - 1),
+                pendingReceiptImageCount: 2,
+                now: now
+            ),
+            [.notOwner, .notRecentlySynced, .pendingReceiptImages(2)]
+        )
+        XCTAssertEqual(
+            ShareMigrationReadiness.blockers(
+                location: location("z", .privateDatabase),
+                lastSyncedAt: nil,
+                pendingReceiptImageCount: 0,
+                now: now
+            ),
+            [.notRecentlySynced]
+        )
+    }
+
+    /// 端末の時計が先に進んでいて「同期したのが未来」に見えるときも、済んだとはみなさない。
+    func testASyncTimeInTheFutureDoesNotCount() {
+        XCTAssertEqual(
+            ShareMigrationReadiness.blockers(
+                location: location("z", .privateDatabase),
+                lastSyncedAt: now.addingTimeInterval(60),
+                pendingReceiptImageCount: 0,
+                now: now
+            ),
+            [.notRecentlySynced]
+        )
+    }
+}
