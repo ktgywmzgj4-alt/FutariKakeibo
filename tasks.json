@@ -504,7 +504,7 @@
       "status": "doing",
       "owner": "実行役",
       "passes": "署名済みアプリの entitlements を配信のログで確かめること。プロファイルが許している権限（aps-environment の有無）を、Apple Developer の設定を変えずに確かめること。Apple の CKDatabaseSubscription の説明を原文で確かめ、要る対応を根拠つきで報告すること。配信ワークフローを書き換えるなら、先に利用者に文面の承認を取ること。TestFlight 配信を止める変更をしないこと",
-      "evidence": "2026-10-21 run 39586459284 の testflight ジョブ（2.0.0 / 2026.1021.1050）の ProcessProductPackaging の出力: 署名した権限は application-identifier・beta-reports-active・com.apple.developer.icloud-container-identifiers・icloud-services（CloudKit）・team-identifier・ubiquity-kvstore-identifier・get-task-allow=0 の7つで、aps-environment は無い（Xcode は CloudKit から自動で足していない）。署名に使ったプロファイルは「FutariKakeibo App Store」（UUID 61a5b15c…）。プロファイルが許している権限は、ios.yml・ios-dev-build.yml・asc_adhoc_profile.rb のどれもログに出していない",
+      "evidence": "2026-10-21 run 39586459284 の testflight ジョブ（2.0.0 / 2026.1021.1050）の ProcessProductPackaging の出力: 署名した権限は application-identifier・beta-reports-active・com.apple.developer.icloud-container-identifiers・icloud-services（CloudKit）・team-identifier・ubiquity-kvstore-identifier・get-task-allow=0 の7つで、aps-environment は無い（Xcode は CloudKit から自動で足していない）。署名に使ったプロファイルは「FutariKakeibo App Store」（UUID 61a5b15c…）。プロファイルが許している権限は、ios.yml・ios-dev-build.yml・asc_adhoc_profile.rb のどれもログに出していない。2026-10-21 利用者が ios.yml に読むだけのジョブ signing-check を足す文面を承認（手で起動したときだけ動く。出すのは名前・UUID・期限・権限の名前と aps-environment の値だけ。何も送らない・変えない）。承認どおりの文面で足し、作り物のプロファイル（aps-environment あり・なし）で手元で動かして、出し分けと後始末を確かめた",
       "dependencies": ["T-047"],
       "notes": "2026-10-21 利用者の依頼【A】。利用者が読むだけで確認: App ID の Push Notifications はチェックなし、プロファイルの Enabled Capabilities は iCloud・In-App Purchase、Status は Active、期限は 2027-09-01。利用者の指摘「Apple の CKDatabaseSubscription の資料では、CloudKit の購読の通知を受けるために App ID の Push を明示的に有効にする必要はない」を受け、App ID の変更やプロファイルの作り直しの前に、実物のプロファイルと署名済みアプリで再評価する。不要な設定変更で TestFlight 配信を止めないこと"
     },
@@ -514,7 +514,7 @@
       "status": "doing",
       "owner": "実行役 + 人間",
       "passes": "役割ごと（World・Authenticated・Creator と、ほかにあればその役割）に、ShareInvite の Create・Read・Write のどれに印があるかを読む手順を、画面の名前まで書くこと。保存・変更をしないことを案内に書くこと。結果を受けて追加の対策が要るかを評価して記録すること",
-      "evidence": "",
+      "evidence": "2026-10-21 役割ごとの見方を Docs/SHARING_SECURITY_AUDIT.md 8章に書いた。同日、利用者の画面（Production、役割の名前は写っていない）: ShareInvite は Create なし・Read あり・Write なし。Users は Create なし・Read あり。ReceiptImage は Read あり・Write なし。World の初期と同じ形で、この役割については問題なし。Authenticated・Creator の画面はまだ",
       "dependencies": ["T-049"],
       "notes": "2026-10-21 利用者の依頼【B】。確認の画面では ShareInvite に Read だけ印があったが、表示していた役割の名前が写っておらず、全部の役割の確認は済んでいない"
     }
