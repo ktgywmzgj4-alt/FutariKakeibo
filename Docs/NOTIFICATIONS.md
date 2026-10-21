@@ -4,7 +4,7 @@
 
 - **2a（配信済み、2.0.0 / 2026.1019.1603）:** 通知の決まり・設定画面・押したときに開く・**アプリを開いているあいだ**の通知
 - **2b（T-047、2026-10-21 条件つきで承認）:** **アプリを閉じているあいだ**の通知。CloudKit の購読によるサイレントプッシュ。
-  コードと `Info.plist` の `remote-notification` は入れた。**push の宣言（`aps-environment`）は、配信用プロファイルに Push が入っているのを確かめてから入れる**（4章）
+  コードと `Info.plist` の `remote-notification` は入れた。**push の宣言（`aps-environment`）は、配信用プロファイルがそれを許しているのを中身で確かめてから入れる**（4章。App ID の Push は有効にしなくてよいと Apple の説明にある）
 
 ---
 
@@ -78,28 +78,39 @@
    定期の更新（`fetch`・`BGTaskScheduler`）は入れていない。実機で合図が届かないことが多いと分かったら、理由を書いて利用者に聞いてから足す
 6. 端末のロックを一度も解いていないときは、ファイルが読めないので何もしない（次に開いたときに追いつく）
 
-### 署名とプロファイル（確かめたこと・確かめていないこと）
+### 署名とプロファイル（2026-10-21 に確かめたこと。T-050）
 
-- リポジトリの中: entitlements は iCloud（CloudKit）だけで、`aps-environment` は無い。CI は手動署名で、Secret のプロファイル
-  `FutariKakeibo App Store` を使う（`ios.yml`）。App ID は iCloud だけを有効にして作った記録がある（`Docs/TESTFLIGHT_ON_WINDOWS.md`）
-- **プロファイルに Push が入っているかは、リポジトリにもCIのログにも出ていない。** Apple Developer の画面を見ないと分からない
-- `aps-environment` をプロファイルに無いまま足すと、配信のときの署名が通らず配信が止まる。**だから、確かめるまでは足さない**
+**閉じているあいだに合図を受けるのに要るもの**（Apple の説明の原文で確かめた）:
 
-利用者に見てもらうこと（見るだけ。何も押さない）:
+| 要るもの | 根拠（Apple の説明） | いま |
+| --- | --- | --- |
+| 署名したアプリに `aps-environment`（プッシュの権限） | CKDatabaseSubscription「Xcode automatically adds the entitlement when you enable the CloudKit capability.」。無いと Apple への端末の登録（`registerForRemoteNotifications`）が失敗し、合図が届かない | **無い**（下の1） |
+| `Info.plist` の `UIBackgroundModes` に `remote-notification` | Pushing background updates to your App「To receive background notifications, you must add the remote notifications background mode to your app.」 | PR #50 で入れた |
+| `fetch`（Background fetch） | CKDatabaseSubscription は「"Background fetch" and "Remote notifications"」を選ぶよう書くが、上の通知の一般の説明が求めるのは remote notifications だけ。`fetch` は定期の更新（BGTaskScheduler）のためのもの | 入れない（利用者の条件。必要と確かめてから聞く） |
+| App ID の Push Notifications | CKDatabaseSubscription「You don't need to explicitly enable push notifications for your App ID to receive subscription notifications.」 | チェックなしのまま。変えない |
+| 開発者の APNs の証明書・鍵 | CloudKit が送るので要らない | 要らない |
 
-1. https://developer.apple.com/account →「Certificates, Identifiers & Profiles」
-2. 「Identifiers」→ `jp.aikawa.futarikakeibo`: Capabilities の「Push Notifications」にチェックがあるか（付け外ししない・Save を押さない）
-3. 「Profiles」→ `FutariKakeibo App Store`: 「Enabled Capabilities」に Push Notifications があるか、「Status」と「Expiration」
+確かめたこと:
 
-結果ごとの次の手順:
+1. **署名済みアプリ（実物）:** 2026-10-21 の配信（2.0.0 / 2026.1021.1050、run 39586459284）の `ProcessProductPackaging` の出力。
+   署名した権限は `application-identifier`・`beta-reports-active`・`com.apple.developer.icloud-container-identifiers`・
+   `com.apple.developer.icloud-services`（CloudKit）・`com.apple.developer.team-identifier`・`com.apple.developer.ubiquity-kvstore-identifier`・
+   `get-task-allow`（0）の7つ。**`aps-environment` は無い。** 「Xcode が自動で足す」のは Xcode の画面で CloudKit を入れたときのことで、
+   このアプリは entitlements のファイルを手で書いている（`project.yml` の `CODE_SIGN_ENTITLEMENTS`。XcodeGen はこのファイルを書き換えない）ので、足されていない
+2. **Apple Developer（利用者が読むだけで確認、2026-10-21）:** App ID の Push Notifications はチェックなし。
+   プロファイル `FutariKakeibo App Store` の Enabled Capabilities は iCloud・In-App Purchase、Status は Active、期限は 2027-09-01。
+   配信の署名に使っているのも同じ名前のプロファイル（UUID 61a5b15c…、配信のログの `CodeSign`）
+3. **プロファイルが `aps-environment` を許しているかは、まだ分からない。** 画面の Enabled Capabilities は App ID で有効にした機能の一覧で、
+   プロファイルの中の権限の一覧そのものではない。上の Apple の説明が手動の署名にも当てはまるなら、CloudKit を有効にした App ID の
+   プロファイルは `aps-environment` を許しているはず。ただし**手動の署名では、プロファイルが許していない権限をアプリに入れると署名が通らず、配信が止まる。**
+   だから、プロファイルの中身を読んでから決める（ワークフローもスクリプトも、いまはプロファイルの権限をログに出していない）
 
-| App ID の Push | プロファイルの Push | Apple Developer で要ること | Claude がすること |
-| --- | --- | --- | --- |
-| あり | あり（Active） | **なし** | entitlements に `aps-environment` を足して、CI・配信 |
-| あり | なし | プロファイルを作り直す → Secret を差し替える（手順は確定したら出す） | 差し替えのあとで entitlements |
-| なし | なし | Push を有効にする → プロファイルを作り直す → Secret を差し替える（**有効にした時点で今のプロファイルが無効になるので、作り直しと差し替えの用意が整ってから**） | 差し替えのあとで entitlements |
+次の手順:
 
-CloudKit の通知に、開発者の APNs の証明書や鍵は要らない（CloudKit が送る）。
+| プロファイルの中の `aps-environment` | Apple Developer で要ること | Claude がすること |
+| --- | --- | --- |
+| ある（`production`） | **なし**（App ID・プロファイル・Secret のどれも変えない） | entitlements に `aps-environment = production` を足す → CI → 配信 → 配信のログで、署名済みアプリに入ったことを確かめる |
+| 無い | App ID の Push を有効にする → プロファイルを作り直す → Secret を差し替える。根拠と手順はそのときに改めて出す（**有効にした時点でいまのプロファイルが無効になり、差し替えるまで配信できない**） | 差し替えのあとで entitlements |
 
 ## 5. 実機での確認（利用者にお願いすること）
 
