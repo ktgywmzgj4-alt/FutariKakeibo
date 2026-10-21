@@ -269,13 +269,15 @@ final class ExpenseSubscriptionPlanTests: XCTestCase {
         on: Bool,
         _ location: CloudLocation?,
         subscribed: CloudLocation.Scope? = nil,
-        at: Date? = nil
+        at: Date? = nil,
+        failedAt: Date? = nil
     ) -> ExpenseSubscriptionPlan.Action {
         ExpenseSubscriptionPlan.action(
             notificationsOn: on,
             location: location,
             subscribedScope: subscribed,
             subscribedAt: at,
+            failedAt: failedAt,
             now: now
         )
     }
@@ -319,6 +321,44 @@ final class ExpenseSubscriptionPlanTests: XCTestCase {
         XCTAssertEqual(
             plan(on: true, location(.sharedDatabase), subscribed: .privateDatabase, at: now),
             .move(from: .privateDatabase, to: .sharedDatabase)
+        )
+    }
+
+    /// 置く・外すのに失敗したら、1時間は送り直さない（失敗し続けても同期のたびに送らない）。1時間を過ぎたら、もう一度試す。
+    func testAFailureWaitsAnHourBeforeTryingAgain() {
+        XCTAssertEqual(plan(on: true, location(.privateDatabase), failedAt: now.addingTimeInterval(-600)), .keep)
+        XCTAssertEqual(
+            plan(
+                on: true,
+                location(.privateDatabase),
+                failedAt: now.addingTimeInterval(-ExpenseSubscriptionPlan.retryInterval - 1)
+            ),
+            .subscribe(.privateDatabase)
+        )
+        // 失敗の時刻が未来（端末の時計がずれた）なら、待たない。
+        XCTAssertEqual(
+            plan(on: true, location(.privateDatabase), failedAt: now.addingTimeInterval(600)),
+            .subscribe(.privateDatabase)
+        )
+        // 外すのも、移すのも同じ。
+        XCTAssertEqual(
+            plan(on: false, location(.sharedDatabase), subscribed: .sharedDatabase, at: now, failedAt: now.addingTimeInterval(-60)),
+            .keep
+        )
+        XCTAssertEqual(
+            plan(on: true, location(.sharedDatabase), subscribed: .privateDatabase, at: now, failedAt: now.addingTimeInterval(-60)),
+            .keep
+        )
+        // 置いてあって1日たっていなければ、失敗の印があっても何もしない（もともと送らない）。
+        XCTAssertEqual(
+            plan(
+                on: true,
+                location(.privateDatabase),
+                subscribed: .privateDatabase,
+                at: now.addingTimeInterval(-3_600),
+                failedAt: now.addingTimeInterval(-ExpenseSubscriptionPlan.retryInterval - 1)
+            ),
+            .keep
         )
     }
 

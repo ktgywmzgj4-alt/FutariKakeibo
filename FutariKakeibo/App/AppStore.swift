@@ -1343,6 +1343,7 @@ final class AppStore: ObservableObject {
     private var canReceiveCloudKitPushes = false
     private static let subscribedScopeKey = "expenseChangesSubscriptionScope"
     private static let subscribedAtKey = "expenseChangesSubscribedAt"
+    private static let subscriptionFailedAtKey = "expenseChangesSubscriptionFailedAt"
 
     /// 知らせた支出の控え（端末だけ）。家計簿を置き換えても残す。同じ支出を2回知らせないため。
     private static var announcedExpenseIDs: [UUID] {
@@ -1385,6 +1386,8 @@ final class AppStore: ObservableObject {
             // CloudKitの合図を受けるための、Appleへの端末の登録。結果は `remoteNotificationsRegistered`。
             UIApplication.shared.registerForRemoteNotifications()
         }
+        // 利用者が切り替えたときは、失敗のあとの待ちを解いて、すぐ試す。
+        UserDefaults.standard.removeObject(forKey: Self.subscriptionFailedAtKey)
         await updateExpenseSubscription()
     }
 
@@ -1398,7 +1401,8 @@ final class AppStore: ObservableObject {
 
     /// CloudKitの購読（相手の支出の合図）を、通知の設定と家計簿の置き場所に合わせる。決まりは `ExpenseSubscriptionPlan`。
     ///
-    /// 読み込みの途中は何もしない（家計簿が見えないまま外さないため）。通信できなければ、次の同期でもう一度。
+    /// 読み込みの途中は何もしない（家計簿が見えないまま外さないため）。失敗したら1時間おいてもう一度
+    /// （同期のたびには送らない。利用者が通知を切り替えたときは、すぐ）。
     func updateExpenseSubscription() async {
         guard didLoad, !isLoading else { return }
         let defaults = UserDefaults.standard
@@ -1407,6 +1411,7 @@ final class AppStore: ObservableObject {
             location: snapshot.household?.cloudLocation,
             subscribedScope: defaults.string(forKey: Self.subscribedScopeKey).flatMap { CloudLocation.Scope(rawValue: $0) },
             subscribedAt: defaults.object(forKey: Self.subscribedAtKey) as? Date,
+            failedAt: defaults.object(forKey: Self.subscriptionFailedAtKey) as? Date,
             now: .now
         )
         do {
@@ -1430,8 +1435,11 @@ final class AppStore: ObservableObject {
                 defaults.set(newScope.rawValue, forKey: Self.subscribedScopeKey)
                 defaults.set(Date.now, forKey: Self.subscribedAtKey)
             }
+            defaults.removeObject(forKey: Self.subscriptionFailedAtKey)
         } catch {
-            // 次の同期・設定の切り替えでもう一度試す。
+            // 1時間は送り直さない（`ExpenseSubscriptionPlan.retryInterval`）。失敗し続けても同期のたびに送ると、
+            // 電池を使い、CloudKit に回数を絞られて、いつもの同期まで遅くなる。
+            defaults.set(Date.now, forKey: Self.subscriptionFailedAtKey)
         }
     }
 

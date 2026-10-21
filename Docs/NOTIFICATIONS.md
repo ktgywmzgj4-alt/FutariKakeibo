@@ -77,6 +77,13 @@
 5. **電池のため:** 合図は支出の変更だけ（家計簿の設定は同期のたびに書き直しているので、対象にすると2台のあいだで合図が行き来し続ける）。
    定期の更新（`fetch`・`BGTaskScheduler`）は入れていない。実機で合図が届かないことが多いと分かったら、理由を書いて利用者に聞いてから足す
 6. 端末のロックを一度も解いていないときは、ファイルが読めないので何もしない（次に開いたときに追いつく）
+7. 購読を置く・外すのに失敗したら、1時間は送り直さない（`ExpenseSubscriptionPlan.retryInterval`）。失敗し続けても同期のたびに送らない
+   （電池のためと、CloudKit に回数を絞られていつもの同期まで遅くならないため）。利用者が通知を切り替えたときは、すぐ試す。
+   Apple の CKSubscription の説明に「Create subscriptions in the development environment first and then promote them to production.
+   Attempting to create a subscription directly in the production environment results in an error.」とある。データベースの購読は
+   CKSyncEngine が本番で自動で作る（CKSyncEngine の説明「If the engine doesn't find a subscription, it automatically creates one」）ので
+   当てはまらないはずで、スキーマの反映（Deploying an iCloud Container's Schema）が写すのも record types・fields・indexes だけ。
+   ただし本番で作れるかは TestFlight でしか確かめられない
 
 ### 署名とプロファイル（2026-10-21 に確かめたこと。T-050）
 
@@ -100,17 +107,48 @@
 2. **Apple Developer（利用者が読むだけで確認、2026-10-21）:** App ID の Push Notifications はチェックなし。
    プロファイル `FutariKakeibo App Store` の Enabled Capabilities は iCloud・In-App Purchase、Status は Active、期限は 2027-09-01。
    配信の署名に使っているのも同じ名前のプロファイル（UUID 61a5b15c…、配信のログの `CodeSign`）
-3. **プロファイルが `aps-environment` を許しているかは、まだ分からない。** 画面の Enabled Capabilities は App ID で有効にした機能の一覧で、
-   プロファイルの中の権限の一覧そのものではない。上の Apple の説明が手動の署名にも当てはまるなら、CloudKit を有効にした App ID の
-   プロファイルは `aps-environment` を許しているはず。ただし**手動の署名では、プロファイルが許していない権限をアプリに入れると署名が通らず、配信が止まる。**
-   だから、プロファイルの中身を読んでから決める（ワークフローもスクリプトも、いまはプロファイルの権限をログに出していない）
+3. **配信用プロファイルは `aps-environment` を許していない**（2026-10-21、読むだけのジョブ `signing-check`、run 39597447741。文面は利用者が承認）。
+   プロファイル `FutariKakeibo App Store`（UUID 61a5b15c-c3ac-4d22-9b53-f6b841776303、期限 2027-09-01）が許している権限は11個で、
+   iCloud（CloudKit・キー値の保存）・キーチェーン・アプリとチームの名前・`beta-reports-active`・`get-task-allow` だけ。
+   **このまま entitlements に `aps-environment` を足すと、署名が通らず配信が止まる。** Apple の「App ID の Push を有効にしなくてよい」は、
+   Xcode が署名とプロファイルを自動で扱うときの話。このアプリのように App ID を iCloud だけで作り、プロファイルを画面で作った場合は、プロファイルに入らない
 
-次の手順:
+**結論: 閉じているあいだの通知には、App ID の Push を有効にし、プロファイルを作り直し、Secret を差し替える必要がある。**
+Apple の説明（Developer Account Help の Enable app capabilities）に「Provisioning profiles that contain a modified App ID become invalid.」
+「You'll need to regenerate the provisioning profiles that use that App ID.」とあるとおり、Push を有効にした時点でいまのプロファイルは無効になる。
 
-| プロファイルの中の `aps-environment` | Apple Developer で要ること | Claude がすること |
-| --- | --- | --- |
-| ある（`production`） | **なし**（App ID・プロファイル・Secret のどれも変えない） | entitlements に `aps-environment = production` を足す → CI → 配信 → 配信のログで、署名済みアプリに入ったことを確かめる |
-| 無い | App ID の Push を有効にする → プロファイルを作り直す → Secret を差し替える。根拠と手順はそのときに改めて出す（**有効にした時点でいまのプロファイルが無効になり、差し替えるまで配信できない**） | 差し替えのあとで entitlements |
+### 利用者にお願いする手順（T-050。利用者が決めてから。1〜3は続けて行う）
+
+影響: 入っているアプリ・TestFlight にあるビルド・iCloud の家計データ・共有は変わらない。**1から3が終わるまで、TestFlight へ配信できない**
+（そのあいだ Claude は配信を起動しない）。Push を外しても元のプロファイルには戻らない（外しても、もう一度作り直しになる）。費用はかからない。
+CloudKit の通知に、APNs の証明書や鍵は要らない（CloudKit が送る）。
+
+1. **App ID に Push を足す:** https://developer.apple.com/account →「Certificates, Identifiers & Profiles」→「Identifiers」→ `jp.aikawa.futarikakeibo`。
+   Capabilities の **Push Notifications にだけチェック**を入れる（「Configure」は押さない。Broadcast Capability が出ても入れない。iCloud などほかは触らない）→
+   Save → 確認の画面で Confirm
+2. **プロファイルを作り直す:** 「Profiles」→ `FutariKakeibo App Store`（Invalid になっている）→ Edit → **名前・App ID・証明書は変えずに** Save（Generate）。
+   Enabled Capabilities に Push Notifications が入り、Status が Active なのを見てから Download。ダウンロードした `.mobileprovision` を
+   `~/ios-signing` に置く（古いファイルは上書きしてよい。リポジトリには入れない）
+3. **Secret を差し替える（Git Bash）:** ファイル名ははっきり書く（`*.mobileprovision` にすると、古いファイルが残っていたときに2つがつながる）。
+   ダウンロードしたファイルの名前が違えば、その名前にする
+   ```bash
+   cd ~/ios-signing
+   base64 -w0 FutariKakeibo_App_Store.mobileprovision > profile.b64
+   gh secret set APPLE_PROVISIONING_PROFILE_BASE64 --repo ktgywmzgj4-alt/FutariKakeibo < profile.b64
+   rm profile.b64
+   ```
+4. Claude に「差し替えた」と知らせる
+
+Claude がすること（4のあと）: 作業ブランチで `signing-check` を動かし、新しいプロファイル（UUID が変わる）が `aps-environment: production` を
+許していることを確かめる → entitlements に `aps-environment = production` を足す → CI → マージ → TestFlight 配信 → 配信のログで、
+署名済みアプリに `aps-environment` が入ったことを確かめる。Ad Hoc のプロファイル（`ios-dev-build.yml`）も無効になるが、
+あのワークフローは動かすたびにプロファイルを作り直すので、手の作業は要らない。
+
+### Push を足さない場合
+
+閉じているあいだの通知は、プッシュでは届けられない。いまの 2a（開いているあいだと、開いたときにまとめて）のまま。
+定期の更新（`BGTaskScheduler`）なら App ID を変えずにできるが、起こす時刻は iPhone が決め（数時間あくこともある）、
+Appのバックグラウンド更新がOFFのときや低電力モードでは動かない。利用者の条件どおり、必要と確かめてから聞く。
 
 ## 5. 実機での確認（利用者にお願いすること）
 
@@ -139,5 +177,5 @@ Apple IDの違う2台（A・B）で、共有している家計簿を使います
 許可の状態の読み替え／設定の文が届かない場面（遅れる・届かない・終了させると届かない・次に開いたときに追いつく）を隠さない／設定の保存先の名前が変わらない
 
 `ExpenseSubscriptionPlanTests`（T-047）: ONで共有していれば家計簿のある側に購読を置く／OFFにしたら外す／1日のあいだは置き直さない（時計が未来なら置き直す）／
-自分の家計簿から相手の家計簿に移ったら購読も移す／家計簿が見えないときは触らない／側ごとに別の購読／CloudKit の合図だけで同期する／
+自分の家計簿から相手の家計簿に移ったら購読も移す／置く・外す・移すのに失敗したら1時間は送り直さない（時計が未来なら待たない）／家計簿が見えないときは触らない／側ごとに別の購読／CloudKit の合図だけで同期する／
 `Info.plist` のバックグラウンドは `remote-notification` だけ（`fetch`・BGTaskScheduler は入れていない）
