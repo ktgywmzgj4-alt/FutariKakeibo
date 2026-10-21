@@ -85,6 +85,7 @@
 		C00000000000000000000095 /* PartnerExpenseAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000095 /* PartnerExpenseAlert.swift */; };
 		C00000000000000000000096 /* LocalNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000096 /* LocalNotifications.swift */; };
 		C00000000000000000000098 /* ShareMigrationReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000098 /* ShareMigrationReadiness.swift */; };
+		C00000000000000000000099 /* ExpenseSubscriptionPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000099 /* ExpenseSubscriptionPlan.swift */; };
 		C00000000000000000000059 /* SharingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000059 /* SharingView.swift */; };
 		C00000000000000000000060 /* ShareInviteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000060 /* ShareInviteTests.swift */; };
 		C00000000000000000000073 /* SyncPushBackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000073 /* SyncPushBackTests.swift */; };
@@ -196,6 +197,7 @@
 		B00000000000000000000095 /* PartnerExpenseAlert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/PartnerExpenseAlert.swift; sourceTree = "<group>"; };
 		B00000000000000000000096 /* LocalNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/LocalNotifications.swift; sourceTree = "<group>"; };
 		B00000000000000000000098 /* ShareMigrationReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/ShareMigrationReadiness.swift; sourceTree = "<group>"; };
+		B00000000000000000000099 /* ExpenseSubscriptionPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/ExpenseSubscriptionPlan.swift; sourceTree = "<group>"; };
 		B00000000000000000000059 /* SharingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Features/Settings/SharingView.swift; sourceTree = "<group>"; };
 		B00000000000000000000060 /* ShareInviteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareInviteTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000073 /* SyncPushBackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPushBackTests.swift; sourceTree = "<group>"; };
@@ -309,6 +311,7 @@
 				B00000000000000000000095 /* PartnerExpenseAlert.swift */,
 				B00000000000000000000096 /* LocalNotifications.swift */,
 				B00000000000000000000098 /* ShareMigrationReadiness.swift */,
+				B00000000000000000000099 /* ExpenseSubscriptionPlan.swift */,
 				B00000000000000000000059 /* SharingView.swift */,
 				B00000000000000000000052 /* Income.swift */,
 				B00000000000000000000053 /* IncomeRow.swift */,
@@ -518,6 +521,7 @@
 				C00000000000000000000095 /* PartnerExpenseAlert.swift in Sources */,
 				C00000000000000000000096 /* LocalNotifications.swift in Sources */,
 				C00000000000000000000098 /* ShareMigrationReadiness.swift in Sources */,
+				C00000000000000000000099 /* ExpenseSubscriptionPlan.swift in Sources */,
 				C00000000000000000000059 /* SharingView.swift in Sources */,
 				C00000000000000000000052 /* Income.swift in Sources */,
 				C00000000000000000000053 /* IncomeRow.swift in Sources */,

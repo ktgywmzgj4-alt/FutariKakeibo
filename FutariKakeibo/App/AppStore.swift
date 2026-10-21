@@ -1,5 +1,6 @@
 @preconcurrency import CloudKit
 import Foundation
+import UIKit
 
 @MainActor
 final class AppStore: ObservableObject {
@@ -1055,6 +1056,8 @@ final class AppStore: ObservableObject {
         if !snapshot.issuedInvites.isEmpty {
             await tidyIssuedInvites()
         }
+        // 相手の支出の合図（CloudKitの購読）を通知の設定に合わせる。たいていは何もしない（1日に1回まで）。
+        await updateExpenseSubscription()
     }
 
     /// 家計簿に入ったあとの手元の中身（合言葉からでも、共有のリンクからでも）。
@@ -1335,6 +1338,11 @@ final class AppStore: ObservableObject {
     private let notifications = LocalNotifications()
     /// この利用者のユーザーレコードの名前。誰が登録した支出かを見分ける（初めて要るときに1回だけ聞く）。
     private var myUserRecordName: String?
+    /// Appleに端末が登録でき、CloudKitの合図（サイレントプッシュ）を受け取れる（T-047）。
+    /// 通知がOFFのとき、プッシュの権限（`aps-environment`）が無いビルドでは false のまま。
+    private var canReceiveCloudKitPushes = false
+    private static let subscribedScopeKey = "expenseChangesSubscriptionScope"
+    private static let subscribedAtKey = "expenseChangesSubscribedAt"
 
     /// 知らせた支出の控え（端末だけ）。家計簿を置き換えても残す。同じ支出を2回知らせないため。
     private static var announcedExpenseIDs: [UUID] {
@@ -1356,9 +1364,8 @@ final class AppStore: ObservableObject {
     /// 許可されなければONにしない（設定の画面で、iPhoneの「設定」への案内を出す）。
     /// OFFにしても同期は続く。
     ///
-    /// いまは**アプリを開いているあいだの同期**（30秒ごと・開いたとき）で届いた支出を知らせる。
-    /// 閉じているあいだも知らせるには、バックグラウンドで動く許可とプッシュの権限が要る
-    /// （利用者の承認待ち。`Docs/NOTIFICATIONS.md`）。
+    /// アプリを開いているあいだは同期（30秒ごと・開いたとき）で、閉じているあいだは CloudKit の合図
+    /// （サイレントプッシュ）で同期して知らせる。合図はONのときだけ受ける（OFFなら購読を外す）。
     func setNotifyPartnerExpenses(_ isOn: Bool) async {
         if isOn {
             var permission = await notifications.permission()
@@ -1374,6 +1381,93 @@ final class AppStore: ObservableObject {
         }
         notifyPartnerExpenses = isOn
         UserDefaults.standard.set(isOn, forKey: Self.notifyPartnerExpensesKey)
+        if isOn {
+            // CloudKitの合図を受けるための、Appleへの端末の登録。結果は `remoteNotificationsRegistered`。
+            UIApplication.shared.registerForRemoteNotifications()
+        }
+        await updateExpenseSubscription()
+    }
+
+    /// Appleに端末が登録できた（`AppDelegate`）。CloudKitの合図を受けられるので、購読を置く。
+    func remoteNotificationsRegistered() async {
+        canReceiveCloudKitPushes = true
+        guard UIApplication.shared.isProtectedDataAvailable else { return }
+        await loadIfNeeded()
+        await updateExpenseSubscription()
+    }
+
+    /// CloudKitの購読（相手の支出の合図）を、通知の設定と家計簿の置き場所に合わせる。決まりは `ExpenseSubscriptionPlan`。
+    ///
+    /// 読み込みの途中は何もしない（家計簿が見えないまま外さないため）。通信できなければ、次の同期でもう一度。
+    func updateExpenseSubscription() async {
+        guard didLoad, !isLoading else { return }
+        let defaults = UserDefaults.standard
+        let action = ExpenseSubscriptionPlan.action(
+            notificationsOn: notifyPartnerExpenses,
+            location: snapshot.household?.cloudLocation,
+            subscribedScope: defaults.string(forKey: Self.subscribedScopeKey).flatMap { CloudLocation.Scope(rawValue: $0) },
+            subscribedAt: defaults.object(forKey: Self.subscribedAtKey) as? Date,
+            now: .now
+        )
+        do {
+            switch action {
+            case .keep:
+                return
+            case let .unsubscribe(scope):
+                try await cloudService.unsubscribeFromExpenseChanges(in: scope)
+                defaults.removeObject(forKey: Self.subscribedScopeKey)
+                defaults.removeObject(forKey: Self.subscribedAtKey)
+            case let .subscribe(scope):
+                // 合図を受け取れない端末（登録の失敗・プッシュの権限の無いビルド）には置かない。
+                guard canReceiveCloudKitPushes else { return }
+                try await cloudService.subscribeToExpenseChanges(in: scope)
+                defaults.set(scope.rawValue, forKey: Self.subscribedScopeKey)
+                defaults.set(Date.now, forKey: Self.subscribedAtKey)
+            case let .move(from: oldScope, to: newScope):
+                guard canReceiveCloudKitPushes else { return }
+                try? await cloudService.unsubscribeFromExpenseChanges(in: oldScope)
+                try await cloudService.subscribeToExpenseChanges(in: newScope)
+                defaults.set(newScope.rawValue, forKey: Self.subscribedScopeKey)
+                defaults.set(Date.now, forKey: Self.subscribedAtKey)
+            }
+        } catch {
+            // 次の同期・設定の切り替えでもう一度試す。
+        }
+    }
+
+    /// CloudKitの合図（サイレントプッシュ）を受けたときの同期（T-047）。
+    ///
+    /// 合図は「変わった」という知らせだけで、中身は使わない。いつもの同期をして、相手の新しい支出があれば
+    /// 同期の中で知らせる（`announcePartnerExpenses`）。**通知を受けたことと同期が終わったことは別**で、
+    /// 知らせるのは手元に保存し終えてから。合図が届かなくても、次にアプリを開いたときの同期で追いつく。
+    func refreshForCloudKitPush() async -> UIBackgroundFetchResult {
+        // 端末のロックを一度も解いていないと、保存したファイルが読めない（`LocalSnapshotStore` の保護）。
+        // 読めないまま読み込むと「読み込めませんでした」のまま止まるので、そのときは何もしない。
+        guard UIApplication.shared.isProtectedDataAvailable else { return .failed }
+        await loadIfNeeded()
+        guard snapshot.household?.cloudLocation != nil else { return .noData }
+        guard notifyPartnerExpenses else {
+            // 通知をOFFにしたのに合図が残っていた（外すのに失敗していた）。もう一度外し、同期はしない。
+            await updateExpenseSubscription()
+            return .noData
+        }
+        let before = ChangeMark(snapshot)
+        await refreshFromCloudIfConfigured()
+        if case .failed = syncState { return .failed }
+        return ChangeMark(snapshot) == before ? .noData : .newData
+    }
+
+    /// 同期の前後で何か変わったかを、安く見るための印（iOSに「新しいデータがあったか」を返すため）。
+    private struct ChangeMark: Equatable {
+        var expenseCount: Int
+        var deletionCount: Int
+        var latestUpdate: Date?
+
+        init(_ snapshot: AppSnapshot) {
+            expenseCount = snapshot.expenses.count
+            deletionCount = snapshot.deletedExpenseIDs.count
+            latestUpdate = snapshot.expenses.map(\.updatedAt).max()
+        }
     }
 
     /// 相手が新しく登録した支出があれば、この端末で知らせる。決まりは `PartnerExpenseAlert`。
