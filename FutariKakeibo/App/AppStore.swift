@@ -1064,6 +1064,10 @@ final class AppStore: ObservableObject {
     /// 手元にしか無い。置き換えるとそれが消える（同じ家計簿の合言葉をもう一度入れたときも同じ）。
     /// 突き合わせて残し、次の同期で送る。レシート画像の送信待ちも残す（2026-10-19 監査）。
     ///
+    /// 家計簿の設定（名前・予算・覚えた店など）も、同じ家計簿なら新しいほうを残す。同期と同じ決まり
+    /// （`CloudKitSyncService.upsertHousehold` は更新の新しいほうが丸ごと勝つ）。以前は iCloud 側で
+    /// 置き換えていたので、外れていたあいだに変えた設定が消えていた（2026-10-21、T-048 の準備）。
+    ///
     /// 別の家計簿に入ったときは、これまでどおり置き換える（参加する前に画面で伝えている）。
     /// 発行した合言葉の控えは、どちらでも引き継ぐ（後片付けで公開データベースから消すため）。
     nonisolated static func snapshotAfterJoining(
@@ -1071,12 +1075,14 @@ final class AppStore: ObservableObject {
         cloud: CloudKitSyncService.CloudSnapshot,
         at location: CloudLocation
     ) -> AppSnapshot {
+        let sameHousehold = Self.isSameHousehold(current.household, as: cloud.household, at: location)
         var household = cloud.household
+        if sameHousehold, let local = current.household, local.updatedAt > household.updatedAt {
+            household = local
+        }
         household.cloudLocation = location
         let partner = household.members.first { $0.role == .partner }?.id ?? household.members.last?.id
-        let isSameHousehold = current.household?.cloudLocation.map(RecoveryCandidate.key(for:))
-            == RecoveryCandidate.key(for: location)
-        guard isSameHousehold else {
+        guard sameHousehold else {
             return AppSnapshot(
                 household: household,
                 selectedMemberID: partner,
@@ -1114,6 +1120,25 @@ final class AppStore: ObservableObject {
             pendingReceiptImageIDs: current.pendingReceiptImageIDs,
             issuedInvites: current.issuedInvites
         )
+    }
+
+    /// 入ろうとしている家計簿が、手元の家計簿と同じか。
+    ///
+    /// 同じ場所（ゾーン）なら同じ。**場所が違っても、家計簿のID（`Household.id`）が同じなら同じ**とみなす。
+    /// 共有の形を移すときに、家計簿を別の場所へ写して共有し直す案がある（`Docs/SHARING_MIGRATION_PLAN.md`）。
+    /// そのとき入り直すパートナーの手元にしか無い記録を、置き換えて消さないため。
+    /// 別々に作った家計簿は、IDが違うので同じにはならない。
+    nonisolated static func isSameHousehold(
+        _ local: Household?,
+        as joined: Household,
+        at location: CloudLocation
+    ) -> Bool {
+        guard let local else { return false }
+        if let localLocation = local.cloudLocation,
+           RecoveryCandidate.key(for: localLocation) == RecoveryCandidate.key(for: location) {
+            return true
+        }
+        return local.id == joined.id
     }
 
     /// 取り戻したあと、この端末の「自分」を誰にするか。
