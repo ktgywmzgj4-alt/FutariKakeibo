@@ -90,10 +90,10 @@
     {
       "id": "T-008",
       "task": "覚えた店の一覧を見て、消したり直したりできるようにする",
-      "status": "todo",
+      "status": "doing",
       "owner": "実行役",
       "passes": "設定画面に覚えた店の一覧が出て、1件ずつ消せる。消したあと同じ店のレシートを読むと、覚える前の推測に戻ることをテストで示す",
-      "evidence": "",
+      "evidence": "2026-10-22 コードで確かめた（T-052 の照合）: PR #33 で RememberedShopsView（選ぶ・左へ払って忘れる・長押しで名前を直す、VoiceOver の操作つき）、AppStore.forgetMerchant・renameMerchant が入っている。CI run 38477232799（167件成功）、2026.1013.2229 で配信済み。名前を直すテスト（MerchantMemoTests）はある。合格条件の「忘れたあと同じ店のレシートを読むと覚える前の推測に戻る」テストは無い。実機は未確認",
       "dependencies": ["T-009"],
       "notes": "PR #18で「覚える」までは入った。間違って覚えた店を、レシートを撮り直さずに直す手段がまだ無い"
     },
@@ -230,10 +230,10 @@
     {
       "id": "T-023",
       "task": "アプリを消しても家計簿を取り戻せるようにする（発行した側・参加した側の両方）",
-      "status": "todo",
+      "status": "review",
       "owner": "実行役 + 人間",
       "passes": "**参加した側（SE2）**でアプリを削除して入れ直し、最初の画面の「以前の家計簿を取り戻す」で家計簿が戻ること。かつ**そのあと支出を足したときの名前が自分になっている**こと（相手の名前だと精算額が狂う）。発行した側でも同じく戻ること",
-      "evidence": "2026-10-04 実装（発行した側のみ）。2026-10-08 **実機で不合格** — SE2（参加した側）で「見つかりませんでした」。プライベートデータベースしか探しておらず、参加した側のデータは共有データベース（相手のゾーン）にあるため構造上ぜったいに見つからなかった。両方を探すよう直し、TestFlight 2026.1013.2229（b316c6b）で配信済み。CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/38477232799 → 167件中167件成功、UPLOAD SUCCEEDED with no errors（Delivery UUID 244933af-cc90-436a-93d1-116e12249d63）。アーカイブ内は 0.1.0 / 2026.1013.2229 で Info.plist の上書きは起きていない。**実機確認はこれから。** CIが確かめたのはコンパイルと「どちら側として戻ったか」の判定だけで、共有側から家計簿が戻る経路は一度も動いていない",
+      "evidence": "2026-10-04 実装（発行した側のみ）。2026-10-08 **実機で不合格** — SE2（参加した側）で「見つかりませんでした」。プライベートデータベースしか探しておらず、参加した側のデータは共有データベース（相手のゾーン）にあるため構造上ぜったいに見つからなかった。両方を探すよう直し、TestFlight 2026.1013.2229（b316c6b）で配信済み。CI: https://github.com/ktgywmzgj4-alt/FutariKakeibo/actions/runs/38477232799 → 167件中167件成功、UPLOAD SUCCEEDED with no errors（Delivery UUID 244933af-cc90-436a-93d1-116e12249d63）。アーカイブ内は 0.1.0 / 2026.1013.2229 で Info.plist の上書きは起きていない。**実機確認はこれから。** CIが確かめたのはコンパイルと「どちら側として戻ったか」の判定だけで、共有側から家計簿が戻る経路は一度も動いていない。2026-10-22（T-052 の照合）: 実装・CI・配信は済んでいるのに状態が todo のままだったので review に直した。取り戻しの自動テストはその後も足されている（SyncMergeTests の RecoveryCandidateTests ほか、T-041）。実機の確認は Docs/RELEASE_PLAN.md 付録A の B3（テスト用の端末で）",
       "dependencies": ["T-016"],
       "notes": "**試す順番がある。先にこの版を両方の端末に入れてから**、アプリを削除→入れ直し→最初の画面のボタン。**この版より前に消すと戻せない。** 直し方は recoverHouseholdFromCloud。**起動時に自動では呼ばない** — loadIfNeeded に置いたら CKException でアプリが起動時に落ち、テストが全滅した（progress.md 2026-10-04）。ゾーン名の接頭辞 household- が戻り道そのもので、変えると以前の家計簿が永久に見つからなくなる。持ち主の名前はゾーンから取ること（zoneID.ownerName）。自分を入れると存在しないゾーンを指す"
     },
@@ -451,10 +451,10 @@
     {
       "id": "T-045",
       "task": "相手が新しい支出を保存したら、もう一方のiPhoneに通知する（CloudKit Subscription と APNs）",
-      "status": "doing",
+      "status": "review",
       "owner": "実行役 + 人間",
       "passes": "相手が新しい支出を保存したとき、アプリを開いていなくても、もう一方のiPhoneに通知が出ること（Appleの仕様で保証できる範囲と、できない範囲を明記する）。自分で保存した支出・初回共有で取り込んだ過去の支出・復元で取り込んだ支出・定期支出の自動計上では通知しないこと。同じ支出の同じ通知を何度も出さないこと。通知の文に金額と店名を出さないこと。通知をタップしたら、できればその支出を開くこと。通知を受けたことと同期が終わったことを区別し、通知が届かなくても今の同期で追いつくこと。編集・削除の通知は作らないこと。Push Notifications の Capability・署名・Provisioning Profile を変えるなら、先に影響を説明すること。TestFlight 内部配信をして、実機で確かめることを利用者向けに残すこと",
-      "evidence": "2026-10-19 第2段階a: アプリを開いているあいだ（30秒ごと・開いたとき）の同期で、相手が新しく登録した支出を知らせる（PartnerExpenseAlert・LocalNotifications、Docs/NOTIFICATIONS.md）。自分の登録・直し・削除・定期支出・取り込み・3日を過ぎた支出・一度知らせた支出は知らせない。何件でも1つにまとめ、文に金額・店名を出さない。押すとその支出（まとめた通知なら履歴）を開く。同期が終わって手元に入ってから知らせる。アプリを閉じているあいだの通知は T-047（Info.plist のバックグラウンド実行が auto モードの判定器に止められた・push の権限とプロファイルの変更が要る。利用者の承認待ち）。CI run 39276993855 は 337件中337件成功（[OCR評価] 変わらず）。GitHub の表示ではテストのジョブが in_progress のまま止まったが、実行の結論は success、ログは 15:34 に TEST SUCCEEDED で終わっていたので、ログで確かめてマージした。PR #47 マージ 881abcc。配信 run 39281245795（main でもテスト 337件中337件成功）: 2.0.0 / 2026.1019.1603、UPLOAD SUCCEEDED（Delivery UUID 5ccd5b4f-45c4-4263-bc9b-37f2e169fc4d、IPA 2,563,521 bytes）、TESTFLIGHT STATUS ready（VALID / IN_BETA_TESTING、2026-10-20 01:07 JST）。アプリを開いているあいだの範囲は実機の確認待ち（同 5章 1〜8）。閉じているあいだ（T-047）が済むまで doing のまま",
+      "evidence": "2026-10-19 第2段階a: アプリを開いているあいだ（30秒ごと・開いたとき）の同期で、相手が新しく登録した支出を知らせる（PartnerExpenseAlert・LocalNotifications、Docs/NOTIFICATIONS.md）。自分の登録・直し・削除・定期支出・取り込み・3日を過ぎた支出・一度知らせた支出は知らせない。何件でも1つにまとめ、文に金額・店名を出さない。押すとその支出（まとめた通知なら履歴）を開く。同期が終わって手元に入ってから知らせる。アプリを閉じているあいだの通知は T-047（Info.plist のバックグラウンド実行が auto モードの判定器に止められた・push の権限とプロファイルの変更が要る。利用者の承認待ち）。CI run 39276993855 は 337件中337件成功（[OCR評価] 変わらず）。GitHub の表示ではテストのジョブが in_progress のまま止まったが、実行の結論は success、ログは 15:34 に TEST SUCCEEDED で終わっていたので、ログで確かめてマージした。PR #47 マージ 881abcc。配信 run 39281245795（main でもテスト 337件中337件成功）: 2.0.0 / 2026.1019.1603、UPLOAD SUCCEEDED（Delivery UUID 5ccd5b4f-45c4-4263-bc9b-37f2e169fc4d、IPA 2,563,521 bytes）、TESTFLIGHT STATUS ready（VALID / IN_BETA_TESTING、2026-10-20 01:07 JST）。アプリを開いているあいだの範囲は実機の確認待ち（同 5章 1〜8）。閉じているあいだ（T-047）が済むまで doing のまま。2026-10-22 T-047 を配信（2.0.0 / 2026.1022.404、run 39719822434）したので review に。実機の確認は Docs/NOTIFICATIONS.md 5章 1〜12",
       "dependencies": ["T-044"],
       "notes": "2026-10-19 利用者の依頼の 2-1・2-2・2-3・2-5"
     },
@@ -471,10 +471,10 @@
     {
       "id": "T-047",
       "task": "アプリを閉じているあいだも、相手の新しい支出を知らせる（CloudKitのデータベースの購読・サイレントプッシュ・バックグラウンド更新）",
-      "status": "doing",
+      "status": "review",
       "owner": "実行役 + 人間",
       "passes": "2026-10-21 の承認の範囲で: Info.plist の UIBackgroundModes は remote-notification だけにすること（fetch・BGTaskScheduler は、必要と確かめて利用者に聞いてから）。先に既存の App ID・配信用プロファイル・署名を確かめ、Push がすでに入っていれば Apple Developer を変えないこと。作り直しが要ると確かめた場合だけ利用者に手順を出し（App ID の Push を有効にする → 配信用プロファイルを作り直す → GitHub Secret APPLE_PROVISIONING_PROFILE_BASE64 を差し替える）、差し替えのあとで entitlements に aps-environment を足すこと（順番を逆にすると配信できなくなる）。CKDatabaseSubscription（作った人はプライベート側・参加した人は共有側、型は Expense、中身の無い合図だけ）で合図を受けて同期し、T-045 と同じ決まりで知らせること。通知がOFFなら購読を消し、裏で起こさないこと（同期は今までどおり続ける）。Appleが届くことを保証しない範囲（強制終了・間引き）を利用者向けに書くこと。CIが緑で、TestFlight 内部配信をして、実機の確認項目を残すこと",
-      "evidence": "2026-10-21 条件つきの承認を受けて実装（PR は #49 のあと）。Info.plist の UIBackgroundModes は remote-notification だけ（承認のあとの編集は auto モードで止められなかった。fetch・BGTaskScheduler は入れていない）。通知がONの端末だけ registerForRemoteNotifications、登録できたら家計簿のある側に CKDatabaseSubscription（型は Expense だけ、shouldSendContentAvailable だけ）を置き、1日は置き直さない（ExpenseSubscriptionPlan）。OFFにしたら外す。合図を受けたら refreshForCloudKitPush で同期し、2a と同じ決まりで知らせる（自分の支出・直し・削除・定期支出は知らせない、文に金額・店名なし、重複なし、届かなくても次の同期で追いつく）。ロックを一度も解いていなければ何もしない。署名: entitlements は iCloud だけ、CI は手動署名で Secret のプロファイル。プロファイルに Push が入っているかはリポジトリ・ログでは分からない → aps-environment はまだ足していない。利用者に Apple Developer の読むだけの確認（App ID の Push・プロファイルの Enabled Capabilities）を依頼した（Docs/NOTIFICATIONS.md 4章）。テスト ExpenseSubscriptionPlanTests。PR #50（ドラフト）: CI run 39587154840 は 351件中351件成功、[OCR評価] 変わらず（店名 14/15・14/15、合計 15/15、日付 15/15、種類 14/15、明細 71/71、余分 0）。2026-10-21 利用者の確認: App ID の Push はチェックなし、プロファイルは iCloud・In-App Purchase。署名済みアプリに aps-environment が無いことを配信のログで確かめた（T-050）。プロファイルが aps-environment を許しているかを中身で確かめるまで、マージ・配信はしない。2026-10-21 確かめた結果、許していない（T-050）→ App ID の Push・プロファイルの作り直し・Secret の差し替えが済むまで止めておく。同日、購読を置く・外すのに失敗したら1時間は送り直さないようにした（ExpenseSubscriptionPlan.retryInterval、テスト testAFailureWaitsAnHourBeforeTryingAgain）。Apple の CKSubscription の説明に「本番で直接作るとエラー」とあり、失敗し続けたときに同期のたびに送って電池を使い、CloudKit に回数を絞られないため。利用者が通知を切り替えたときはすぐ試す。fec924c の CI run 39598846044 は 352件中352件成功、[OCR評価] 変わらず。2026-10-22 利用者が App ID の Push・プロファイルの作り直し・Secret の差し替えを済ませ（T-050）、signing-check で新しいプロファイルが aps-environment: production を許すのを確かめてから、entitlements に aps-environment = production を足した。Docs/PRIVACY_POLICY_REQUIREMENTS.md の通知の行を「入れた」に、Docs/NOTIFICATIONS.md の4章・5章を更新",
+      "evidence": "2026-10-21 条件つきの承認を受けて実装（PR は #49 のあと）。Info.plist の UIBackgroundModes は remote-notification だけ（承認のあとの編集は auto モードで止められなかった。fetch・BGTaskScheduler は入れていない）。通知がONの端末だけ registerForRemoteNotifications、登録できたら家計簿のある側に CKDatabaseSubscription（型は Expense だけ、shouldSendContentAvailable だけ）を置き、1日は置き直さない（ExpenseSubscriptionPlan）。OFFにしたら外す。合図を受けたら refreshForCloudKitPush で同期し、2a と同じ決まりで知らせる（自分の支出・直し・削除・定期支出は知らせない、文に金額・店名なし、重複なし、届かなくても次の同期で追いつく）。ロックを一度も解いていなければ何もしない。署名: entitlements は iCloud だけ、CI は手動署名で Secret のプロファイル。プロファイルに Push が入っているかはリポジトリ・ログでは分からない → aps-environment はまだ足していない。利用者に Apple Developer の読むだけの確認（App ID の Push・プロファイルの Enabled Capabilities）を依頼した（Docs/NOTIFICATIONS.md 4章）。テスト ExpenseSubscriptionPlanTests。PR #50（ドラフト）: CI run 39587154840 は 351件中351件成功、[OCR評価] 変わらず（店名 14/15・14/15、合計 15/15、日付 15/15、種類 14/15、明細 71/71、余分 0）。2026-10-21 利用者の確認: App ID の Push はチェックなし、プロファイルは iCloud・In-App Purchase。署名済みアプリに aps-environment が無いことを配信のログで確かめた（T-050）。プロファイルが aps-environment を許しているかを中身で確かめるまで、マージ・配信はしない。2026-10-21 確かめた結果、許していない（T-050）→ App ID の Push・プロファイルの作り直し・Secret の差し替えが済むまで止めておく。同日、購読を置く・外すのに失敗したら1時間は送り直さないようにした（ExpenseSubscriptionPlan.retryInterval、テスト testAFailureWaitsAnHourBeforeTryingAgain）。Apple の CKSubscription の説明に「本番で直接作るとエラー」とあり、失敗し続けたときに同期のたびに送って電池を使い、CloudKit に回数を絞られないため。利用者が通知を切り替えたときはすぐ試す。fec924c の CI run 39598846044 は 352件中352件成功、[OCR評価] 変わらず。2026-10-22 利用者が App ID の Push・プロファイルの作り直し・Secret の差し替えを済ませ（T-050）、signing-check で新しいプロファイルが aps-environment: production を許すのを確かめてから、entitlements に aps-environment = production を足した。Docs/PRIVACY_POLICY_REQUIREMENTS.md の通知の行を「入れた」に、Docs/NOTIFICATIONS.md の4章・5章を更新。PR #50 は CI run 39718710537（352件中352件成功、[OCR評価] 変わらず）のあと 6977406 を指定してマージ（bff475e）。配信 run 39719822434: signing-check でプロファイル 32041c47-2e08-4129-aa36-de92d0520ce0・aps-environment production、test 352件中352件成功、アーカイブの ProcessProductPackaging の権限に \"aps-environment\" = production、ARCHIVE・EXPORT SUCCEEDED、UPLOAD SUCCEEDED（Delivery UUID 7d2da067-8424-4955-90fa-990fd0b0d8e3、2,580,850 bytes）、2.0.0 / 2026.1022.404、TESTFLIGHT STATUS ready（VALID / IN_BETA_TESTING、2026-10-22 13:10 JST）。実機の確認（Docs/NOTIFICATIONS.md 5章 9〜12）は利用者",
       "dependencies": ["T-045"],
       "notes": "2026-10-19 利用者の依頼の 2（できればアプリを開いていない状態でも通知）。同日、Info.plist へのバックグラウンド実行の追加が Claude Code の auto モードの判定器に止められた（Unauthorized Persistence）。影響と手順は Docs/NOTIFICATIONS.md 4章。2026-10-21 利用者が条件つきで承認: Info.plist のバックグラウンドモードは T-047 に要る範囲で承認。条件: 先に既存の App ID・Provisioning Profile・署名設定を確かめる／Push Notifications がすでに有効なら再設定しない／プロファイルの作り直しが本当に要るか確かめる／要ると確かめるまで Apple Developer の設定を変えない／CloudKit Subscription のサイレントプッシュを優先する／BGTaskScheduler は必要性を確かめてから入れる／電池の消費を最小にする／通知OFFでも同期は続ける／自分の支出は知らせない／本文に金額・店名などを入れない／重複させない／届かなくても次の同期で追いつく。auto モードの制限は正規の承認の手順で扱い、回避しない。Apple Developer の変更と Secret の差し替えは、必要と確かめてから具体的な手順を出す。署名プロファイルを無効にする操作は、作り直しと Secret の更新の用意が整うまで保留。2026-10-21（2回目）利用者: T-047 は続ける。CloudKit のサイレントプッシュに要る署名とバックグラウンドモードを調べ、必要最小限の変更で実装する。Apple Developer の変更やプロファイルの更新が要るなら、根拠と手順を改めて報告する。家計データ・共有の状態・TestFlight の配信の環境を保つことを優先（T-050）"
     },
@@ -517,6 +517,76 @@
       "evidence": "2026-10-21 役割ごとの見方を Docs/SHARING_SECURITY_AUDIT.md 8章に書いた。同日、利用者の画面（Production、役割の名前は写っていない）: ShareInvite は Create なし・Read あり・Write なし。Users は Create なし・Read あり。ReceiptImage は Read あり・Write なし。World の初期と同じ形で、この役割については問題なし。2026-10-22 利用者が Development と Production の両方で全部の役割を確認（設定の変更・スキーマのデプロイはしていない）: ShareInvite は World（_world）が Read だけ、Authenticated（_icloud）が Create だけ、Creator（_creator）が Write だけで、両環境で同じ。初期の権限（READ _world・CREATE _icloud・WRITE _creator）と一致し、World・Authenticated に Write は無い → 他人が招待を書き換え・消すことはできない。追加の対策は不要。これは ShareInvite の権限の確認で、アプリ全体のセキュリティや通知の動作を確かめたものではない（利用者の注記）",
       "dependencies": ["T-049"],
       "notes": "2026-10-21 利用者の依頼【B】。確認の画面では ShareInvite に Read だけ印があったが、表示していた役割の名前が写っておらず、全部の役割の確認は済んでいない"
+    },
+    {
+      "id": "T-052",
+      "task": "App Store 公開までの計画を作る（最新のコード・PR・CIでの現在地、公開を阻む課題と根拠、公開前に必須の作業と公開後でよい作業、優先順位・完了条件・確認方法、利用者が決める事項と推奨案）",
+      "status": "review",
+      "owner": "実行役 + 人間",
+      "passes": "Docs/RELEASE_PLAN.md に5点がそろう。実装済み・CI確認済み・実機確認済み・未確認を分け、文書の古い所を一覧にし、根拠（コード・CI・配信のログ・Appleの原文）を付ける。TestFlight の新しい配信・App Store への提出と公開・CloudKit Production の変更・共有の権限の変更をしない。利用者が決める事項には推奨案を付ける",
+      "evidence": "2026-10-22 Docs/RELEASE_PLAN.md を書いた。照合したもの: main bff475e のコード、PR #50 の CI run 39718710537（352件中352件成功）、配信 run 39719822434（署名済みアプリに aps-environment production、UPLOAD SUCCEEDED、2.0.0 / 2026.1022.404、TestFlight ready）、開いている PR #28・#29、Apple の Upcoming Requirements・App privacy details・App Review Guidelines・AppTransaction の原文。新しい配信・提出・Production の変更・共有の権限の変更はしていない",
+      "dependencies": ["T-047", "T-048", "T-049", "T-050", "T-051"],
+      "notes": "2026-10-22 利用者の依頼（安全な App Store 公開まで進めるための計画）。方針: 安全な一般公開が最優先／初回は完全無料で『初期ユーザーはレシート読み取りが完全無料』を魅力にしたい（対象・期間・回数は利用者が決める。永久無料と約束しない）／AI家計評価は公開後（端末内AIは魅力を感じていない）／いまのレシートのAI補助は撤去しない。今朝の設定（App ID の Push・プロファイルの作り直し・Secret の更新・ShareInvite の Security Roles の確認）は済んだものとして引き継ぐ（T-050・T-051）"
+    },
+    {
+      "id": "T-053",
+      "task": "公開の判断のために、共有の安全性を整理する（第三者が参加できる条件・合言葉の1回利用と期限・共有のURLが漏れたときの取消・参加者の確認・既存の利用者を安全に移す方法・未同期データの保護と移行に失敗したときの復旧）",
+      "status": "review",
+      "owner": "実行役 + 人間",
+      "passes": "T-040・T-048 の文書を再利用し、コード（sharePublicPermission = .readWrite ほか）で確かめたことを Docs/RELEASE_PLAN.md 3章にまとめる。Security Roles に問題が無いことだけを理由に『招待した2人だけが使える』と結論づけない。既存の共有の解除・権限の変更・Production の変更・最低対応iOSの引き上げをしない",
+      "evidence": "2026-10-22 Docs/RELEASE_PLAN.md 3-1〜3-6 に書いた。初回公開の共有の方式は利用者の判断（D1。推奨は、いまの形で説明を正確にして出し、名指しの共有は公開後の最初の改善にする）",
+      "dependencies": ["T-040", "T-048", "T-051"],
+      "notes": "2026-10-22 利用者の依頼の優先順位1（共有とデータ保全）"
+    },
+    {
+      "id": "T-054",
+      "task": "復元と同期の場面（作った人・参加した人の入れ直し、別のApple IDの2台、オフライン、同時編集、削除が古い端末から戻らない、入り直しで未同期データが消えない、復元後に本人と相手を取り違えず精算が正しい）を、コード・自動テスト・実機に分けて整理し、本番の家計簿を消さない短い実機手順を用意する",
+      "status": "review",
+      "owner": "実行役 + 人間",
+      "passes": "場面ごとに、仕組み・自動テストの名前・実機の状態・言えないことを並べる。実機の手順は、本番でも試してよいもの（テスト用の支出だけ）と、テスト用の2台・2つのApple IDでだけ行うものに分ける。本番の家計簿を消す手順を入れない",
+      "evidence": "2026-10-22 Docs/RELEASE_PLAN.md 3-7 と付録A に書いた。引いたテストはすべて実在し、CI（352件）で成功している。実機の確認は利用者（テスト用の端末を用意できるかは D8）",
+      "dependencies": ["T-041", "T-023"],
+      "notes": "2026-10-22 利用者の依頼の優先順位1（復元と同期）"
+    },
+    {
+      "id": "T-055",
+      "task": "無料のレシート読み取りを公開前に固める（Vision と端末内AI補助の区別、AIが使えない端末で使えること、合計と日付を重く見て不確かな読み取りを直せること、OCRの回帰の下限を下げないこと、解析テストと実機での読み取りを分けて数えること、Release のログ、PR #29 の扱い）",
+      "status": "doing",
+      "owner": "実行役 + 人間",
+      "passes": "外部AIへのレシートの送信を足さない。[OCR評価] の下限を下げない。Release のビルドにレシートの文字や共有の情報をログで残さない。AIが動く端末とそうでない端末での実機の確認を分けて記録する。PR #29 を公開版に取り込むかは利用者が決める",
+      "evidence": "2026-10-22 コードで確かめた: 文字の読み取りは Vision（端末内）。AI補助は iOS 26 かつ SystemLanguageModel が使える端末だけで、根拠のある値は上書きしない。通信なし。print はすべて #if DEBUG の中。[OCR評価] 15枚（合計 15/15・日付 15/15）。AIが動く端末での実機の確認は一度も無い（利用者の iPhone 13・SE2 は非対応）。PR #29 は公開版に取り込まない案（Docs/RELEASE_PLAN.md 4章）",
+      "dependencies": ["T-042"],
+      "notes": "2026-10-22 利用者の依頼の優先順位2。初回公開の中心の機能"
+    },
+    {
+      "id": "T-056",
+      "task": "App Store 公開の準備を、完成済み・不足・利用者の判断に分けて片付ける（公開プライバシーポリシー・運営者名・問い合わせ先、App Privacy の申告、Privacy Manifest と使用API・SDK、アプリ内の説明と実際の扱いの一致、説明文・キーワード・年齢区分・スクリーンショット、審査の担当者が共有を確かめる手順、対応端末・文字の拡大・VoiceOver・通信失敗の表示、提出時点の Apple の要件）",
+      "status": "doing",
+      "owner": "実行役 + 人間",
+      "passes": "Docs/RELEASE_PLAN.md 5章の表がすべて『完成済み』か『利用者が済ませた』になる。『iCloud だけだから収集なし』と機械的に決めず、実装と Apple の定義を照らした方針で App Privacy と Privacy Manifest をそろえる。掲載文に『ふたりだけ』『画像は外に出さない』と書かない。スクリーンショットは架空データ。App Store への提出は利用者の承認のあと",
+      "evidence": "2026-10-22 棚卸しを Docs/RELEASE_PLAN.md 5章に書いた。不足: ポリシーの公開URL・運営者名・問い合わせ先、アプリの中のリンク（開発用のメモが出ている）、Privacy Manifest の理由つきAPI（UserDefaults・ファイルの日時）、掲載文の言い方、年齢区分、スクリーンショット、サポートURL。満たしている: Xcode 26・iOS 26 SDK、iOS 13 以上、外部SDKなし、暗号の申告",
+      "dependencies": ["T-043"],
+      "notes": "2026-10-22 利用者の依頼の優先順位3"
+    },
+    {
+      "id": "T-057",
+      "task": "初期ユーザーの無料特典の判断材料をまとめる（初期ユーザーの対象の定義、特典をいつまで続けるか、有料化しても残せるか、再インストールや機種変更でも見分けられるか、公開前に最低限要る準備）",
+      "status": "review",
+      "owner": "実行役 + 人間",
+      "passes": "課金や独自アカウントを先回りで作らない。『初期ユーザーは永久無料』と約束しない。準備が要るなら、方法・負担・後から対応したときの制約を書く。対象・期間・回数の扱いは利用者が決める",
+      "evidence": "2026-10-22 Docs/RELEASE_PLAN.md 6章に書いた。Apple の AppTransaction（originalPurchaseDate・originalAppVersion。iOS の originalAppVersion はビルド番号、サンドボックスでは常に 1.0）で後から判定できる見込みで、公開前のコードの準備は要らない。掲載文は審査 2.3.7（スクリーンショット・サブタイトルに価格や条件を入れない）に合わせる",
+      "dependencies": [],
+      "notes": "2026-10-22 利用者の依頼（初期ユーザーの無料特典）"
+    },
+    {
+      "id": "T-058",
+      "task": "AI家計評価（公開後）: 幅広い端末で使える方式を、品質・費用・プライバシーの観点で比べ、MonthlyReport と LedgerCalculator を使って作る",
+      "status": "todo",
+      "owner": "人間 + 実行役",
+      "passes": "公開して運用を確かめるまで実装しない。外部AIとの契約・API連携・バックエンドの構築をしない。家計データを外部へ送る方式なら、送る項目・送り先・保存と学習への利用・2人分の情報への同意・プライバシーポリシーの改訂を利用者と決めてから作る（審査 5.1.2(i)）",
+      "evidence": "",
+      "dependencies": ["T-052"],
+      "notes": "2026-10-22 利用者の依頼。端末内AIで作る案は、対応端末が限られるので利用者は魅力を感じていない。関わる決定: T-007（2026-09-03、レシートは端末内AI、クラウドAIは当面見送り）。方式の比べ方の下書きは Docs/RELEASE_PLAN.md 7章"
     }
   ]
 }
