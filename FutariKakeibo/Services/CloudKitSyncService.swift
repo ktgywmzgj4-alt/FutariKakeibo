@@ -929,6 +929,20 @@ actor CloudKitSyncService {
         )
     }
 
+    /// iCloudにある記録を、手元の内容で上書きしてよいか。支出と収入の送り道の両方で使う。
+    ///
+    /// - **削除印は、時刻に関係なく上書きしない。** 古い端末がオフラインのあいだに直した記録を、
+    ///   相手が消したあとに戻さないため（2026-10-22 利用者: 消した記録が戻らないことは必須の条件）
+    /// - iCloudのほうが新しければ上書きしない（後から直したほうを残す）
+    /// - 同じ時刻なら上書きする（中身は同じはず）
+    ///
+    /// CloudKitに触らない形にしてあるので、場面ごとにテストで確かめられる（`SyncMergeTests`）。
+    static func mayOverwrite(remoteIsDeleted: Bool, remoteUpdatedAt: Date?, localUpdatedAt: Date) -> Bool {
+        if remoteIsDeleted { return false }
+        if let remoteUpdatedAt, remoteUpdatedAt > localUpdatedAt { return false }
+        return true
+    }
+
     /// 手元の支出をレコードに写す。**保存する必要が無ければ nil を返す。**
     ///
     /// 1件ずつ送る経路とまとめて送る経路で、同じ判断と同じ項目を使うためにここに置く。
@@ -941,11 +955,11 @@ actor CloudKitSyncService {
     ) -> CKRecord? {
         let record = existing ?? CKRecord(recordType: RecordType.expense, recordID: recordID)
         // 削除印は古いオフライン端末からの再アップロードより常に優先する。
-        guard (record["isDeleted"] as? NSNumber)?.boolValue != true else {
-            return nil
-        }
-        if let remoteUpdatedAt = record["updatedAt"] as? Date,
-           remoteUpdatedAt > expense.updatedAt {
+        guard Self.mayOverwrite(
+            remoteIsDeleted: (record["isDeleted"] as? NSNumber)?.boolValue == true,
+            remoteUpdatedAt: record["updatedAt"] as? Date,
+            localUpdatedAt: expense.updatedAt
+        ) else {
             return nil
         }
         record.parent = parentReference(to: householdRecordID)
@@ -1087,11 +1101,11 @@ actor CloudKitSyncService {
     ) -> CKRecord? {
         let record = existing ?? CKRecord(recordType: RecordType.income, recordID: recordID)
         // 削除印は古いオフライン端末からの再アップロードより常に優先する。
-        guard (record["isDeleted"] as? NSNumber)?.boolValue != true else {
-            return nil
-        }
-        if let remoteUpdatedAt = record["updatedAt"] as? Date,
-           remoteUpdatedAt > income.updatedAt {
+        guard Self.mayOverwrite(
+            remoteIsDeleted: (record["isDeleted"] as? NSNumber)?.boolValue == true,
+            remoteUpdatedAt: record["updatedAt"] as? Date,
+            localUpdatedAt: income.updatedAt
+        ) else {
             return nil
         }
         record.parent = parentReference(to: householdRecordID)
