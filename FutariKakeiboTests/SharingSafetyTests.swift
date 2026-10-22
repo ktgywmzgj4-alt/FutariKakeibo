@@ -213,3 +213,50 @@ final class SharingSafetyTests: XCTestCase {
         }
     }
 }
+
+/// Privacy Manifest（`PrivacyInfo.xcprivacy`）に、使っている「理由の要るAPI」を申告してあるか（`Docs/RELEASE_PLAN.md` R3）。
+///
+/// Apple は 2024-05-01 から、理由を書いていないアプリを App Store Connect で受け付けない。
+/// このアプリが使っているのは次の2つだけ（2026-10-22 にコードを検索して確かめた）。
+/// - UserDefaults: 通知の設定など、このアプリだけが読み書きする値 → `CA92.1`
+/// - ファイルの日時: `ReceiptImageStore` が、アプリの中に置いた画像を古いものから片付ける → `C617.1`
+///
+/// 新しく理由の要るAPI（起動してからの時間・空き容量・ファイルの日時を読む別の方法など）を使うときは、
+/// plist とここの両方に足す。
+final class PrivacyManifestTests: XCTestCase {
+    private func manifest() throws -> [String: Any] {
+        let bundle = Bundle(for: AppStore.self)
+        let url = try XCTUnwrap(
+            bundle.url(forResource: "PrivacyInfo", withExtension: "xcprivacy"),
+            "アプリに Privacy Manifest が入っていない"
+        )
+        let data = try Data(contentsOf: url)
+        return try XCTUnwrap(PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+    }
+
+    private func reasons(for category: String) throws -> [String] {
+        let types = try XCTUnwrap(manifest()["NSPrivacyAccessedAPITypes"] as? [[String: Any]])
+        let entry = types.first { $0["NSPrivacyAccessedAPIType"] as? String == category }
+        return entry?["NSPrivacyAccessedAPITypeReasons"] as? [String] ?? []
+    }
+
+    func testUserDefaultsIsDeclaredAsTheAppsOwnSettings() throws {
+        XCTAssertEqual(try reasons(for: "NSPrivacyAccessedAPICategoryUserDefaults"), ["CA92.1"])
+    }
+
+    func testFileTimestampsAreDeclaredForFilesInsideTheApp() throws {
+        XCTAssertEqual(try reasons(for: "NSPrivacyAccessedAPICategoryFileTimestamp"), ["C617.1"])
+    }
+
+    func testOnlyTheTwoCategoriesInUseAreDeclared() throws {
+        let types = try XCTUnwrap(manifest()["NSPrivacyAccessedAPITypes"] as? [[String: Any]])
+        XCTAssertEqual(
+            Set(types.compactMap { $0["NSPrivacyAccessedAPIType"] as? String }),
+            ["NSPrivacyAccessedAPICategoryUserDefaults", "NSPrivacyAccessedAPICategoryFileTimestamp"]
+        )
+    }
+
+    func testTheAppDoesNotTrack() throws {
+        XCTAssertEqual(try manifest()["NSPrivacyTracking"] as? Bool, false)
+    }
+}

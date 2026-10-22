@@ -182,6 +182,166 @@ final class SyncMergeTests: XCTestCase {
 
         XCTAssertTrue(result.entries.isEmpty, "消された収入が戻ってきた")
     }
+
+    // MARK: - D10 必須の条件（2026-10-22 利用者）
+    //
+    // 同じ記録を2台で同時に直したときは、後から直したほうを残す（初回はこの仕様を受け入れる）。
+    // ただし、**消した記録が戻らないこと**と、**別々に足した記録が失われないこと**は別の必須の条件。
+    // ここでは2台とiCloudを、突き合わせ（`SyncMerge`）と送り直しの決まりだけで交互に動かして確かめる。
+
+    /// 1台の端末の中身。
+    private struct Phone {
+        var entries: [Expense] = []
+        var deletions: [UUID: Date] = [:]
+    }
+
+    /// iCloudの中身。削除印のある記録は、記録としては返らず、削除印として返る（`fetchSnapshot`）。
+    private struct Cloud {
+        var entries: [UUID: Expense] = [:]
+        var deletions: [UUID: Date] = [:]
+    }
+
+    /// 1台を同期する。`delivered` が false なら、送り直しが届かなかった（通信が切れた）ことにする。
+    private func sync(_ phone: inout Phone, with cloud: inout Cloud, delivered: Bool = true) {
+        let result = SyncMerge.merge(
+            local: phone.entries,
+            localDeletions: phone.deletions,
+            remote: Array(cloud.entries.values),
+            remoteDeletions: cloud.deletions
+        )
+        phone.entries = result.entries
+        phone.deletions = result.deletions
+        guard delivered else { return }
+        for entry in result.entries where result.staleIDs.contains(entry.id) {
+            // 送り道と同じ判断で上書きする（削除印は上書きしない）。
+            guard CloudKitSyncService.mayOverwrite(
+                remoteIsDeleted: cloud.deletions[entry.id] != nil,
+                remoteUpdatedAt: cloud.entries[entry.id]?.updatedAt,
+                localUpdatedAt: entry.updatedAt
+            ) else { continue }
+            cloud.entries[entry.id] = entry
+        }
+        for (id, deletedAt) in result.unsentDeletions {
+            cloud.deletions[id] = max(cloud.deletions[id] ?? deletedAt, deletedAt)
+            cloud.entries[id] = nil
+        }
+    }
+
+    private func ids(_ phone: Phone) -> Set<UUID> { Set(phone.entries.map(\.id)) }
+
+    /// 2台がそれぞれオフラインで別々の支出を足しても、同期の順番に関係なく、両方の端末に両方が残る。
+    func testTwoPhonesThatAddedDifferentExpensesOfflineBothEndUpWithBoth() {
+        for aSyncsFirst in [true, false] {
+            let shared = expense(title: "前からある")
+            var cloud = Cloud(entries: [shared.id: shared])
+            var phoneA = Phone(entries: [shared])
+            var phoneB = Phone(entries: [shared])
+
+            let fromA = expense(title: "Aがオフラインで足した", updated: 100)
+            let fromB = expense(title: "Bがオフラインで足した", updated: 100)
+            phoneA.entries.append(fromA)
+            phoneB.entries.append(fromB)
+
+            if aSyncsFirst {
+                sync(&phoneA, with: &cloud)
+                sync(&phoneB, with: &cloud)
+            } else {
+                sync(&phoneB, with: &cloud)
+                sync(&phoneA, with: &cloud)
+            }
+            sync(&phoneA, with: &cloud)
+            sync(&phoneB, with: &cloud)
+
+            let all: Set = [shared.id, fromA.id, fromB.id]
+            XCTAssertEqual(ids(phoneA), all, "Aで記録が欠けた（Aが先: \(aSyncsFirst)）")
+            XCTAssertEqual(ids(phoneB), all, "Bで記録が欠けた（Aが先: \(aSyncsFirst)）")
+            XCTAssertEqual(Set(cloud.entries.keys), all, "iCloudで記録が欠けた（Aが先: \(aSyncsFirst)）")
+        }
+    }
+
+    /// Aが消した支出を、オフラインのBが後から直し、さらに別の支出を足した。
+    /// どちらが先に同期しても、消した支出は戻らず、Bが足した支出は失われない。
+    func testADeletionAndAnOfflineEditAndAdditionOnTheOtherPhoneSettleSafelyInEitherOrder() {
+        for aSyncsFirst in [true, false] {
+            let target = expense(title: "Aが消す", updated: 0)
+            var cloud = Cloud(entries: [target.id: target])
+            var phoneA = Phone(entries: [target])
+            var phoneB = Phone(entries: [target])
+
+            phoneA.entries.removeAll { $0.id == target.id }
+            phoneA.deletions[target.id] = date(100)
+
+            var edited = target
+            edited.title = "Bが後から直した"
+            edited.updatedAt = date(500)
+            let added = expense(title: "Bが足した", updated: 500)
+            phoneB.entries = [edited, added]
+
+            if aSyncsFirst {
+                sync(&phoneA, with: &cloud)
+                sync(&phoneB, with: &cloud)
+            } else {
+                sync(&phoneB, with: &cloud)
+                sync(&phoneA, with: &cloud)
+            }
+            sync(&phoneA, with: &cloud)
+            sync(&phoneB, with: &cloud)
+
+            XCTAssertEqual(ids(phoneA), [added.id], "Aの結果が違う（Aが先: \(aSyncsFirst)）")
+            XCTAssertEqual(ids(phoneB), [added.id], "消した支出が戻ったか、足した支出が消えた（Aが先: \(aSyncsFirst)）")
+            XCTAssertEqual(Set(cloud.entries.keys), [added.id])
+            XCTAssertNotNil(cloud.deletions[target.id], "iCloudに削除印が無い")
+        }
+    }
+
+    /// 送った記録が届かなかったとき（通信が切れた）、次の同期で送り直され、相手にも届く。
+    func testAnAdditionThatDidNotReachICloudIsSentOnTheNextSync() {
+        var cloud = Cloud()
+        var phoneA = Phone()
+        var phoneB = Phone()
+        let added = expense(title: "届かなかった", updated: 100)
+        phoneA.entries = [added]
+
+        sync(&phoneA, with: &cloud, delivered: false)
+        XCTAssertTrue(cloud.entries.isEmpty)
+        XCTAssertEqual(ids(phoneA), [added.id], "届かなかった記録が手元から消えた")
+
+        sync(&phoneA, with: &cloud)
+        sync(&phoneB, with: &cloud)
+        XCTAssertEqual(ids(phoneB), [added.id], "送り直した記録が相手に届かない")
+    }
+
+    /// 消したことが届かなかったときも、手元で戻らず、次の同期で相手からも消える。
+    func testADeletionThatDidNotReachICloudKeepsItGoneAndIsSentOnTheNextSync() {
+        let target = expense(title: "消す", updated: 0)
+        var cloud = Cloud(entries: [target.id: target])
+        var phoneA = Phone(entries: [target])
+        var phoneB = Phone(entries: [target])
+
+        phoneA.entries = []
+        phoneA.deletions[target.id] = date(100)
+        sync(&phoneA, with: &cloud, delivered: false)
+        XCTAssertTrue(ids(phoneA).isEmpty, "届かなかったあいだに、消した支出が手元に戻った")
+
+        sync(&phoneA, with: &cloud)
+        sync(&phoneB, with: &cloud)
+        XCTAssertTrue(ids(phoneB).isEmpty, "消したことが相手に届かない")
+        XCTAssertNotNil(cloud.deletions[target.id])
+    }
+
+    /// 送り道の判断: 削除印は、手元のほうが新しくても上書きしない。
+    func testTheUploadNeverOverwritesADeletionEvenWithANewerEdit() {
+        XCTAssertFalse(CloudKitSyncService.mayOverwrite(remoteIsDeleted: true, remoteUpdatedAt: date(100), localUpdatedAt: date(500)))
+        XCTAssertFalse(CloudKitSyncService.mayOverwrite(remoteIsDeleted: true, remoteUpdatedAt: nil, localUpdatedAt: date(500)))
+    }
+
+    /// 送り道の判断: iCloudのほうが新しければ上書きしない。手元が新しいか同じなら上書きする。新しい記録は書く。
+    func testTheUploadKeepsTheNewerSide() {
+        XCTAssertFalse(CloudKitSyncService.mayOverwrite(remoteIsDeleted: false, remoteUpdatedAt: date(500), localUpdatedAt: date(100)))
+        XCTAssertTrue(CloudKitSyncService.mayOverwrite(remoteIsDeleted: false, remoteUpdatedAt: date(100), localUpdatedAt: date(500)))
+        XCTAssertTrue(CloudKitSyncService.mayOverwrite(remoteIsDeleted: false, remoteUpdatedAt: date(100), localUpdatedAt: date(100)))
+        XCTAssertTrue(CloudKitSyncService.mayOverwrite(remoteIsDeleted: false, remoteUpdatedAt: nil, localUpdatedAt: date(100)))
+    }
 }
 
 /// 入れ直したときに、iCloudに家計簿が2つ以上あったときの並び（T-041）。
@@ -337,6 +497,28 @@ final class RejoinSnapshotTests: XCTestCase {
         XCTAssertEqual(result.selectedMemberID, partner.id)
         XCTAssertEqual(result.pendingReceiptImageIDs, [pendingImage], "送信待ちのレシート画像を忘れた")
         XCTAssertEqual(result.household?.cloudLocation, here)
+    }
+
+    /// 外れていたあいだに相手が消した記録は、こちらの手元にあっても（後から直していても）、入り直したあと戻らない。
+    /// 外れていたあいだにこちらで足した記録は残る（D10 の必須の条件。2026-10-22 利用者）。
+    func testRejoiningDoesNotBringBackWhatTheOtherPhoneDeletedWhileWeWereOut() {
+        let here = location("household-a")
+        let deletedThere = UUID()
+        let addedHere = expense("外れていたあいだに足した", updated: 600)
+        let current = AppSnapshot(
+            household: household(at: here),
+            selectedMemberID: partner.id,
+            expenses: [expense("相手が消した（こちらで後から直した）", updated: 500, id: deletedThere), addedHere]
+        )
+
+        let result = AppStore.snapshotAfterJoining(
+            current: current,
+            cloud: cloud(expenses: [], deletions: [deletedThere: Date(timeIntervalSince1970: 1_760_000_100)]),
+            at: here
+        )
+
+        XCTAssertEqual(result.expenses.map(\.id), [addedHere.id], "消された記録が戻ったか、足した記録が消えた")
+        XCTAssertNotNil(result.deletedExpenseIDs[deletedThere], "相手の削除印を引き継いでいない")
     }
 
     /// 別の家計簿に入ったときは置き換える（参加する前に画面で伝えている）。合言葉の控えは引き継ぐ。
