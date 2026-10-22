@@ -353,8 +353,8 @@ iPhoneの中だけで使っていた家計簿は、アプリを消すと戻り�
 
 | # | 場面 | どうなるか（コードから） | 自動テスト | 戻らないもの |
 | --- | --- | --- | --- | --- |
-| 1 | 招待した人（作った人）が削除して入れ直す | 入口の「iCloudから戻す」で、自分のPrivate Databaseの家計簿を見つけて戻す。自分は「作った人」として戻る | `testAnEmptyPhoneTakesEverythingFromICloudAndPushesNothing`、`testTheMemberOnThisPhoneFollowsTheSideItCameBackFrom` | 消す前にまだ送れていなかった記録・レシート画像 |
-| 2 | 招待された人（参加した人）が削除して入れ直す | 共有への参加はApple IDに残るので、Shared Databaseに家計簿が見える。「iCloudから戻す」で戻る。参加する前に自分でも合言葉を発行していたら、2つ並ぶので選ぶ | 同上、`testTheMostRecentlyUsedHouseholdComesFirst`、`testATieGoesToTheSharedHousehold` | 同上 |
+| 1 | 招待した人（作った人）が削除して入れ直す | 入口の「以前の家計簿を取り戻す」（はじめの画面）で、自分のPrivate Databaseの家計簿を見つけて戻す。自分は「作った人」として戻る | `testAnEmptyPhoneTakesEverythingFromICloudAndPushesNothing`、`testTheMemberOnThisPhoneFollowsTheSideItCameBackFrom` | 消す前にまだ送れていなかった記録・レシート画像 |
+| 2 | 招待された人（参加した人）が削除して入れ直す | 共有への参加はApple IDに残るので、Shared Databaseに家計簿が見える。「以前の家計簿を取り戻す」（はじめの画面）で戻る。参加する前に自分でも合言葉を発行していたら、2つ並ぶので選ぶ | 同上、`testTheMostRecentlyUsedHouseholdComesFirst`、`testATieGoesToTheSharedHousehold` | 同上 |
 | 3 | 同じApple IDで機種変更 | iCloudバックアップ・クイックスタートで移したなら、手元のファイルごと移り、そのまま同期する。新しいiPhoneとして始めたなら 1・2 と同じ | 1・2 と同じ | iPhoneの中だけの家計簿は、バックアップから戻したときだけ戻る |
 | 4 | 一時的にオフラインになってから戻る | 記録は手元に保存される。戻ったときの同期で、iCloudに無い・iCloudより新しい記録と削除印を送り直す | `testAfterBeingOfflineOurNewExpensesArePushedAndTheirsArrive`、`testALocalDeletionNotYetUploadedKeepsTheExpenseGoneAndIsSentAgain` | なし（送り直すまで相手には見えない） |
 | 5 | ふたりが同時に同じ支出を直す | **後から直したほうが丸ごと残る**（各端末の時計の「直した時刻」で比べる）。先に直したほうの直しは消える。項目ごとに混ぜることはしない | `testWhenBothEditedTheNewerEditWinsAndTheOlderIsNotPushedBack`、`testWhenOurEditIsNewerItStaysAndIsPushed` | 負けたほうの直し（知らせは出ない） |
@@ -371,7 +371,10 @@ iPhoneの中だけで使っていた家計簿は、アプリを消すと戻り�
 ## 10. 実機での確認（利用者にお願いすること）
 
 **このビルドで確かめていないことです。** Apple IDの違う2台（A: 家計簿を作る人、B: 参加する人）で行います。
-**家計のデータを消す操作（アプリの削除）を含む項目は、先にCSVで書き出してから**行ってください。
+**2026-10-22 から: 日常で使っている家計簿では、アプリの削除・入れ直し・共有をやめる操作をしない**（利用者の指示）。
+いまの端末と本番のアプリで行えるのは **5・8・11・12・13**（11〜13 はテスト用の支出だけを使い、最後に消す）。
+**1・3・4・7・9・10** は本番と分けたテスト用アプリで（`Docs/TEST_APP_PLAN.md`。まだ作っていない）、**2・6・14** は3つ目の Apple Account か協力者が要る。
+対応は `Docs/RELEASE_PLAN.md` 付録A。
 
 ### 共有（T-040）
 
@@ -389,13 +392,13 @@ iPhoneの中だけで使っていた家計簿は、アプリを消すと戻り�
 
 ### 取り戻し（T-041）
 
-9. （場面1）Aでアプリを削除 → 入れ直す → 「iCloudから戻す」 → 家計簿と支出が戻る。自分が「作った人」の名前になっている
-10. （場面2）Bでアプリを削除 → 入れ直す → 「iCloudから戻す」 → 相手の家計簿に戻る。Bが前に自分で合言葉を発行したことがあれば、
+9. （場面1）Aでアプリを削除 → 入れ直す → 「以前の家計簿を取り戻す」（はじめの画面） → 家計簿と支出が戻る。自分が「作った人」の名前になっている
+10. （場面2）Bでアプリを削除 → 入れ直す → 「以前の家計簿を取り戻す」（はじめの画面） → 相手の家計簿に戻る。Bが前に自分で合言葉を発行したことがあれば、
     一覧が出て、相手の家計簿が先頭にある
 11. （場面4）Bを機内モードにして支出を1件足し、1件消す → 機内モードを切ってアプリを開く → Aに足した1件が出て、消した1件が消える
 12. （場面5）AとBで同じ支出を開き、ほぼ同時に違う金額で保存 → 30秒ほどで両方が、**後から保存したほうの金額**にそろう
 13. （場面6）Bを機内モードにし、Aで支出を1件消す。Bでその支出を直して保存 → Bの機内モードを切る → その支出はBからも消える（戻ってこない）
-14. （場面3、任意）同じApple IDの別のiPhoneに入れて「iCloudから戻す」 → 同じ家計簿に戻る
+14. （場面3、任意）同じApple IDの別のiPhoneに入れて「以前の家計簿を取り戻す」（はじめの画面） → 同じ家計簿に戻る
 
 ### レシート（T-042。2.0.0 / 2026.1019.16 以降のビルド）
 

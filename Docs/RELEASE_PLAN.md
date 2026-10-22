@@ -93,6 +93,8 @@
 | アプリの「データとプライバシー」 | 「正式公開前に…公開用プライバシーポリシーURLが必要です」 | 開発用のメモが利用者に見えている | Claude（R2。ポリシーのURLが決まってから） |
 | `.github/workflows/ios-dev-build.yml` | 「Development 環境につながるビルド」 | **Bundle ID が本番と同じ。日常の端末には入れられない**（`Docs/TEST_APP_PLAN.md`） | Claude（文面の承認のあと） |
 | この計画の前の版の付録A B3 | 「iCloudから戻す」 | 画面の言葉は「以前の家計簿を取り戻す」（はじめの画面）。付録Aを直した | Claude（この PR） |
+| `Docs/SHARING_SECURITY_AUDIT.md` 10章 | 実機の手順に「アプリを削除 → 入れ直す」「iCloudから戻す」 | 日常の家計簿で行わない項目と、テスト用アプリ・3つ目の Account が要る項目を冒頭に書き、画面の言葉を直した | Claude（この PR） |
+| `Docs/CLOUDKIT_SHARE_SCHEMA.md` | Ad Hoc 版は「TestFlight 版と同じアプリとして上書き」「データは消えません」 | 2026-09-28 に誤りと分かっていた。日常の端末に入れない注意を冒頭に足した | Claude（この PR） |
 | リポジトリ | **公開（public）** | `FutariKakeiboTests/ReceiptCorpus.swift` に実際のレシートの写し（店名・住所・日時・金額。カード番号・担当者名などは置き換え済み）があり、誰でも読める。非公開にするのは利用者の判断（`Docs/safety.md` で承認が要る操作）。非公開にすると GitHub Actions の無料の範囲が変わり、いまの頻度で CI を回せなくなるおそれがある（GitHub の料金の説明はこの環境から読めず、未確認） | 利用者 |
 
 ---
