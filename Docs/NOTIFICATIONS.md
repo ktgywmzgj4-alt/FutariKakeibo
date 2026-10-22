@@ -4,7 +4,8 @@
 
 - **2a（配信済み、2.0.0 / 2026.1019.1603）:** 通知の決まり・設定画面・押したときに開く・**アプリを開いているあいだ**の通知
 - **2b（T-047、2026-10-21 条件つきで承認）:** **アプリを閉じているあいだ**の通知。CloudKit の購読によるサイレントプッシュ。
-  コードと `Info.plist` の `remote-notification` は入れた。**push の宣言（`aps-environment`）は、配信用プロファイルがそれを許しているのを中身で確かめてから入れる**（4章。App ID の Push は有効にしなくてよいと Apple の説明にある）
+  コードと `Info.plist` の `remote-notification` は入れた。push の宣言（`aps-environment`）は、配信用プロファイルが許していなかったので、2026-10-22 に利用者が App ID の Push を有効にしてプロファイルを作り直し、Secret を差し替えた。
+  **新しいプロファイル（32041c47…）が `aps-environment: production` を許すのを `signing-check` で確かめてから、entitlements に足した**（4章）
 
 ---
 
@@ -91,7 +92,7 @@
 
 | 要るもの | 根拠（Apple の説明） | いま |
 | --- | --- | --- |
-| 署名したアプリに `aps-environment`（プッシュの権限） | CKDatabaseSubscription「Xcode automatically adds the entitlement when you enable the CloudKit capability.」。無いと Apple への端末の登録（`registerForRemoteNotifications`）が失敗し、合図が届かない | **無い**（下の1） |
+| 署名したアプリに `aps-environment`（プッシュの権限） | CKDatabaseSubscription「Xcode automatically adds the entitlement when you enable the CloudKit capability.」。無いと Apple への端末の登録（`registerForRemoteNotifications`）が失敗し、合図が届かない | 2026-10-21 は無かった（下の1）。**2026-10-22 に足した** |
 | `Info.plist` の `UIBackgroundModes` に `remote-notification` | Pushing background updates to your App「To receive background notifications, you must add the remote notifications background mode to your app.」 | PR #50 で入れた |
 | `fetch`（Background fetch） | CKDatabaseSubscription は「"Background fetch" and "Remote notifications"」を選ぶよう書くが、上の通知の一般の説明が求めるのは remote notifications だけ。`fetch` は定期の更新（BGTaskScheduler）のためのもの | 入れない（利用者の条件。必要と確かめてから聞く） |
 | App ID の Push Notifications | CKDatabaseSubscription「You don't need to explicitly enable push notifications for your App ID to receive subscription notifications.」 | チェックなしのまま。変えない |
@@ -118,6 +119,11 @@ Apple の説明（Developer Account Help の Enable app capabilities）に「Pro
 「You'll need to regenerate the provisioning profiles that use that App ID.」とあるとおり、Push を有効にした時点でいまのプロファイルは無効になる。
 
 ### 利用者にお願いする手順（T-050。利用者が決めてから。1〜3は続けて行う）
+
+**2026-10-22 に済んだ。** 利用者が 1〜3 を行った（Secret の更新は 6:36 JST。ほかの Secret は変えていない）。作り直したプロファイルの中身も
+利用者が確かめた（`application-identifier` 79XN3292J9.jp.aikawa.futarikakeibo、`aps-environment` production、期限 2027-09-01）。
+Claude は `signing-check`（run 39718347146）で、CI が使う Secret のプロファイルが新しいもの（UUID 32041c47-2e08-4129-aa36-de92d0520ce0、
+権限は12個）に替わり、`aps-environment: production` を許していることを確かめてから、entitlements に `aps-environment = production` を足した。
 
 影響: 入っているアプリ・TestFlight にあるビルド・iCloud の家計データ・共有は変わらない。**1から3が終わるまで、TestFlight へ配信できない**
 （そのあいだ Claude は配信を起動しない）。Push を外しても元のプロファイルには戻らない（外しても、もう一度作り直しになる）。費用はかからない。
@@ -166,6 +172,10 @@ Apple IDの違う2台（A・B）で、共有している家計簿を使います
 10. （2bのあと）Aのアプリを上にスワイプして終了させる → Bで登録 → Aには通知が出ない（Appleの説明どおり）。Aでアプリを開くと出る
 11. （2bのあと）Aを機内モードにしてBで登録 → Aの機内モードを切る → 少しして、またはアプリを開いたときに通知が出る
 12. 前の版のアプリのままの端末と共有している → 新しい版の端末には、相手の登録が通知される。前の版の端末には通知は出ない（機能が無い）
+
+9〜11 で届かないことが続いたら: Aの「パートナーの支出を知らせる」がONで、iPhoneの通知が許可されていて、アプリを上にスワイプして終了させていないかを見る。
+新しいビルドを入れたら、一度アプリを開いてから試す（開いたときに合図の購読を置く）。iPhone の「設定」→「一般」→「Appのバックグラウンド更新」と低電力モードも見る
+（Apple の説明はこれに触れていないが、裏で起こされるかどうかに関わることがある）。それでも届かなければ、どの手順で何分待ったかを知らせてもらう。
 
 ## 6. 自動テスト
 

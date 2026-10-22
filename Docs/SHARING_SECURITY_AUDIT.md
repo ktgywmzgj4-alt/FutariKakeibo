@@ -333,6 +333,11 @@ CloudKit Console で変えていないことを確かめてください（8章�
 World か Authenticated に Write があれば、他人が招待を書き換え・消せる（**高**。初期に戻すのは Production の変更なので、利用者の承認のあと）。
 2026-10-21 に見えた「Read だけ」は、World の画面なら前提どおり。
 
+**2026-10-22 の結果（利用者が Development と Production の両方で確認。変更・デプロイなし）:** `ShareInvite` は
+World（`_world`）が Read だけ、Authenticated（`_icloud`）が Create だけ、Creator（`_creator`）が Write だけで、両方の環境で同じ。
+上の表の前提どおりで、World・Authenticated に Write は無い（他人が招待を書き換え・消すことはできない）。**追加の対策は要らない。**
+これは `ShareInvite` の権限の確認で、アプリ全体のセキュリティや通知の動作を確かめたものではない。
+
 **任意の掃除（承認が要る操作）:** この版より前に発行された合言葉のレコード（`invite-` で始まるもの）は、
 発行した端末に控えが無いので、アプリからは消せません。中身は共有のURLと期限で、期限はすべて切れています。
 CloudKit Console から消すこともできますが、**既存データの削除にあたるので、Claudeからは行いません**。

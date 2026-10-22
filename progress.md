@@ -14,17 +14,17 @@
 | | |
 | --- | --- |
 | 配信した最新 | **2.0.0 / 2026.1021.1050**（2026-10-21 19:56 JST、PR #49。共有を名指しの形に移すための準備で、入り直すときに手元の記録と新しい設定を残す。**共有の方式・公開の権限・最低対応iOS・Production は変えていない**）。内部テスターに配布済み。その前が 2026.1019.1603（相手の支出の通知、アプリを開いているあいだ） |
-| いま作っているもの | **T-047 アプリを閉じているあいだの通知（PR #50、ドラフト）。マージと配信は止めている。** 配信用プロファイルが `aps-environment` を許していないことを、読むだけのジョブ `signing-check` で確かめた（T-050、run 39597447741）。閉じているあいだの通知には **App ID の Push を有効にする → プロファイルを作り直す → Secret を差し替える** が要る（利用者の操作。手順は `Docs/NOTIFICATIONS.md` 4章）。**Claude からは App ID・プロファイル・Secret を変えない** |
+| いま作っているもの | **T-047 アプリを閉じているあいだの通知（PR #50）。** 2026-10-22 利用者が App ID の Push を有効にし、プロファイルを作り直し、Secret を差し替えた（T-050）。`signing-check`（run 39718347146）で、CI が使うプロファイルが新しいもの（32041c47…）に替わり `aps-environment: production` を許すのを確かめてから、entitlements に `aps-environment = production` を足した。CI → マージ → TestFlight 配信 → 配信のログで、署名済みアプリに入ったことを確かめる |
 | **依頼の決まり** | **利用者の依頼は、受けたその場で `tasks.json` に1件ずつ書く**（2026-10-19、入力例の直しを台帳に書かずに2回頼ませた。`AGENTS.md`・`CLAUDE.md`） |
 | **版の決まり** | **2.0.0 より下には戻さない。** TestFlightには 2026-09-01 の事故の 1.0 が残っている（T-033） |
 | **OCRの決まり** | **`[OCR評価]` の数字（CIの記録）が前の段階より下がる変更は入れない。** 下限は `ZReceiptScoreboardTests.floors` |
 | **覚えた店の決まり** | **直さずに1回保存しただけの店は、確かな読み取りを上書きしない**（T-037）。品から決まった種類も上書きしない |
 | 実機の確認待ち | **T-040〜T-043 共有の安全性と取り戻し**（`Docs/SHARING_SECURITY_AUDIT.md` 10章）、**T-044〜T-046 相手の支出の通知**（`Docs/NOTIFICATIONS.md` 5章 1〜8）。T-038 入力例、T-039 ローソン・PISOLAのレシート。2.0.0 の版の表示と自動の更新（T-030/T-032/T-033）。T-023 家計簿の取り戻し、T-024 版の表示、T-025 レシートの種類。OCR第1〜第3段階の実機での当たり方。**T-048 の入り直しの守りは、いまの共有を外す操作になるので実機では確かめない**（Development での検証は承認待ち） |
 | 要件の残り | レシートあと1枚（いま9〜10枚）、プライバシーポリシー（運営者名・問い合わせ先が未定） |
-| 利用者の判断待ち | **T-050 → T-047:** App ID の Push・プロファイルの作り直し・Secret の差し替えをするか（するなら1〜3を続けて。終わるまで TestFlight に配信できない）。**T-051:** CloudKit Console の Security Roles で、Authenticated（`_icloud`）と Creator（`_creator`）の `ShareInvite` の印（World と見られる画面は Read だけで問題なし）。**T-048:** Development での検証（`ios-dev-build.yml` はプロファイルを作り直すので承認が要る）と、移すかどうか |
-| 開いているPR | **#50 T-047（ドラフト。`aps-environment` が決まるまでマージしない）**、#28 目印の色、#29 Releaseで診断ログ（要注意） |
+| 利用者の判断待ち | **T-048:** Development での検証（`ios-dev-build.yml` はプロファイルを作り直すので承認が要る）と、移すかどうか。T-050・T-051 は 2026-10-22 に済んだ（Security Roles は Development・Production とも初期どおりで、追加の対策は不要） |
+| 開いているPR | **#50 T-047（権限を足した。CI が緑ならドラフトを外してマージ・配信）**、#28 目印の色、#29 Releaseで診断ログ（要注意） |
 
-**次にやること:** 利用者が Secret を差し替えたと知らせたら、作業ブランチで ios.yml を手で起動し（main 以外なので TestFlight へは送らない）、`signing-check` で新しいプロファイルが `aps-environment: production` を許していることを確かめる。それから entitlements に `aps-environment = production` を足して CI → PR #50 をドラフトから戻す → マージ → 配信 → 配信のログ（`ProcessProductPackaging`）で署名済みアプリに入ったことを確かめる。実機の確認は `Docs/NOTIFICATIONS.md` 5章の 9〜12。**差し替えの前に `aps-environment` を足さない**（配信が止まる）。外れたレシートが届いたら `ReceiptCorpus` に足してから直す。
+**次にやること:** PR #50 の CI が緑なら、ドラフトを外してマージ → TestFlight 配信。配信のログで `signing-check`（新しいプロファイル）・`ProcessProductPackaging` の `"aps-environment" = production`・UPLOAD SUCCEEDED・TESTFLIGHT STATUS を確かめる。実機の確認は `Docs/NOTIFICATIONS.md` 5章の 9〜12（届かないときの見どころも5章）。外れたレシートが届いたら `ReceiptCorpus` に足してから直す。
 **外れたレシートは、写真に加えて「読み取った文字を確認」の画面も撮ってもらう。** 保存される画像は切り抜く前の1枚なので、画像だけでは読み取りが何を見たか分からない（T-039）。
 **作業を始める前に必ず `main` を取り直すこと**（2026-10-15、取り直さずに始めて利用者の直しとぶつかった）。
 
