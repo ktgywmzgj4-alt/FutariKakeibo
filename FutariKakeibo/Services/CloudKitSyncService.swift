@@ -660,6 +660,65 @@ actor CloudKitSyncService {
         )
     }
 
+    // MARK: - 相手の支出の合図（CloudKitの購読、T-047）
+
+    /// 購読の名前。自分で作った家計簿はプライベート側、参加した家計簿は共有側に1つずつ置く。
+    static func subscriptionID(for scope: CloudLocation.Scope) -> String {
+        "expense-changes-\(scope.rawValue)"
+    }
+
+    /// 支出が変わったら、この端末に中身の無い合図（サイレントプッシュ）を送ってもらう。
+    ///
+    /// 合図を受けたら同期し、相手の新しい支出があれば、この端末で通知を作る（`PartnerExpenseAlert`）。
+    /// **データベースの購読を使う。** 参加した側の家計簿は共有側にあり、共有側はデータベースの購読しか
+    /// 使えない（Appleの `CKQuerySubscription`・`CKRecordZoneSubscription` の説明）。
+    /// 型を `Expense` に絞り、家計簿の設定・収入・レシート画像の変更では起こさない（電池のため）。
+    /// 合図には中身を入れない（金額や店名を Apple のプッシュに乗せない）。
+    /// **アプリにプッシュの権限（`aps-environment`）が無いと届かない。**
+    func subscribeToExpenseChanges(in scope: CloudLocation.Scope) async throws {
+        let subscription = CKDatabaseSubscription(subscriptionID: Self.subscriptionID(for: scope))
+        subscription.recordType = RecordType.expense
+        let info = CKSubscription.NotificationInfo()
+        info.shouldSendContentAvailable = true
+        subscription.notificationInfo = info
+        try await modifySubscriptions(saving: [subscription], deleting: [], in: database(for: scope))
+    }
+
+    /// 通知をOFFにしたら、合図も止める（アプリを裏で起こさない）。もう無ければ、それでよい。
+    func unsubscribeFromExpenseChanges(in scope: CloudLocation.Scope) async throws {
+        do {
+            try await modifySubscriptions(
+                saving: [],
+                deleting: [Self.subscriptionID(for: scope)],
+                in: database(for: scope)
+            )
+        } catch let error as CKError where Self.isOnlyMissingRecords(error) {
+            return
+        }
+    }
+
+    private func modifySubscriptions(
+        saving subscriptions: [CKSubscription],
+        deleting subscriptionIDs: [CKSubscription.ID],
+        in database: CKDatabase
+    ) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            let operation = CKModifySubscriptionsOperation(
+                subscriptionsToSave: subscriptions,
+                subscriptionIDsToDelete: subscriptionIDs
+            )
+            operation.modifySubscriptionsResultBlock = { result in
+                switch result {
+                case .success:
+                    continuation.resume()
+                case let .failure(error):
+                    continuation.resume(throwing: error)
+                }
+            }
+            database.add(operation)
+        }
+    }
+
     func saveHousehold(_ household: Household) async throws {
         guard let location = household.cloudLocation else { return }
         let database = database(for: location)
@@ -1099,7 +1158,11 @@ actor CloudKitSyncService {
     // MARK: - CloudKit wrappers
 
     private func database(for location: CloudLocation) -> CKDatabase {
-        switch location.scope {
+        database(for: location.scope)
+    }
+
+    private func database(for scope: CloudLocation.Scope) -> CKDatabase {
+        switch scope {
         case .privateDatabase: container.privateCloudDatabase
         case .sharedDatabase: container.sharedCloudDatabase
         }

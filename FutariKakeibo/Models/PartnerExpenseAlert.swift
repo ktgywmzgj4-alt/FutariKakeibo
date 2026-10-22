@@ -119,4 +119,9 @@ enum PartnerExpenseAlert {
         }
         return Array(result.suffix(rememberedLimit))
     }
+
+    /// CloudKitからの合図（購読の知らせ）か。中身は使わず、同期のきっかけにだけ使う（T-047）。
+    static func isCloudKitPush(_ userInfo: [AnyHashable: Any]) -> Bool {
+        userInfo["ck"] != nil
+    }
 }

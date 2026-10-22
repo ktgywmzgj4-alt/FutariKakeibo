@@ -305,6 +305,39 @@ CloudKit Console で変えていないことを確かめてください（8章�
 
 前提どおりなら、追加の対策は要らない（いまの守りは 5〜6章のとおり）。
 
+### 2026-10-21 の結果（利用者が Production を読むだけで確認。変更なし）
+
+| 見たもの | 結果 | 評価 |
+| --- | --- | --- |
+| `ShareInvite` の QUERYABLE 索引 | 無い | 前提どおり。合言葉を知らない人は、招待を一覧できない |
+| `Expense`・`Income` の QUERYABLE 索引 | ある | 前提どおり（アプリの同期が使う）。この2つの型はプライベート・共有のデータベースにしか置かないので、他人からは読めない |
+| API Token・Server-to-Server Key | どちらも無い | 前提どおり。Web から公開データベースを読む入口は無い |
+| `ShareInvite` の権限 | 役割の名前が写っていない画面で、Read だけに印 | **全部の役割は、まだ。** 下の「役割ごとの見方」で確かめる（T-051） |
+
+ここまでで、追加の対策は要らない。
+
+### 役割ごとの見方（T-051。読むだけ。Save は押さない）
+
+1. 上の手順の 1〜4 と同じ（環境は Production）
+2. 左の **Schema → Security Roles** を開く。役割の一覧が出る。初めからある役割は3つ
+   （画面では `_world`・`_icloud`・`_creator`、または World・Authenticated・Creator と出る）。**3つ以外の役割があれば、その名前も控える**
+3. 役割を1つずつ押し、出てくる型の一覧で `ShareInvite` の行を探して、**Create・Read・Write のどれに印があるか**を控える
+4. 全部の役割を見終えたら、何も押さずに閉じる
+
+| 役割 | 前提（初期のまま） | 前提と違う印 |
+| --- | --- | --- |
+| World（`_world`、だれでも） | Read だけ | Create・Write |
+| Authenticated（`_icloud`、iCloud にサインインした人） | Create（Read もあってよい） | **Write** |
+| Creator（`_creator`、そのレコードを作った人） | Write（Read もあってよい） | Write が無い（発行した人が、自分の合言葉を片付けられないだけ。守りは弱まらない） |
+
+World か Authenticated に Write があれば、他人が招待を書き換え・消せる（**高**。初期に戻すのは Production の変更なので、利用者の承認のあと）。
+2026-10-21 に見えた「Read だけ」は、World の画面なら前提どおり。
+
+**2026-10-22 の結果（利用者が Development と Production の両方で確認。変更・デプロイなし）:** `ShareInvite` は
+World（`_world`）が Read だけ、Authenticated（`_icloud`）が Create だけ、Creator（`_creator`）が Write だけで、両方の環境で同じ。
+上の表の前提どおりで、World・Authenticated に Write は無い（他人が招待を書き換え・消すことはできない）。**追加の対策は要らない。**
+これは `ShareInvite` の権限の確認で、アプリ全体のセキュリティや通知の動作を確かめたものではない。
+
 **任意の掃除（承認が要る操作）:** この版より前に発行された合言葉のレコード（`invite-` で始まるもの）は、
 発行した端末に控えが無いので、アプリからは消せません。中身は共有のURLと期限で、期限はすべて切れています。
 CloudKit Console から消すこともできますが、**既存データの削除にあたるので、Claudeからは行いません**。
